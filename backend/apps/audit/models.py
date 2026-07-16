@@ -1,1 +1,25 @@
-﻿# audit models.py - stub
+﻿from django.db import models
+from django.conf import settings
+from apps.core.choices import Action
+from apps.core.models import BaseModel
+
+class AuditLog(BaseModel):
+    report = models.ForeignKey('reports.Report', on_delete=models.CASCADE, null=True, blank=True, related_name='audit_logs')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_actions')
+    action = models.CharField(max_length=20, choices=Action.choices)
+    before_state = models.JSONField(null=True, blank=True)
+    after_state = models.JSONField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'audit_logs'
+        indexes = [
+            models.Index(fields=['report']),
+            models.Index(fields=['actor']),
+            models.Index(fields=['action']),
+            models.Index(fields=['created_at']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.action} on {self.report_id} by {self.actor_id}"

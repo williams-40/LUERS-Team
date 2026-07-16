@@ -1,0 +1,861 @@
+openapi: 3.0.3
+info:
+  title: ''
+  version: 0.0.0
+paths:
+  /api/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - ht
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - ug
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      description: |-
+        POST /api/v1/auth/login/
+        Returns access and refresh tokens.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+        required: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      description: |-
+        GET /api/v1/auth/me/
+        Returns the current authenticated user's profile.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/refresh/:
+    post:
+      operationId: v1_auth_refresh_create
+      description: |-
+        POST /api/v1/auth/refresh/
+        Returns a new access token using a valid refresh token.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/test/ictadmin/:
+    get:
+      operationId: v1_auth_test_ictadmin_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/test/management/:
+    get:
+      operationId: v1_auth_test_management_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/test/security/:
+    get:
+      operationId: v1_auth_test_security_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/test/studentstaff/:
+    get:
+      operationId: v1_auth_test_studentstaff_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/summary/:
+    get:
+      operationId: v1_dashboard_summary_retrieve
+      description: |-
+        GET /api/v1/dashboard/summary/
+        Returns aggregate counts, average response time.
+        Only Security and ICT Admin can access.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/:
+    get:
+      operationId: v1_reports_list
+      description: |-
+        GET /api/v1/reports/
+        List reports with filtering by status, category, urgency.
+        Only Security and ICT Admin can access.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReportListList'
+          description: ''
+  /api/v1/reports/{id}/:
+    get:
+      operationId: v1_reports_retrieve
+      description: GET /api/v1/reports/{id}/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportDetail'
+          description: ''
+  /api/v1/reports/{id}/assign/:
+    post:
+      operationId: v1_reports_assign_create
+      description: |-
+        POST /api/v1/reports/{id}/assign/
+        Assign a report to a security officer. Allowed for Security and ICT Admin.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportAssign'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReportAssign'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReportAssign'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportAssign'
+          description: ''
+  /api/v1/reports/{id}/evidence/:
+    post:
+      operationId: v1_reports_evidence_create
+      description: |-
+        POST /api/v1/reports/{id}/evidence/
+        Upload evidence file. Validates file size and extension.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Evidence'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Evidence'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Evidence'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+          description: ''
+  /api/v1/reports/{id}/status/:
+    patch:
+      operationId: v1_reports_status_partial_update
+      description: |-
+        PATCH /api/v1/reports/{id}/status/
+        Update report status. Only Security can change status.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReportUpdateStatus'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReportUpdateStatus'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReportUpdateStatus'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportUpdateStatus'
+          description: ''
+  /api/v1/reports/create/:
+    post:
+      operationId: v1_reports_create_create
+      description: |-
+        POST /api/v1/reports/
+        Submit a report (panic or detailed). Supports is_anonymous flag.
+        Rate-limited to 5 reports per hour per user.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReportCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReportCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportCreate'
+          description: ''
+  /api/v1/reports/mine/:
+    get:
+      operationId: v1_reports_mine_list
+      description: GET /api/v1/reports/mine/
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReportListList'
+          description: ''
+components:
+  schemas:
+    CategoryEnum:
+      enum:
+      - theft
+      - assault
+      - medical
+      - fire
+      - harassment_gbv
+      - other
+      type: string
+      description: |-
+        * `theft` - Theft
+        * `assault` - Assault
+        * `medical` - Medical
+        * `fire` - Fire
+        * `harassment_gbv` - Harassment / GBV
+        * `other` - Other
+    Evidence:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        file:
+          type: string
+          format: uri
+        file_url:
+          type: string
+          format: uri
+          readOnly: true
+        file_type:
+          $ref: '#/components/schemas/FileTypeEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - file
+      - file_type
+      - file_url
+      - id
+    FileTypeEnum:
+      enum:
+      - image
+      - video
+      - audio
+      - other
+      type: string
+      description: |-
+        * `image` - Image
+        * `video` - Video
+        * `audio` - Audio
+        * `other` - Other
+    PaginatedReportListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportList'
+    PatchedReportUpdateStatus:
+      type: object
+      description: Used for status updates by Security/ICT Admin.
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+    ReportAssign:
+      type: object
+      description: Used for assignment by Security/ICT Admin.
+      properties:
+        assigned_to:
+          type: string
+          format: uuid
+      required:
+      - assigned_to
+    ReportCreate:
+      type: object
+      description: Used for report submission — delegates creation process to ReportService.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        description:
+          type: string
+        urgency:
+          $ref: '#/components/schemas/UrgencyEnum'
+        is_anonymous:
+          type: boolean
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        location_accuracy:
+          type: number
+          format: double
+          nullable: true
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        evidence:
+          type: array
+          items:
+            type: string
+            format: uri
+          writeOnly: true
+      required:
+      - category
+      - created_at
+      - description
+      - id
+      - status
+    ReportDetail:
+      type: object
+      description: Used for detail view — includes evidence and audit trail.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        category_display:
+          type: string
+          readOnly: true
+        description:
+          type: string
+        urgency:
+          $ref: '#/components/schemas/UrgencyEnum'
+        urgency_display:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        location_accuracy:
+          type: number
+          format: double
+          nullable: true
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+        assigned_to_username:
+          type: string
+          readOnly: true
+        is_anonymous:
+          type: boolean
+        metadata: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evidence'
+          readOnly: true
+      required:
+      - assigned_to_username
+      - category
+      - category_display
+      - created_at
+      - description
+      - evidence
+      - id
+      - status_display
+      - updated_at
+      - urgency_display
+    ReportList:
+      type: object
+      description: Used for list views (officer dashboard) — hides reporter identity.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        category_display:
+          type: string
+          readOnly: true
+        description:
+          type: string
+        urgency:
+          $ref: '#/components/schemas/UrgencyEnum'
+        urgency_display:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        location_accuracy:
+          type: number
+          format: double
+          nullable: true
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+        assigned_to_username:
+          type: string
+          readOnly: true
+        is_anonymous:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        evidence_count:
+          type: integer
+          readOnly: true
+      required:
+      - assigned_to_username
+      - category
+      - category_display
+      - created_at
+      - description
+      - evidence_count
+      - id
+      - status_display
+      - updated_at
+      - urgency_display
+    ReportUpdateStatus:
+      type: object
+      description: Used for status updates by Security/ICT Admin.
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+      required:
+      - status
+    StatusEnum:
+      enum:
+      - new
+      - acknowledged
+      - in_progress
+      - resolved
+      - closed
+      type: string
+      description: |-
+        * `new` - New
+        * `acknowledged` - Acknowledged
+        * `in_progress` - In Progress
+        * `resolved` - Resolved
+        * `closed` - Closed
+    TokenObtainPair:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+        password:
+          type: string
+          writeOnly: true
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - password
+      - refresh
+      - username
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    UrgencyEnum:
+      enum:
+      - panic
+      - normal
+      type: string
+      description: |-
+        * `panic` - Panic
+        * `normal` - Normal
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
