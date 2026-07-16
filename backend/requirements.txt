@@ -1,0 +1,12 @@
+Django
+djangorestframework
+djangorestframework-simplejwt
+psycopg2-binary
+django-environ
+django-cors-headers
+channels
+channels-redis
+redis
+celery
+drf-spectacular
+django-ratelimit
