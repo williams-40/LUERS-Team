@@ -6,6 +6,7 @@ class Role(models.TextChoices):
     SECURITY = 'security', 'Security Officer'
     ICT_ADMIN = 'ict_admin', 'ICT Admin'
     MANAGEMENT = 'management', 'Management / Escrow'
+    SYSTEM_ADMIN = 'system_admin', 'System Admin'
 
 class Category(models.TextChoices):
     THEFT = 'theft', 'Theft'
@@ -13,6 +14,7 @@ class Category(models.TextChoices):
     MEDICAL = 'medical', 'Medical'
     FIRE = 'fire', 'Fire'
     HARASSMENT_GBV = 'harassment_gbv', 'Harassment / GBV'
+    ACADEMIC = 'academic', 'Academic'  
     OTHER = 'other', 'Other'
 
 class Urgency(models.TextChoices):
@@ -43,3 +45,7 @@ class Action(models.TextChoices):
     ASSIGN = 'assign', 'Assign'
     EVIDENCE_UPLOAD = 'evidence_upload', 'Evidence Upload'
     DEANONYMIZE = 'deanonymize', 'Deanonymize'   # Phase 2 backlog but include now
+
+class SyncOrigin(models.TextChoices):
+    LIVE = 'live', 'Live'
+    SYNC = 'sync', 'Offline Sync'

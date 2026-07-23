@@ -158,14 +158,10 @@ CELERY_TIMEZONE = TIME_ZONE
 # Redis cache (for ratelimiting, sessions, etc.)
 CACHES = {
     'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': env('REDIS_URL', default='redis://localhost:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
     }
 }
-
 # drf-spectacular
 SPECTACULAR_SETTINGS = {
     "TITLE": "LUERS API",
@@ -200,3 +196,6 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
+# Disable rate limiting in development
+if DEBUG:
+    RATELIMIT_ENABLE = False

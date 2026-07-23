@@ -11,17 +11,31 @@ class Report(BaseModel):
     is_anonymous = models.BooleanField(default=False)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    location_accuracy = models.FloatField(null=True, blank=True)  # meters
+    location_accuracy = models.FloatField(null=True, blank=True)
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='assigned_reports',
-        limit_choices_to={'role': 'security'}   # only security can be assigned
+        limit_choices_to={'role': 'security'}
     )
-    metadata = models.JSONField(default=dict, blank=True)  # AI readiness
+    metadata = models.JSONField(default=dict, blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+
+    # Offline support
+    idempotency_key = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    client_created_at = models.DateTimeField(null=True, blank=True)
+
+    # ✅ New department fields
+    department = models.ForeignKey(
+        'Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reports'
+    )
+    custom_department = models.CharField(max_length=200, blank=True)
 
     class Meta:
         db_table = 'reports'
@@ -31,8 +45,9 @@ class Report(BaseModel):
             models.Index(fields=['urgency']),
             models.Index(fields=['created_at']),
             models.Index(fields=['assigned_to']),
+            models.Index(fields=['idempotency_key']),
+            models.Index(fields=['department']),  # for performance
         ]
-
     def __str__(self):
         return f"Report {self.id} - {self.status}"
 
@@ -57,3 +72,31 @@ class Evidence(BaseModel):
 
     def __str__(self):
         return f"Evidence for Report {self.report_id}"
+
+class Department(BaseModel):
+    """Department entity for routing reports."""
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    head = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='departments_headed'
+    )
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='department_members',
+        blank=True
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'departments'
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return self.name
