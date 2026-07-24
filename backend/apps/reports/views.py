@@ -210,11 +210,8 @@ class EvidenceUploadView(APIView):
         is_security = user.role == 'security'
         is_owner = False
         if not report.is_anonymous:
-            from apps.reports.models import ReportIdentity
-            pattern = f"PLACEHOLDER_{user.id}"
-            identity = ReportIdentity.objects.filter(report=report, encrypted_reporter_ref__icontains=pattern).first()
-            if identity:
-                is_owner = True
+            identity = ReportIdentity.objects.filter(report=report).first()
+            is_owner = IdentityService.is_owner(identity, user)
 
         if not (is_security or is_owner):
             raise PermissionDenied("You do not have permission to upload evidence for this report.")
@@ -267,12 +264,8 @@ class MyReportsView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsStudentOrStaff]
 
     def get_queryset(self):
-        user = self.request.user
-        from apps.reports.models import ReportIdentity
-        pattern = f"PLACEHOLDER_{user.id}"
-        identities = ReportIdentity.objects.filter(encrypted_reporter_ref__icontains=pattern)
-        report_ids = identities.values_list('report_id', flat=True)
-        return Report.objects.filter(id__in=report_ids, is_anonymous=False)
+        from apps.reports.services import get_accessible_reports
+        return get_accessible_reports(self.request.user)
 
 
 class SyncView(APIView):

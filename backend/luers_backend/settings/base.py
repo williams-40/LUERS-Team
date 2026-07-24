@@ -9,6 +9,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env = environ.Env()
 environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
+# Encryption keys for identity escrow (anonymity system)
+FERNET_KEY = env("FERNET_KEY")          # used to encrypt/decrypt the reporter's real identity
+IDENTITY_HASH_KEY = env("IDENTITY_HASH_KEY")  # used only to look up "is this report mine", never reversible
+
 # SECURITY
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env.bool("DEBUG", default=False)

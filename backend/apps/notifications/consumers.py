@@ -89,16 +89,12 @@ class ReportConsumer(AsyncWebsocketConsumer):
 
         return False
 
-    @database_sync_to_async
-    def _get_report_and_check_access(self, user, report_id):
-        """Fetch report and check access in one DB call."""
-        try:
-            report = Report.objects.get(id=report_id)
-        except Report.DoesNotExist:
+    async def _get_report_and_check_access(self, user, report_id):
+        """Fetch report and check access."""
+        has_access = await self._can_access_report(user, report_id)
+        if not has_access:
             return None, False
-
-        if not self._can_access_report(user, report_id):
-            return report, False
+        report = await database_sync_to_async(Report.objects.get)(id=report_id)
         return report, True
 
     async def receive(self, text_data):

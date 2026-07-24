@@ -10,3 +10,4 @@ redis
 celery
 drf-spectacular
 django-ratelimit
+cryptography
