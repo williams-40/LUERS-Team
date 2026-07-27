@@ -16,6 +16,9 @@ from apps.notifications.serializers import WebSocketMessageSerializer
 
 User = get_user_model()
 
+# Roles with campus-wide visibility (matches get_accessible_reports in apps.reports.services)
+ADMIN_ROLES = ['security', 'ict_admin', 'management', 'system_admin']
+
 class ReportConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         # Get JWT token and optional report_id from query string
@@ -32,20 +35,27 @@ class ReportConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        # Validate token and get user
+        # Validate token and get user. Any authenticated role may connect —
+        # visibility is enforced per-group below, not at connect() time.
         user = await self.get_user_from_token(token)
-        if not user or user.role not in ['security', 'ict_admin', 'management']:
+        if not user:
             await self.close()
             return
 
         self.user = user
-        self.groups = ['reports']  # Always join the general group
+        self.groups = []
         self.report_groups = []    # Track report-specific groups
 
-        # Join general group
-        await self.channel_layer.group_add('reports', self.channel_name)
+        # Only admin-tier roles get the campus-wide broadcast group; students/staff
+        # would otherwise see report_created/report_updated events for every report,
+        # including other users' anonymous ones.
+        if user.role in ADMIN_ROLES:
+            self.groups.append('reports')
+            await self.channel_layer.group_add('reports', self.channel_name)
 
-        # If a report_id is provided, check access and join if authorized
+        # If a report_id is provided, check access and join if authorized.
+        # This is what lets a student/staff reporter get live updates on their
+        # own report without granting them the general group.
         if report_id:
             if await self._can_access_report(user, report_id):
                 group_name = f'report_{report_id}'
@@ -55,9 +65,10 @@ class ReportConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
-        # Leave general group and all report groups
-        await self.channel_layer.group_discard('reports', self.channel_name)
-        for group in self.report_groups:
+        # Leave whichever groups this connection actually joined
+        for group in getattr(self, 'groups', []):
+            await self.channel_layer.group_discard(group, self.channel_name)
+        for group in getattr(self, 'report_groups', []):
             await self.channel_layer.group_discard(group, self.channel_name)
 
     @database_sync_to_async
@@ -69,7 +80,7 @@ class ReportConsumer(AsyncWebsocketConsumer):
             return False
 
         # Admin roles have full access
-        if user.role in ['security', 'ict_admin', 'management']:
+        if user.role in ADMIN_ROLES:
             return True
 
         # Check if user is the reporter (non-anonymous only)
@@ -125,7 +136,7 @@ class ReportConsumer(AsyncWebsocketConsumer):
         if msg_type == 'ping':
             await self.send(text_data=json.dumps({
                 'type': 'pong',
-                'timestamp': self.scope['server'][1] if self.scope.get('server') else ''
+                'timestamp': timezone.now().isoformat()
             }))
 
         elif msg_type == 'status_update':

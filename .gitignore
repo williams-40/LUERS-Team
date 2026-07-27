@@ -20,3 +20,6 @@ staticfiles/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Local Docker overrides (machine-specific port remaps, etc.)
+docker-compose.override.yml

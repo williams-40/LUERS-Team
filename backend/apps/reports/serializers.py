@@ -124,11 +124,9 @@ class ReportCreateSerializer(serializers.ModelSerializer):
 
         report = Report.objects.create(**validated_data)
 
-        from apps.reports.models import ReportIdentity
-        ReportIdentity.objects.create(
-            report=report,
-            encrypted_reporter_ref=f"PLACEHOLDER_{user.id}" if user else "PLACEHOLDER_ANONYMOUS"
-        )
+        if user:
+            from apps.reports.services import IdentityService
+            IdentityService.create_identity(report, user)
 
         for file in evidence_files:
             file_type = self._get_file_type(file)

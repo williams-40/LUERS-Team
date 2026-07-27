@@ -9,10 +9,12 @@ ENDPOINTS = {
     '/api/v1/dashboard/summary/': 'GET',
 }
 
-# Expected status codes per role
+# Expected status codes per role.
+# GET /api/v1/reports/ is IsAuthenticated-only (any role gets 200; visibility is
+# scoped server-side via get_accessible_reports, not gated at the permission layer).
 ROLE_MATRIX = {
     'student': {
-        '/api/v1/reports/': 403,
+        '/api/v1/reports/': 200,
         '/api/v1/reports/mine/': 200,
         '/api/v1/reports/create/': 201,   # valid data will be provided
         '/api/v1/dashboard/summary/': 403,
@@ -30,7 +32,7 @@ ROLE_MATRIX = {
         '/api/v1/dashboard/summary/': 200,
     },
     'management': {
-        '/api/v1/reports/': 403,
+        '/api/v1/reports/': 200,
         '/api/v1/reports/mine/': 403,
         '/api/v1/reports/create/': 403,
         '/api/v1/dashboard/summary/': 403,

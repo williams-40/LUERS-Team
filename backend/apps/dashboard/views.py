@@ -1,7 +1,7 @@
 ﻿from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Count, Avg, Q
+from django.db.models import Count, Avg, F, Q
 from django.utils import timezone
 from datetime import timedelta
 from apps.reports.models import Report
@@ -30,7 +30,7 @@ class DashboardSummaryView(APIView):
         avg_response_time = None
         if resolved.exists():
             # Calculate average time difference in hours between created_at and updated_at
-            avg = resolved.aggregate(avg_time=Avg('updated_at' - 'created_at'))
+            avg = resolved.aggregate(avg_time=Avg(F('updated_at') - F('created_at')))
             if avg['avg_time']:
                 avg_response_time = avg['avg_time'].total_seconds() / 3600  # hours
 

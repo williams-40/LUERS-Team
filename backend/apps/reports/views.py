@@ -112,6 +112,7 @@ class ReportDetailView(generics.RetrieveAPIView):
     GET /api/v1/reports/{id}/
     Report detail with department-aware access control.
     """
+    queryset = Report.objects.all()
     serializer_class = ReportDetailSerializer
     permission_classes = [permissions.IsAuthenticated]
     lookup_field = 'id'
@@ -143,7 +144,7 @@ class ReportStatusUpdateView(APIView):
     serializer_class = ReportUpdateStatusSerializer
 
     def patch(self, request, id):
-        report = get_object_or_404(Report, id=id)
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_status = serializer.validated_data['status']
@@ -176,7 +177,7 @@ class ReportAssignView(APIView):
     serializer_class = ReportAssignSerializer
 
     def post(self, request, id):
-        report = get_object_or_404(Report, id=id)
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         assigned_to = serializer.validated_data['assigned_to']

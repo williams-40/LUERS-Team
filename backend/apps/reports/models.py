@@ -55,9 +55,15 @@ class ReportIdentity(BaseModel):
     report = models.OneToOneField(Report, on_delete=models.CASCADE, related_name='identity')
     encrypted_reporter_ref = models.TextField()   # encrypted token linking to real user
     # Key held only by escrow role; not accessible in normal serializers
+    reporter_hash = models.CharField(max_length=64, blank=True, null=True)
+    # One-way HMAC of the reporter's user id (EncryptionService.hash_for_lookup),
+    # used only to answer "is this my report" without decrypting encrypted_reporter_ref.
 
     class Meta:
         db_table = 'report_identities'
+        indexes = [
+            models.Index(fields=['reporter_hash']),
+        ]
 
     def __str__(self):
         return f"Identity for Report {self.report_id}"

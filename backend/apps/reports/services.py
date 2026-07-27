@@ -25,7 +25,8 @@ class IdentityService:
         encrypted_ref = EncryptionService.generate_placeholder(user.id)
         return ReportIdentity.objects.create(
             report=report,
-            encrypted_reporter_ref=encrypted_ref
+            encrypted_reporter_ref=encrypted_ref,
+            reporter_hash=EncryptionService.hash_for_lookup(user.id),
         )
 
     @staticmethod
@@ -37,6 +38,16 @@ class IdentityService:
             elif decrypted.startswith('PLACEHOLDER_'):
                 return decrypted.replace('PLACEHOLDER_', '')
         return None
+
+    @staticmethod
+    def is_owner(identity, user):
+        """
+        Whether `user` is the reporter behind `identity`, checked via the
+        one-way reporter_hash (never decrypts encrypted_reporter_ref).
+        """
+        if identity is None or not identity.reporter_hash:
+            return False
+        return identity.reporter_hash == EncryptionService.hash_for_lookup(user.id)
 
     @staticmethod
     def identity_exists(report):
@@ -296,7 +307,7 @@ def get_accessible_reports(user):
         return Report.objects.filter(department__in=dept_as_member)
 
     # Students/staff: only own non‑anonymous reports
-    pattern = f"PLACEHOLDER_{user.id}"
-    identities = ReportIdentity.objects.filter(encrypted_reporter_ref__icontains=pattern)
+    reporter_hash = EncryptionService.hash_for_lookup(user.id)
+    identities = ReportIdentity.objects.filter(reporter_hash=reporter_hash)
     report_ids = identities.values_list('report_id', flat=True)
     return Report.objects.filter(id__in=report_ids, is_anonymous=False)
