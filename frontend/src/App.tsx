@@ -4,7 +4,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { RequireAuth } from './components/auth/RequireAuth';
 import { LoginPage } from './routes/LoginPage';
 import { DashboardPage } from './routes/DashboardPage';
-import { AdminPage } from './routes/AdminPage';
+import { TriageQueuePage } from './routes/TriageQueuePage';
 import { ReportCreatePage } from './routes/ReportCreatePage';
 import { MyReportsPage } from './routes/MyReportsPage';
 import { ReportDetailPage } from './routes/ReportDetailPage';
@@ -30,7 +30,7 @@ const router = createBrowserRouter([
         path: 'admin',
         element: (
           <RequireAuth roles={ADMIN_ROLES}>
-            <AdminPage />
+            <TriageQueuePage />
           </RequireAuth>
         ),
       },

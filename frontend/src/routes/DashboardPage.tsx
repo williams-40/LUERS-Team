@@ -2,12 +2,13 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
 import { ROLE_LABELS } from '../lib/labels';
-import { REPORTER_ROLES } from '../types/domain';
+import { ADMIN_ROLES, REPORTER_ROLES } from '../types/domain';
 
 /** Authenticated landing — role-specific dashboards land in later phases. */
 export function DashboardPage() {
   const { user, logout } = useAuth();
   const isReporter = user ? REPORTER_ROLES.includes(user.role) : false;
+  const isAdminTier = user ? ADMIN_ROLES.includes(user.role) : false;
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
@@ -23,6 +24,14 @@ export function DashboardPage() {
           </Link>
           <Link to="/reports/mine">
             <Button variant="secondary">My reports</Button>
+          </Link>
+        </div>
+      )}
+
+      {isAdminTier && (
+        <div className="mb-6 flex flex-wrap gap-3">
+          <Link to="/admin">
+            <Button variant="primary">Report queue</Button>
           </Link>
         </div>
       )}

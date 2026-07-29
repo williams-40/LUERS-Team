@@ -2,20 +2,27 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { fetchReportDetail } from '../lib/reports-api';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { StatusUpdateControl } from '../components/reports/StatusUpdateControl';
+import { AssignControl } from '../components/reports/AssignControl';
 import { CATEGORY_LABELS } from '../lib/labels';
-import { Urgency } from '../types/domain';
+import { ADMIN_ROLES, Role, Urgency } from '../types/domain';
 import type { ReportDetail } from '../types/domain';
 import type { ApiError } from '../lib/api-client';
+import { useAuth } from '../hooks/useAuth';
+
+const ASSIGN_ROLES: Role[] = [Role.SECURITY, Role.ICT_ADMIN];
 
 export function ReportDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
+  const { user } = useAuth();
   const justCreated = Boolean((location.state as { justCreated?: boolean } | null)?.justCreated);
 
   const {
     data: report,
     isLoading,
     error,
+    refetch,
   } = useQuery<ReportDetail, ApiError>({
     queryKey: ['reports', id],
     queryFn: () => fetchReportDetail(id!),
@@ -75,6 +82,16 @@ export function ReportDetailPage() {
         </p>
       )}
 
+      {report.assigned_to_username && (
+        <p className="text-ink-secondary mb-5 text-sm">
+          <span className="font-semibold">Assigned to:</span> {report.assigned_to_username}
+        </p>
+      )}
+
+      {user?.role === Role.SECURITY && <StatusUpdateControl report={report} onUpdated={refetch} />}
+
+      {user && ASSIGN_ROLES.includes(user.role) && <AssignControl report={report} onUpdated={refetch} />}
+
       {report.evidence.length > 0 && (
         <div className="mb-5">
           <h2 className="text-ink-secondary mb-2 text-[12.5px] font-semibold">
@@ -101,8 +118,11 @@ export function ReportDetailPage() {
         </div>
       )}
 
-      <Link to="/reports/mine" className="text-brand text-sm font-semibold hover:underline">
-        Back to my reports
+      <Link
+        to={user && ADMIN_ROLES.includes(user.role) ? '/admin' : '/reports/mine'}
+        className="text-brand text-sm font-semibold hover:underline"
+      >
+        {user && ADMIN_ROLES.includes(user.role) ? 'Back to queue' : 'Back to my reports'}
       </Link>
     </div>
   );

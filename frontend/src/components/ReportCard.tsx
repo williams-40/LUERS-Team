@@ -61,6 +61,12 @@ export function ReportCard({ report }: { report: ReportListItem }) {
               </span>
             </>
           )}
+          {report.assigned_to_username && (
+            <>
+              <span>·</span>
+              <span>@{report.assigned_to_username}</span>
+            </>
+          )}
         </div>
       </div>
     </Link>

@@ -64,6 +64,11 @@ export interface Department {
   name: string;
 }
 
+export interface Officer {
+  id: string;
+  username: string;
+}
+
 export interface Evidence {
   id: string;
   file: string;
