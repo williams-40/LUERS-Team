@@ -2,13 +2,17 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
 import { ROLE_LABELS } from '../lib/labels';
-import { ADMIN_ROLES, REPORTER_ROLES } from '../types/domain';
+import { ADMIN_ROLES, REPORTER_ROLES, Role } from '../types/domain';
+import { DashboardSummaryPanel } from '../components/dashboard/DashboardSummaryPanel';
 
-/** Authenticated landing — role-specific dashboards land in later phases. */
+/** Matches DashboardSummaryView's IsSecurity | IsICTAdmin permission — narrower than ADMIN_ROLES. */
+const DASHBOARD_ROLES: Role[] = [Role.SECURITY, Role.ICT_ADMIN];
+
 export function DashboardPage() {
   const { user, logout } = useAuth();
   const isReporter = user ? REPORTER_ROLES.includes(user.role) : false;
   const isAdminTier = user ? ADMIN_ROLES.includes(user.role) : false;
+  const canSeeSummary = user ? DASHBOARD_ROLES.includes(user.role) : false;
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
@@ -35,6 +39,8 @@ export function DashboardPage() {
           </Link>
         </div>
       )}
+
+      {canSeeSummary && <DashboardSummaryPanel />}
 
       <Button variant="ghost" onClick={logout}>
         Sign out

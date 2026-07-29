@@ -1,14 +1,19 @@
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { fetchReportDetail } from '../lib/reports-api';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { StatusUpdateControl } from '../components/reports/StatusUpdateControl';
 import { AssignControl } from '../components/reports/AssignControl';
+import { ReportChat } from '../components/reports/ReportChat';
+import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { CATEGORY_LABELS } from '../lib/labels';
 import { ADMIN_ROLES, Role, Urgency } from '../types/domain';
 import type { ReportDetail } from '../types/domain';
 import type { ApiError } from '../lib/api-client';
+import type { ChatMessagePayload } from '../lib/ws-client';
 import { useAuth } from '../hooks/useAuth';
+import { useReportSocket } from '../hooks/useReportSocket';
 
 const ASSIGN_ROLES: Role[] = [Role.SECURITY, Role.ICT_ADMIN];
 
@@ -27,6 +32,17 @@ export function ReportDetailPage() {
     queryKey: ['reports', id],
     queryFn: () => fetchReportDetail(id!),
     enabled: Boolean(id),
+  });
+
+  const [liveMessages, setLiveMessages] = useState<ChatMessagePayload[]>([]);
+  useEffect(() => setLiveMessages([]), [id]);
+
+  const { status: socketStatus, sendChatMessage } = useReportSocket({
+    reportId: id,
+    onReportUpdated: (updated) => {
+      if (updated.id === id) void refetch();
+    },
+    onChatMessage: (message) => setLiveMessages((prev) => [...prev, message]),
   });
 
   if (isLoading) {
@@ -66,7 +82,10 @@ export function ReportDetailPage() {
 
       <div className="mb-1 flex items-center justify-between gap-2">
         <h1 className="text-2xl">{CATEGORY_LABELS[report.category]}</h1>
-        <StatusBadge status={report.status} />
+        <div className="flex items-center gap-2">
+          <LiveIndicator status={socketStatus} />
+          <StatusBadge status={report.status} />
+        </div>
       </div>
 
       <p className="text-ink-muted mb-4 font-mono text-xs">
@@ -117,6 +136,13 @@ export function ReportDetailPage() {
           </ul>
         </div>
       )}
+
+      <ReportChat
+        reportId={report.id}
+        liveMessages={liveMessages}
+        onSend={sendChatMessage}
+        canSend={socketStatus === 'open'}
+      />
 
       <Link
         to={user && ADMIN_ROLES.includes(user.role) ? '/admin' : '/reports/mine'}

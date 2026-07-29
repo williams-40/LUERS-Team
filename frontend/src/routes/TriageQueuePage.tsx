@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useReportQueue } from '../hooks/useReportQueue';
 import type { QueueFilterState } from '../hooks/useReportQueue';
+import { useReportSocket } from '../hooks/useReportSocket';
 import { ReportCard } from '../components/ReportCard';
 import { Button } from '../components/ui/Button';
+import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { Category, Status, Urgency } from '../types/domain';
 import { CATEGORY_LABELS } from '../lib/labels';
 
@@ -44,7 +46,12 @@ function FilterSelect<T extends string>({
 
 export function TriageQueuePage() {
   const [filters, setFilters] = useState<QueueFilterState>({});
-  const { data, isLoading, isError, page, setPage, refresh, isFetching } = useReportQueue(filters);
+  const { data, isLoading, isError, page, setPage, refresh, isFetching, applyLiveEvent } =
+    useReportQueue(filters);
+  const { status: socketStatus } = useReportSocket({
+    onReportCreated: applyLiveEvent,
+    onReportUpdated: applyLiveEvent,
+  });
 
   function setFilter<K extends keyof QueueFilterState>(key: K, value: QueueFilterState[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -53,7 +60,10 @@ export function TriageQueuePage() {
   return (
     <div className="mx-auto max-w-2xl px-5 py-8">
       <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-2xl">Report queue</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl">Report queue</h1>
+          <LiveIndicator status={socketStatus} />
+        </div>
         <Button variant="secondary" size="sm" onClick={() => refresh()} disabled={isFetching}>
           {isFetching ? 'Refreshing…' : 'Refresh'}
         </Button>

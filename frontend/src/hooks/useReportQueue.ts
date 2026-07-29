@@ -9,6 +9,13 @@ export interface QueueFilterState {
   urgency?: Urgency;
 }
 
+function matchesFilters(report: ReportListItem, filters: QueueFilterState): boolean {
+  if (filters.status && report.status !== filters.status) return false;
+  if (filters.category && report.category !== filters.category) return false;
+  if (filters.urgency && report.urgency !== filters.urgency) return false;
+  return true;
+}
+
 /**
  * Full fetch on filter/page change; "refresh" delta-fetches via the X-Cursor
  * from the last response and merges results in place (update matching ids,
@@ -68,5 +75,34 @@ export function useReportQueue(filters: QueueFilterState) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, filtersKey, queryClient]);
 
-  return { ...query, page, setPage: changePage, refresh };
+  /**
+   * Patches a single report into the page-1 view from a live WS event —
+   * update in place, insert if it now matches the filters, or drop it if it
+   * no longer does (e.g. a status change filtered it out). Only page 1 is
+   * patchable this way; other pages are left stale until revisited.
+   */
+  const applyLiveEvent = useCallback(
+    (report: ReportListItem) => {
+      if (page !== 1) return;
+      const matches = matchesFilters(report, filters);
+      queryClient.setQueryData<Paginated<ReportListItem>>(queryKey, (old) => {
+        if (!old) return old;
+        const idx = old.results.findIndex((r) => r.id === report.id);
+        if (!matches) {
+          if (idx < 0) return old;
+          return { ...old, results: old.results.filter((r) => r.id !== report.id), count: Math.max(0, old.count - 1) };
+        }
+        if (idx >= 0) {
+          const results = [...old.results];
+          results[idx] = report;
+          return { ...old, results };
+        }
+        return { ...old, results: [report, ...old.results], count: old.count + 1 };
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page, filtersKey, queryClient],
+  );
+
+  return { ...query, page, setPage: changePage, refresh, applyLiveEvent };
 }

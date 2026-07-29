@@ -124,6 +124,14 @@ export interface Paginated<T> {
   results: T[];
 }
 
+export interface Message {
+  id: string;
+  sender_id: string;
+  sender_username: string;
+  content: string;
+  created_at: string;
+}
+
 export interface DashboardSummary {
   total: number;
   category_counts: { category: Category; count: number }[];
