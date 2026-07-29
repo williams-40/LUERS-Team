@@ -1,0 +1,70 @@
+@import 'tailwindcss';
+
+/* Self-hosted fonts (offline-friendly — no external font CDN calls) */
+@import '@fontsource/manrope/700.css';
+@import '@fontsource/manrope/800.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+/*
+ * Design tokens, sourced from the LUERS Design System project.
+ * Brand colors were extracted directly from lirauni.ac.ug (logo pixel sampling
+ * + the site's own --global-palette1 CSS variable) — see design system notes.
+ * Status/urgency colors follow the dataviz skill's validated fixed status
+ * palette (good/warning/serious/critical) and are deliberately a separate
+ * scale from brand, so the two never compete for meaning.
+ */
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Brand — verified from the university's own logo/theme */
+  --color-brand: #2d5dc2;
+  --color-brand-ink: #0a1f44;
+  --color-accent-yellow: #fefd07;
+
+  /* Status — reserved meaning, never reused for anything else */
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-serious: #ec835a;
+  --color-status-critical: #d03b3b;
+
+  /* Ink / surfaces */
+  --color-ink: #0b0b0b;
+  --color-ink-secondary: #52514e;
+  --color-ink-muted: #898781;
+  --color-surface: #fcfcfb;
+  --color-surface-2: #ffffff;
+}
+
+@keyframes rail-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(208 59 59 / 22%);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgb(208 59 59 / 0%);
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  body {
+    @apply bg-surface text-ink font-sans antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-heading font-bold;
+  }
+  code,
+  .font-data {
+    @apply font-mono;
+  }
+}
