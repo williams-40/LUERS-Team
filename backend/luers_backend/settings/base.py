@@ -142,6 +142,9 @@ SIMPLE_JWT = {
 
 # CORS (tightened in production via settings override)
 CORS_ALLOW_ALL_ORIGINS = True   # Override in production.py
+# X-Cursor (ReportListView delta-fetch cursor) isn't in the CORS default-safelisted
+# header set, so cross-origin JS can't read it without this.
+CORS_EXPOSE_HEADERS = ["X-Cursor"]
 
 # Channels & Redis
 ASGI_APPLICATION = "luers_backend.asgi.application"
