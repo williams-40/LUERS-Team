@@ -31,15 +31,19 @@ class WebSocketMessageSerializer(serializers.Serializer):
     type = serializers.ChoiceField(choices=['ping', 'status_update', 'chat_message'], required=True)
 
     def validate(self, attrs):
+        # `attrs` only carries fields this serializer itself declares (just
+        # `type`) — report_id/status/content live on the raw payload, so the
+        # nested serializers below must validate against `self.initial_data`,
+        # not `attrs`, or every non-ping message fails as "field required".
         msg_type = attrs.get('type')
         if msg_type == 'ping':
             pass
         elif msg_type == 'status_update':
-            status_serializer = StatusUpdateMessageSerializer(data=attrs)
+            status_serializer = StatusUpdateMessageSerializer(data=self.initial_data)
             status_serializer.is_valid(raise_exception=True)
             attrs.update(status_serializer.validated_data)
         elif msg_type == 'chat_message':
-            chat_serializer = ChatMessageSerializer(data=attrs)
+            chat_serializer = ChatMessageSerializer(data=self.initial_data)
             chat_serializer.is_valid(raise_exception=True)
             attrs.update(chat_serializer.validated_data)
         else:

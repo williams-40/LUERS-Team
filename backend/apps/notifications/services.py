@@ -25,13 +25,13 @@ class NotificationService:
         channel_layer = get_channel_layer()
         serializer = ReportListSerializer(report, context={'request': None})
         event_type = 'report_created' if kwargs.get('event_type') == 'created' else 'report_updated'
-        async_to_sync(channel_layer.group_send)(
-            'reports',
-            {
-                'type': event_type,
-                'data': serializer.data
-            }
-        )
+        payload = {'type': event_type, 'data': serializer.data}
+        # Admin-tier dashboard/queue group, plus this report's own group —
+        # without the latter, a non-admin reporter watching their own report
+        # (via ws/reports/?report_id=...) never sees a live update, since
+        # they're never a member of 'reports'.
+        async_to_sync(channel_layer.group_send)('reports', payload)
+        async_to_sync(channel_layer.group_send)(f'report_{report.id}', payload)
         logger.info(f"[WebSocket] Broadcast sent for report {report.id}")
         return {'status': 'sent', 'channel': 'websocket'}
 

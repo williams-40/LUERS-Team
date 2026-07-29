@@ -5,6 +5,7 @@ psycopg2-binary
 django-environ
 django-cors-headers
 channels
+daphne
 channels-redis
 redis
 django-redis

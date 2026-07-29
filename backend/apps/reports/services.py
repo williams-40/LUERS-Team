@@ -154,7 +154,12 @@ class ReportService:
             channel=Channel.WEBSOCKET,
             sent_at=timezone.now()
         )
-        NotificationService.broadcast_report_created(report)
+        # Deferred to on_commit: this runs inside @transaction.atomic, and the
+        # in-memory channel layer delivers to listening sockets fast enough
+        # that a client refetching in response to the broadcast can lose the
+        # race against this transaction's own commit and read stale/missing
+        # data. Broadcasting only after commit closes that window.
+        transaction.on_commit(lambda: NotificationService.broadcast_report_created(report))
 
         # Send SMS and Email if assigned
         if report.assigned_to:
@@ -219,7 +224,7 @@ class ReportService:
             channel=Channel.WEBSOCKET,
             sent_at=timezone.now()
         )
-        NotificationService.broadcast_report_updated(report)
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
         return {'status': new_status}
 
     @staticmethod
@@ -248,6 +253,11 @@ class ReportService:
                 NotificationService.dispatch(report, Channel.SMS, recipient=assigned_to)
             if assigned_to.email:
                 NotificationService.dispatch(report, Channel.EMAIL, recipient=assigned_to)
+
+        # Unlike update_status, this broadcast was missing entirely — an
+        # assignment never reached the live queue/dashboard/report-detail
+        # views until a manual refresh.
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
         return {'assigned_to': assigned_to.id}
 
     @staticmethod

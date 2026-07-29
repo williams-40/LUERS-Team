@@ -20,6 +20,9 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 # Application definition
 DJANGO_APPS = [
+    # Must be first: channels patches `runserver` to serve ASGI (and thus
+    # websockets) only when daphne is the very first entry in INSTALLED_APPS.
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

@@ -25,6 +25,12 @@ class ReportListSerializer(serializers.ModelSerializer):
     category_display = serializers.CharField(source='get_category_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     urgency_display = serializers.CharField(source='get_urgency_display', read_only=True)
+    # Explicit UUIDField (not the ModelSerializer-inferred PrimaryKeyRelatedField)
+    # so `.data` holds a plain str — PrimaryKeyRelatedField.to_representation
+    # returns the raw UUID object, which json.dumps() in ReportConsumer can't
+    # serialize (DRF's own renderer would have handled it, but the WS
+    # broadcast path calls json.dumps directly on `.data`).
+    assigned_to = serializers.UUIDField(source='assigned_to_id', read_only=True, default=None)
     assigned_to_username = serializers.CharField(source='assigned_to.username', read_only=True, default=None)
     evidence_count = serializers.IntegerField(source='evidence.count', read_only=True)
     # ✅ Department fields

@@ -15,8 +15,9 @@ class CanAccessReportMixin:
         report = get_object_or_404(Report, id=report_id)
         user = self.request.user
 
-        # Admin roles have full access (case‑insensitive)
-        admin_roles = {'security', 'ict_admin', 'management'}
+        # Admin roles have full access (case‑insensitive) — matches ADMIN_ROLES in
+        # apps.notifications.consumers / apps.reports.services.get_accessible_reports
+        admin_roles = {'security', 'ict_admin', 'management', 'system_admin'}
         if user.role and user.role.lower() in admin_roles:
             return report
 
