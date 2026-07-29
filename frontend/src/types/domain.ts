@@ -13,6 +13,9 @@ export type Role = (typeof Role)[keyof typeof Role];
 /** Matches ADMIN_ROLES in backend/apps/notifications/consumers.py and get_accessible_reports. */
 export const ADMIN_ROLES: Role[] = [Role.SECURITY, Role.ICT_ADMIN, Role.MANAGEMENT, Role.SYSTEM_ADMIN];
 
+/** Matches IsStudentOrStaff in backend/apps/accounts/permissions.py — who can create reports. */
+export const REPORTER_ROLES: Role[] = [Role.STUDENT, Role.STAFF];
+
 export const Category = {
   THEFT: 'theft',
   ASSAULT: 'assault',
@@ -107,6 +110,13 @@ export interface CreateReportInput {
   custom_department?: string;
   idempotency_key?: string;
   client_created_at?: string;
+}
+
+export interface Paginated<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
 }
 
 export interface DashboardSummary {

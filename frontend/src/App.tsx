@@ -5,10 +5,13 @@ import { RequireAuth } from './components/auth/RequireAuth';
 import { LoginPage } from './routes/LoginPage';
 import { DashboardPage } from './routes/DashboardPage';
 import { AdminPage } from './routes/AdminPage';
+import { ReportCreatePage } from './routes/ReportCreatePage';
+import { MyReportsPage } from './routes/MyReportsPage';
+import { ReportDetailPage } from './routes/ReportDetailPage';
 import { StyleGuidePage } from './routes/StyleGuidePage';
 import { ForbiddenPage } from './routes/ForbiddenPage';
 import { NotFoundPage } from './routes/NotFoundPage';
-import { ADMIN_ROLES } from './types/domain';
+import { ADMIN_ROLES, REPORTER_ROLES } from './types/domain';
 
 const router = createBrowserRouter([
   {
@@ -28,6 +31,30 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth roles={ADMIN_ROLES}>
             <AdminPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'reports/new',
+        element: (
+          <RequireAuth roles={REPORTER_ROLES}>
+            <ReportCreatePage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'reports/mine',
+        element: (
+          <RequireAuth roles={REPORTER_ROLES}>
+            <MyReportsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'reports/:id',
+        element: (
+          <RequireAuth>
+            <ReportDetailPage />
           </RequireAuth>
         ),
       },
