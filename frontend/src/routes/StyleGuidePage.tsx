@@ -72,15 +72,15 @@ const DEMO_REPORTS: ReportListItem[] = [
   },
 ];
 
-/** Temporary component showcase for Phase 0 — replaced by real routes in Phase 1+. */
-export function HomePage() {
+/** Component showcase / living style guide — reachable at /style-guide. */
+export function StyleGuidePage() {
   return (
     <div className="mx-auto max-w-xl space-y-8 px-5 py-8">
       <section>
         <h1 className="mb-1 text-2xl">LUERS Foundations</h1>
         <p className="text-ink-secondary text-sm">
-          Phase 0 scaffold — design tokens, component primitives, routing, and the API client are wired up.
-          Auth and real report data land in Phase 1/2.
+          Design tokens and component primitives — a living reference, not a real screen. Real screens start
+          at <code className="font-data">/login</code> and <code className="font-data">/</code>.
         </p>
       </section>
 

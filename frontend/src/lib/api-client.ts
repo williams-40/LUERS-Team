@@ -45,12 +45,23 @@ async function refreshAccessToken(): Promise<string> {
   return access;
 }
 
+/** /auth/login/ and /auth/refresh/ 401s are login/refresh failures, not "your session expired" — never retried via refresh. */
+const AUTH_ENDPOINTS = ['/auth/login/', '/auth/refresh/'];
+function isAuthEndpoint(url?: string): boolean {
+  return Boolean(url && AUTH_ENDPOINTS.some((path) => url.includes(path)));
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
 
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isAuthEndpoint(originalRequest.url)
+    ) {
       originalRequest._retry = true;
       try {
         refreshPromise ??= refreshAccessToken().finally(() => {

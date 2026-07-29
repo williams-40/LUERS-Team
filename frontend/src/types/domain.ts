@@ -10,6 +10,9 @@ export const Role = {
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
 
+/** Matches ADMIN_ROLES in backend/apps/notifications/consumers.py and get_accessible_reports. */
+export const ADMIN_ROLES: Role[] = [Role.SECURITY, Role.ICT_ADMIN, Role.MANAGEMENT, Role.SYSTEM_ADMIN];
+
 export const Category = {
   THEFT: 'theft',
   ASSAULT: 'assault',
