@@ -1,10 +1,14 @@
-﻿from rest_framework import status
+﻿from django.contrib.auth import get_user_model
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from apps.accounts.serializers import UserSerializer
+from apps.accounts.serializers import OfficerSerializer, UserSerializer
 from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsManagement, IsStudentOrStaff
+from apps.core.choices import Role
+
+User = get_user_model()
 
 class LoginView(TokenObtainPairView):
     """
@@ -30,6 +34,19 @@ class MeView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+
+class SecurityOfficersView(generics.ListAPIView):
+    """
+    GET /api/v1/auth/officers/
+    Lists security officers for assignment pickers. Same role gate as
+    ReportAssignView (IsSecurity|IsICTAdmin) since that's the only place
+    this list is used.
+    """
+    serializer_class = OfficerSerializer
+    permission_classes = [IsAuthenticated, IsSecurity | IsICTAdmin]
+    pagination_class = None
+    queryset = User.objects.filter(role=Role.SECURITY).order_by('username')
 # ... existing imports ...
 
 

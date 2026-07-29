@@ -10,3 +10,10 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_display', 'university_id', 'phone_number', 'date_joined']
         read_only_fields = ['id', 'date_joined']
+
+
+class OfficerSerializer(serializers.ModelSerializer):
+    """Minimal shape for assignment pickers — deliberately excludes email/phone/etc."""
+    class Meta:
+        model = User
+        fields = ['id', 'username']
