@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework.exceptions import ValidationError as DRFValidationError
-from apps.notifications.email import EmailService
+from apps.notifications.tasks import send_email_task
 
 User = get_user_model()
 
@@ -30,10 +30,10 @@ class PasswordResetService:
         token = default_token_generator.make_token(user)
         reset_url = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
 
-        EmailService.send_email(
-            recipient_email=user.email,
-            subject="Reset your LUERS password",
-            message=(
+        send_email_task.delay(
+            user.email,
+            "Reset your LUERS password",
+            (
                 f"Hi {user.username},\n\n"
                 f"Use the link below to reset your LUERS password. "
                 f"If you didn't request this, you can ignore this email.\n\n"

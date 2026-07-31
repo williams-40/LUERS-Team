@@ -15,6 +15,7 @@ django-ratelimit
 cryptography
 twilio
 reportlab
+sentry-sdk
 
 # Testing
 pytest

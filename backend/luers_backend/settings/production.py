@@ -18,6 +18,10 @@ SECURE_REFERRER_POLICY = "same-origin"
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 
+# Structured JSON logs for aggregation — base.py's console-readable formatter
+# is only meant for local dev.
+LOGGING["handlers"]["console"]["formatter"] = "json"
+
 # base.py's CACHES/CHANNEL_LAYERS default to in-process backends, which don't
 # share state across multiple worker processes — silently breaking rate
 # limiting and WebSocket group fan-out under any real multi-worker deployment.

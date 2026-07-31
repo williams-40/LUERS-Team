@@ -3,11 +3,13 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from apps.reports.views import SyncView 
+from apps.reports.views import SyncView
+from apps.core.views import HealthCheckView
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('healthz/', HealthCheckView.as_view(), name='healthz'),
     path('api/v1/auth/', include('apps.accounts.urls')),
     path('api/v1/reports/', include('apps.reports.urls')),
     path('api/v1/dashboard/', include('apps.dashboard.urls')),

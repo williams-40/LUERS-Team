@@ -2,8 +2,7 @@
 from asgiref.sync import async_to_sync
 from apps.reports.serializers import ReportListSerializer
 from apps.core.choices import Channel
-from apps.notifications.sms import SMSService
-from apps.notifications.email import EmailService
+from apps.notifications.tasks import send_sms_task, send_email_task
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,8 +43,8 @@ class NotificationService:
         # --- FIXED: Converted UUID to string before slicing ---
         short_id = str(report.id)[:8]
         message = f"LUERS Alert: New report #{short_id} - {report.category} at {report.created_at.strftime('%H:%M')}"
-        result = SMSService.send_sms(recipient.phone_number, message)
-        return result
+        send_sms_task.delay(recipient.phone_number, message)
+        return {'status': 'queued'}
 
     @staticmethod
     def _send_email(report, recipient, **kwargs):
@@ -67,8 +66,8 @@ Created: {report.created_at}
 
 Please login to LUERS for more details.
 """
-        result = EmailService.send_email(recipient.email, subject, message)
-        return result
+        send_email_task.delay(recipient.email, subject, message)
+        return {'status': 'queued'}
 
     @staticmethod
     def broadcast_report_created(report):

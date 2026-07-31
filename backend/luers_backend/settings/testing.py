@@ -27,3 +27,10 @@ CACHES = {
 # In-memory email backend so password-reset tests can assert on
 # django.core.mail.outbox without hitting real SMTP.
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+
+# Run Celery tasks inline (no broker needed) and don't retry — the SMS/email
+# backends have no real credentials in tests, so a retrying task would fail
+# fast repeatedly instead of hanging on a countdown.
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+NOTIFICATION_TASK_MAX_RETRIES = 0

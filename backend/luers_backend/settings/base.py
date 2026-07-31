@@ -58,6 +58,7 @@ AUTH_USER_MODEL = "accounts.User"
 # Middleware
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "apps.core.middleware.RequestIDMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -207,6 +208,67 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="LUERS <noreply@luers.com
 # Used to build links in outbound emails (e.g. password reset) that point
 # back at the SPA, which lives on a different origin than this API.
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:5175")
+
+# Logging — console-readable here; production.py swaps the handler's
+# formatter to the JSON one for log aggregation. RequestIDMiddleware
+# populates request_id_var for the duration of each request.
+LOG_LEVEL = env("LOG_LEVEL", default="INFO")
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {
+            "()": "apps.core.log_utils.RequestIDFilter",
+        },
+    },
+    "formatters": {
+        "console": {
+            "format": "%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s",
+        },
+        "json": {
+            "()": "apps.core.log_utils.JSONFormatter",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "console",
+            "filters": ["request_id"],
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+}
+
+# Notification task retries (apps/notifications/tasks.py) — overridden to 0
+# in testing.py so tests fail fast instead of retrying against a Twilio/SMTP
+# sandbox that isn't configured with real credentials.
+NOTIFICATION_TASK_MAX_RETRIES = env.int("NOTIFICATION_TASK_MAX_RETRIES", default=3)
+NOTIFICATION_TASK_RETRY_DELAY = env.int("NOTIFICATION_TASK_RETRY_DELAY", default=30)
+
+# Sentry — no-op unless SENTRY_DSN is set, matching how Twilio/Mailtrap
+# already degrade gracefully in this codebase without their own credentials.
+SENTRY_DSN = env("SENTRY_DSN", default="")
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration(), CeleryIntegration()],
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
 
 # Disable rate limiting in development
 if DEBUG:
