@@ -15,7 +15,12 @@ import { ReportDetailPage } from './routes/ReportDetailPage';
 import { StyleGuidePage } from './routes/StyleGuidePage';
 import { ForbiddenPage } from './routes/ForbiddenPage';
 import { NotFoundPage } from './routes/NotFoundPage';
-import { ADMIN_ROLES, REPORTER_ROLES } from './types/domain';
+import { ProfilePage } from './routes/ProfilePage';
+import { AdminUsersPage } from './routes/AdminUsersPage';
+import { AdminUserFormPage } from './routes/AdminUserFormPage';
+import { DepartmentsPage } from './routes/DepartmentsPage';
+import { DepartmentFormPage } from './routes/DepartmentFormPage';
+import { ACCOUNT_ADMIN_ROLES, ADMIN_ROLES, REPORTER_ROLES } from './types/domain';
 
 const router = createBrowserRouter([
   {
@@ -68,6 +73,62 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <ReportDetailPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'profile',
+        element: (
+          <RequireAuth>
+            <ProfilePage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/users',
+        element: (
+          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+            <AdminUsersPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/users/new',
+        element: (
+          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+            <AdminUserFormPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/users/:id/edit',
+        element: (
+          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+            <AdminUserFormPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/departments',
+        element: (
+          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+            <DepartmentsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/departments/new',
+        element: (
+          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+            <DepartmentFormPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/departments/:id/edit',
+        element: (
+          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+            <DepartmentFormPage />
           </RequireAuth>
         ),
       },

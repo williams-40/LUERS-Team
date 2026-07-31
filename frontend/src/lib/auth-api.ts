@@ -51,3 +51,20 @@ export async function confirmPasswordReset(input: {
     new_password: input.newPassword,
   });
 }
+
+export async function updateMe(
+  input: Partial<Pick<User, 'first_name' | 'last_name' | 'phone_number' | 'email'>>,
+): Promise<User> {
+  const { data } = await apiClient.patch<User>('/auth/me/', input);
+  return data;
+}
+
+export async function changePassword(input: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  await apiClient.post('/auth/change-password/', {
+    current_password: input.currentPassword,
+    new_password: input.newPassword,
+  });
+}

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
 import { ROLE_LABELS } from '../lib/labels';
-import { ADMIN_ROLES, REPORTER_ROLES, Role } from '../types/domain';
+import { ACCOUNT_ADMIN_ROLES, ADMIN_ROLES, REPORTER_ROLES, Role } from '../types/domain';
 import { DashboardSummaryPanel } from '../components/dashboard/DashboardSummaryPanel';
 import { DashboardTrendsPanel } from '../components/dashboard/DashboardTrendsPanel';
 
@@ -14,6 +14,7 @@ export function DashboardPage() {
   const isReporter = user ? REPORTER_ROLES.includes(user.role) : false;
   const isAdminTier = user ? ADMIN_ROLES.includes(user.role) : false;
   const canSeeSummary = user ? DASHBOARD_ROLES.includes(user.role) : false;
+  const isAccountAdmin = user ? ACCOUNT_ADMIN_ROLES.includes(user.role) : false;
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
@@ -44,8 +45,25 @@ export function DashboardPage() {
         </div>
       )}
 
+      {isAccountAdmin && (
+        <div className="mb-6 flex flex-wrap gap-3">
+          <Link to="/admin/users">
+            <Button variant="secondary">Manage users</Button>
+          </Link>
+          <Link to="/admin/departments">
+            <Button variant="secondary">Departments</Button>
+          </Link>
+        </div>
+      )}
+
       {canSeeSummary && <DashboardSummaryPanel />}
       {canSeeSummary && <DashboardTrendsPanel />}
+
+      <div className="mb-4 flex flex-wrap gap-3">
+        <Link to="/profile">
+          <Button variant="ghost">My profile</Button>
+        </Link>
+      </div>
 
       <Button variant="ghost" onClick={() => void logout()}>
         Sign out

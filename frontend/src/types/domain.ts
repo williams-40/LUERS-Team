@@ -16,6 +16,9 @@ export const ADMIN_ROLES: Role[] = [Role.SECURITY, Role.ICT_ADMIN, Role.MANAGEME
 /** Matches IsStudentOrStaff in backend/apps/accounts/permissions.py — who can create reports. */
 export const REPORTER_ROLES: Role[] = [Role.STUDENT, Role.STAFF];
 
+/** Matches IsAccountAdmin in backend/apps/accounts/permissions.py — ict_admin + system_admin only. */
+export const ACCOUNT_ADMIN_ROLES: Role[] = [Role.ICT_ADMIN, Role.SYSTEM_ADMIN];
+
 export const Category = {
   THEFT: 'theft',
   ASSAULT: 'assault',
@@ -54,14 +57,34 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  first_name: string;
+  last_name: string;
   phone_number: string | null;
   role: Role;
   university_id: string | null;
+  is_active: boolean;
+  date_joined: string;
 }
 
 export interface Department {
   id: string;
   name: string;
+  description: string;
+  head: string | null;
+  head_username: string | null;
+  members: string[];
+  member_usernames: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentInput {
+  name: string;
+  description: string;
+  head: string | null;
+  members: string[];
+  is_active: boolean;
 }
 
 export interface Officer {
