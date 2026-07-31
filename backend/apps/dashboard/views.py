@@ -2,6 +2,7 @@
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Avg, F, Q
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
 from apps.reports.models import Report
@@ -41,3 +42,39 @@ class DashboardSummaryView(APIView):
             'urgency_counts': urgency_counts,
             'average_response_time_hours': avg_response_time,
         })
+
+
+class DashboardTrendsView(APIView):
+    """
+    GET /api/v1/dashboard/trends/?days=30
+    Returns daily report counts for the last N days (default 30, max 180).
+    Only Security and ICT Admin can access.
+    """
+    permission_classes = [IsAuthenticated, IsSecurity | IsICTAdmin]
+
+    def get(self, request):
+        try:
+            days = int(request.query_params.get('days', 30))
+        except ValueError:
+            days = 30
+        days = max(1, min(days, 180))
+
+        since = timezone.now() - timedelta(days=days - 1)
+        counts_by_date = dict(
+            Report.objects.filter(created_at__gte=since)
+            .annotate(day=TruncDate('created_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .values_list('day', 'count')
+        )
+
+        today = timezone.localdate()
+        daily_counts = [
+            {
+                'date': (today - timedelta(days=offset)).isoformat(),
+                'count': counts_by_date.get(today - timedelta(days=offset), 0),
+            }
+            for offset in range(days - 1, -1, -1)
+        ]
+
+        return Response({'daily_counts': daily_counts})

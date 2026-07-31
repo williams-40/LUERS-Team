@@ -10,6 +10,7 @@ from apps.notifications.models import Notification, Message
 from apps.notifications.services import NotificationService
 from apps.core.services import EncryptionService
 from apps.reports.mapping import get_department_for_category
+from apps.accounts.models import User
 
 
 class ConflictError(APIException):
@@ -52,6 +53,38 @@ class IdentityService:
     @staticmethod
     def identity_exists(report):
         return hasattr(report, 'identity')
+
+    @staticmethod
+    def reveal_identity(report, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
+        """
+        Decrypt a report's reporter identity for the Management/Escrow role
+        and record a DEANONYMIZE audit entry. Raises APIException(404-style)
+        via the caller if no identity exists.
+        """
+        identity = ReportIdentity.objects.filter(report=report).first()
+        if identity is None:
+            return None
+
+        user_id = IdentityService.get_reporter(identity)
+        reporter = None
+        if user_id:
+            reporter = User.objects.filter(id=user_id).first()
+
+        after_state = {
+            'revealed_user_id': str(reporter.id) if reporter else user_id,
+            'revealed_username': reporter.username if reporter else None,
+        }
+
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.DEANONYMIZE,
+            after_state=after_state,
+            ip_address=ip_address,
+            sync_origin=sync_origin,
+        )
+
+        return reporter
 
 
 class ReportClassifierService:
@@ -297,6 +330,20 @@ class ReportService:
 # ============================================================
 # Department Access Helper (Phase 6)
 # ============================================================
+
+def filter_reports(queryset, params):
+    """Shared status/category/urgency filtering for the queue list and export views."""
+    status = params.get('status')
+    category = params.get('category')
+    urgency = params.get('urgency')
+    if status:
+        queryset = queryset.filter(status=status)
+    if category:
+        queryset = queryset.filter(category=category)
+    if urgency:
+        queryset = queryset.filter(urgency=urgency)
+    return queryset
+
 
 def get_accessible_reports(user):
     """

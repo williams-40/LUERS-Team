@@ -14,8 +14,9 @@ from apps.reports.serializers import (
     ReportListSerializer, ReportDetailSerializer, ReportCreateSerializer,
     ReportUpdateStatusSerializer, ReportAssignSerializer, EvidenceSerializer
 )
-from apps.reports.services import ReportService, IdentityService, MessageService, get_accessible_reports  # ✅ added
-from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsStudentOrStaff
+from apps.reports.services import ReportService, IdentityService, MessageService, get_accessible_reports, filter_reports  # ✅ added
+from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsStudentOrStaff, IsManagement, IsAdminTier
+from apps.core.export import csv_response, pdf_response
 from apps.core.pagination import StandardPagination
 from apps.reports.serializers import SyncRequestSerializer, SyncResultSerializer
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -69,17 +70,7 @@ class ReportListView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         queryset = get_accessible_reports(user)  # ✅ department-aware filtering
-
-        # Additional filters
-        status = self.request.query_params.get('status')
-        category = self.request.query_params.get('category')
-        urgency = self.request.query_params.get('urgency')
-        if status:
-            queryset = queryset.filter(status=status)
-        if category:
-            queryset = queryset.filter(category=category)
-        if urgency:
-            queryset = queryset.filter(urgency=urgency)
+        queryset = filter_reports(queryset, self.request.query_params)
 
         # Delta-fetch: filter by updated_at > since
         since = self.request.query_params.get('since')
@@ -105,6 +96,52 @@ class ReportListView(generics.ListAPIView):
             response['X-Cursor'] = timezone.now().isoformat()
 
         return response
+
+
+class ReportExportView(APIView):
+    """
+    GET /api/v1/reports/export/?export_format=csv|pdf&status=&category=&urgency=
+    Exports the caller's accessible reports (same status/category/urgency
+    filters as the queue list), respecting department-aware access.
+    Admin tier only.
+
+    Uses 'export_format' rather than DRF's reserved 'format' query param —
+    DRF's content negotiation intercepts 'format' for its own renderer
+    selection and raises Http404 for values it doesn't recognize (like
+    'csv'), before the view body ever runs.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminTier]
+
+    HEADER = [
+        'ID', 'Category', 'Status', 'Urgency', 'Anonymous', 'Department',
+        'Assigned To', 'Evidence Count', 'Created At', 'Updated At',
+    ]
+
+    def get(self, request):
+        queryset = get_accessible_reports(request.user)
+        queryset = filter_reports(queryset, request.query_params)
+        queryset = queryset.select_related('department', 'assigned_to').prefetch_related('evidence').order_by('-created_at')
+
+        rows = [
+            [
+                str(r.id),
+                r.category,
+                r.status,
+                r.urgency,
+                r.is_anonymous,
+                r.department.name if r.department else '',
+                r.assigned_to.username if r.assigned_to else '',
+                len(r.evidence.all()),
+                r.created_at.isoformat(),
+                r.updated_at.isoformat(),
+            ]
+            for r in queryset
+        ]
+
+        export_format = request.query_params.get('export_format', 'csv')
+        if export_format == 'pdf':
+            return pdf_response('Reports', self.HEADER, rows, 'reports.pdf')
+        return csv_response(self.HEADER, rows, 'reports.csv')
 
 
 class ReportDetailView(generics.RetrieveAPIView):
@@ -255,6 +292,41 @@ class EvidenceUploadView(APIView):
         )
         serializer = self.serializer_class(evidence, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ReportRevealIdentityView(APIView):
+    """
+    POST /api/v1/reports/{id}/reveal/
+    Decrypt and return the reporter's identity. Restricted to Management
+    (the Escrow Authority) since deanonymization is that role's purpose.
+    Logs a 'deanonymize' audit entry regardless of whether an identity
+    is found, capturing who attempted the reveal.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsManagement]
+
+    def post(self, request, id):
+        report = get_object_or_404(Report, id=id)
+        ip = get_client_ip(request)
+
+        reporter = IdentityService.reveal_identity(
+            report,
+            request.user,
+            ip_address=ip,
+            sync_origin=SyncOrigin.LIVE,
+        )
+
+        if reporter is None:
+            return Response(
+                {'error': 'No identity record exists for this report.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            'reporter_id': str(reporter.id),
+            'username': reporter.username,
+            'email': reporter.email,
+            'university_id': reporter.university_id,
+        })
 
 
 class MyReportsView(generics.ListAPIView):

@@ -34,3 +34,14 @@ class IsAdminOrManagement(BasePermission):
     """
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role in ['ict_admin', 'management']
+
+class IsAdminTier(BasePermission):
+    """
+    Allows access to the full admin tier: Security, ICT Admin, Management,
+    System Admin. Mirrors the admin-role set used by get_accessible_reports
+    and the frontend's ADMIN_ROLES.
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role in [
+            'security', 'ict_admin', 'management', 'system_admin'
+        ]
