@@ -45,3 +45,13 @@ class IsAdminTier(BasePermission):
         return request.user.is_authenticated and request.user.role in [
             'security', 'ict_admin', 'management', 'system_admin'
         ]
+
+class IsAccountAdmin(BasePermission):
+    """
+    Allows access only to ICT Admin or System Admin — day-to-day account and
+    department administration. Deliberately excludes Management (Escrow
+    Authority — a separate governance concern for identity-reveal, see
+    IsManagement) and Security.
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role in ['ict_admin', 'system_admin']

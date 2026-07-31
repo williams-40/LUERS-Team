@@ -10,10 +10,18 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from apps.accounts.serializers import OfficerSerializer, UserSerializer
-from apps.accounts.services import PasswordResetService
-from apps.accounts.permissions import IsSecurity, IsICTAdmin
+from apps.accounts.serializers import (
+    AdminUserCreateSerializer,
+    AdminUserUpdateSerializer,
+    ChangePasswordSerializer,
+    MeUpdateSerializer,
+    OfficerSerializer,
+    UserSerializer,
+)
+from apps.accounts.services import PasswordResetService, blacklist_all_tokens_for, filter_users
+from apps.accounts.permissions import IsAccountAdmin, IsSecurity, IsICTAdmin
 from apps.core.choices import Role
+from apps.core.pagination import StandardPagination
 
 User = get_user_model()
 
@@ -140,12 +148,82 @@ class MeView(APIView):
     """
     GET /api/v1/auth/me/
     Returns the current authenticated user's profile.
+
+    PATCH /api/v1/auth/me/
+    Self-service update of first_name/last_name/phone_number/email — see
+    MeUpdateSerializer for why role/university_id/username can't be changed
+    here.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+    def patch(self, request):
+        serializer = MeUpdateSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSerializer(request.user).data)
+
+
+class ChangePasswordView(APIView):
+    """
+    POST /api/v1/auth/change-password/
+    Self-service password change, requiring the current password. Blacklists
+    all of the user's outstanding refresh tokens on success (see
+    ChangePasswordSerializer.save) so a leaked refresh token can't outlive
+    the change.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'detail': 'Password updated.'})
+
+
+class AdminUserListCreateView(generics.ListCreateAPIView):
+    """
+    GET /api/v1/auth/users/
+    List users, filterable by role (comma-separated), is_active, and search
+    (username/email/first_name/last_name). ICT Admin / System Admin only.
+
+    POST /api/v1/auth/users/
+    Create a new account — the only non-shell way to provision a user now
+    that this phase exists.
+    """
+    permission_classes = [IsAuthenticated, IsAccountAdmin]
+    pagination_class = StandardPagination
+
+    def get_serializer_class(self):
+        return AdminUserCreateSerializer if self.request.method == 'POST' else UserSerializer
+
+    def get_queryset(self):
+        return filter_users(User.objects.all().order_by('username'), self.request.query_params)
+
+
+class AdminUserDetailView(generics.RetrieveUpdateAPIView):
+    """
+    GET/PATCH /api/v1/auth/users/<id>/
+    Admin-tier account management: role changes, deactivation via
+    `is_active`. No DELETE — deactivation is the only supported removal
+    path. Deactivating a user (is_active True -> False) blacklists their
+    outstanding refresh tokens so a live session can't outlive the change.
+    """
+    permission_classes = [IsAuthenticated, IsAccountAdmin]
+    queryset = User.objects.all()
+    lookup_field = 'id'
+
+    def get_serializer_class(self):
+        return AdminUserUpdateSerializer if self.request.method == 'PATCH' else UserSerializer
+
+    def perform_update(self, serializer):
+        was_active = serializer.instance.is_active
+        user = serializer.save()
+        if was_active and not user.is_active:
+            blacklist_all_tokens_for(user)
 
 
 class SecurityOfficersView(generics.ListAPIView):

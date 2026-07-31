@@ -1,6 +1,6 @@
 import factory
 from faker import Faker
-from apps.reports.models import Report, Evidence, ReportIdentity
+from apps.reports.models import Report, Evidence, ReportIdentity, Department
 from apps.core.choices import Category, Urgency, Status, Role
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -27,6 +27,17 @@ class ManagementFactory(UserFactory):
 
 class StaffFactory(UserFactory):
     role = Role.STAFF
+
+class SystemAdminFactory(UserFactory):
+    role = Role.SYSTEM_ADMIN
+
+class DepartmentFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Department
+
+    name = factory.Sequence(lambda n: f"Test Dept {n}")
+    description = factory.LazyAttribute(lambda _: fake.sentence())
+    is_active = True
 
 class ReportFactory(factory.django.DjangoModelFactory):
     class Meta:
