@@ -25,7 +25,8 @@ export type ClientMessage =
     }
   | { type: 'chat_message'; report_id: string; content: string };
 
-export type SocketStatus = 'connecting' | 'open' | 'closed';
+/** 'disconnected' is distinct from the transient 'closed' before a scheduled retry — it means reconnect attempts were exhausted and connect() needs to be called again manually. */
+export type SocketStatus = 'connecting' | 'open' | 'closed' | 'disconnected';
 
 const PING_INTERVAL_MS = 25_000;
 const MAX_RECONNECT_DELAY_MS = 15_000;
@@ -96,13 +97,26 @@ export class ReportSocket {
     ws.onclose = () => {
       if (this.pingTimer) clearInterval(this.pingTimer);
       this.pingTimer = null;
-      this.handlers.onStatusChange('closed');
-      if (!this.closedByCaller && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+      if (this.closedByCaller) {
+        this.handlers.onStatusChange('closed');
+        return;
+      }
+      if (this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        this.handlers.onStatusChange('closed');
         const delay = Math.min(1000 * 2 ** this.reconnectAttempts, MAX_RECONNECT_DELAY_MS);
         this.reconnectAttempts += 1;
         this.reconnectTimer = setTimeout(() => this.connect(), delay);
+      } else {
+        // Automatic retries exhausted — needs a manual reconnect() call.
+        this.handlers.onStatusChange('disconnected');
       }
     };
+  }
+
+  /** Resets the retry counter and connects again — for a user-triggered "Reconnect" action after connect() gave up. */
+  reconnect(): void {
+    this.reconnectAttempts = 0;
+    this.connect();
   }
 
   send(message: ClientMessage): void {

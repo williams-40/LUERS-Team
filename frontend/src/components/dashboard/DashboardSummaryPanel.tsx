@@ -30,7 +30,7 @@ export function DashboardSummaryPanel() {
     }, REFRESH_DEBOUNCE_MS);
   }, [queryClient]);
 
-  const { status: socketStatus } = useReportSocket({
+  const { status: socketStatus, reconnect } = useReportSocket({
     onReportCreated: scheduleRefresh,
     onReportUpdated: scheduleRefresh,
   });
@@ -39,7 +39,7 @@ export function DashboardSummaryPanel() {
     <div className="mb-6 rounded-xl border border-black/10 p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-ink-secondary text-[12.5px] font-semibold">Campus summary</h2>
-        <LiveIndicator status={socketStatus} />
+        <LiveIndicator status={socketStatus} onReconnect={reconnect} />
       </div>
 
       {isLoading && <p className="text-ink-muted text-sm">Loading…</p>}

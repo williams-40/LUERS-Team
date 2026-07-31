@@ -38,7 +38,7 @@ export function ReportDetailPage() {
   const [liveMessages, setLiveMessages] = useState<ChatMessagePayload[]>([]);
   useEffect(() => setLiveMessages([]), [id]);
 
-  const { status: socketStatus, sendChatMessage } = useReportSocket({
+  const { status: socketStatus, sendChatMessage, reconnect } = useReportSocket({
     reportId: id,
     onReportUpdated: (updated) => {
       if (updated.id === id) void refetch();
@@ -84,7 +84,7 @@ export function ReportDetailPage() {
       <div className="mb-1 flex items-center justify-between gap-2">
         <h1 className="text-2xl">{CATEGORY_LABELS[report.category]}</h1>
         <div className="flex items-center gap-2">
-          <LiveIndicator status={socketStatus} />
+          <LiveIndicator status={socketStatus} onReconnect={reconnect} />
           <StatusBadge status={report.status} />
         </div>
       </div>

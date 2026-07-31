@@ -31,8 +31,11 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Keep the shell offline; API calls go through the app's own
-        // offline queue (POST /api/v1/sync/), not a generic runtime cache.
+        // Keep the shell offline; report creation goes through the app's
+        // own IndexedDB outbox (lib/offline-queue.ts + lib/offline-sync.ts,
+        // replayed via the normal authenticated API client) rather than a
+        // generic runtime cache or Workbox's BackgroundSyncPlugin — see
+        // that module for why.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
       },
     }),

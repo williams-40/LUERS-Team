@@ -50,7 +50,7 @@ export function TriageQueuePage() {
   const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
   const { data, isLoading, isError, page, setPage, refresh, isFetching, applyLiveEvent } =
     useReportQueue(filters);
-  const { status: socketStatus } = useReportSocket({
+  const { status: socketStatus, reconnect } = useReportSocket({
     onReportCreated: applyLiveEvent,
     onReportUpdated: applyLiveEvent,
   });
@@ -73,7 +73,7 @@ export function TriageQueuePage() {
       <div className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl">Report queue</h1>
-          <LiveIndicator status={socketStatus} />
+          <LiveIndicator status={socketStatus} onReconnect={reconnect} />
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={() => handleExport('csv')} disabled={exporting !== null}>

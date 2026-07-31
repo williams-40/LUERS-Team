@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, Link } from 'react-router-dom';
 import { Category, Urgency } from '../types/domain';
 import type { CreateReportInput } from '../types/domain';
 import { createReport, uploadEvidence } from '../lib/reports-api';
 import { getCurrentLocation } from '../lib/geolocation';
 import type { ApiError } from '../lib/api-client';
+import { enqueueReport, OFFLINE_QUEUE_KEY } from '../lib/offline-queue';
 import { Button } from '../components/ui/Button';
 import { PanicButton } from '../components/ui/PanicButton';
 import { CategoryPicker } from '../components/reports/CategoryPicker';
@@ -39,11 +40,13 @@ type Mode = 'panic' | 'detailed';
 
 export function ReportCreatePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<Mode>('detailed');
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidenceErrors, setEvidenceErrors] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+  const [queuedOffline, setQueuedOffline] = useState<{ hadEvidence: boolean } | null>(null);
 
   const {
     register,
@@ -85,27 +88,69 @@ export function ReportCreatePage() {
       ...(location ?? {}),
     };
 
+    let report;
     try {
-      const report = await createMutation.mutateAsync(payload);
-
-      if (mode === 'detailed' && evidenceFiles.length > 0) {
-        for (const file of evidenceFiles) {
-          // Sequential, not parallel — keeps evidence order predictable and
-          // avoids hammering the same endpoint with a burst of large uploads.
-          // eslint-disable-next-line no-await-in-loop
-          await evidenceMutation.mutateAsync({ reportId: report.id, file });
-        }
-      }
-
-      navigate(`/reports/${report.id}`, { state: { justCreated: true } });
+      report = await createMutation.mutateAsync(payload);
     } catch (err) {
       const apiError = err as ApiError;
+      if (apiError.status === null) {
+        // No response at all — genuinely offline, not a rejection. Queue it
+        // rather than losing it; useOfflineQueue drains this automatically
+        // once connectivity returns.
+        await enqueueReport(payload, evidenceFiles.length > 0);
+        await queryClient.invalidateQueries({ queryKey: OFFLINE_QUEUE_KEY });
+        setQueuedOffline({ hadEvidence: evidenceFiles.length > 0 });
+        return;
+      }
       if (apiError.fieldErrors) {
         setSubmitError(Object.values(apiError.fieldErrors).flat().join(' '));
       } else {
         setSubmitError(apiError.detail ?? 'Something went wrong. Please try again.');
       }
+      return;
     }
+
+    if (mode === 'detailed' && evidenceFiles.length > 0) {
+      for (const file of evidenceFiles) {
+        try {
+          // Sequential, not parallel — keeps evidence order predictable and
+          // avoids hammering the same endpoint with a burst of large uploads.
+          // eslint-disable-next-line no-await-in-loop
+          await evidenceMutation.mutateAsync({ reportId: report.id, file });
+        } catch {
+          // The report itself already exists — don't block navigation on a
+          // failed attachment; it can be added again from the detail page.
+          break;
+        }
+      }
+    }
+
+    navigate(`/reports/${report.id}`, { state: { justCreated: true } });
+  }
+
+  if (queuedOffline) {
+    return (
+      <div className="mx-auto max-w-xl px-5 py-16 text-center">
+        <h1 className="mb-2 text-xl">Report queued</h1>
+        <p className="text-ink-secondary mb-2 text-sm">
+          You're offline right now, so this report is saved on your device and will send automatically as
+          soon as you're back online.
+        </p>
+        {queuedOffline.hadEvidence && (
+          <p className="text-status-warning mb-4 text-sm font-semibold">
+            The evidence you attached wasn't included — add it from the report once it's sent.
+          </p>
+        )}
+        <div className="mt-4 flex flex-col items-center gap-3">
+          <Button variant="secondary" onClick={() => setQueuedOffline(null)}>
+            Report another incident
+          </Button>
+          <Link to="/" className="text-brand text-sm font-semibold hover:underline">
+            Back home
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (

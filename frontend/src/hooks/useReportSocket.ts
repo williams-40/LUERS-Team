@@ -68,5 +68,9 @@ export function useReportSocket({
     });
   }
 
-  return { status, sendChatMessage, sendStatusUpdate };
+  function reconnect() {
+    socketRef.current?.reconnect();
+  }
+
+  return { status, sendChatMessage, sendStatusUpdate, reconnect };
 }
