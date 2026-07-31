@@ -5,6 +5,7 @@ import { RequireAuth } from './components/auth/RequireAuth';
 import { LoginPage } from './routes/LoginPage';
 import { DashboardPage } from './routes/DashboardPage';
 import { TriageQueuePage } from './routes/TriageQueuePage';
+import { AuditLogPage } from './routes/AuditLogPage';
 import { ReportCreatePage } from './routes/ReportCreatePage';
 import { MyReportsPage } from './routes/MyReportsPage';
 import { ReportDetailPage } from './routes/ReportDetailPage';
@@ -31,6 +32,14 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth roles={ADMIN_ROLES}>
             <TriageQueuePage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/audit',
+        element: (
+          <RequireAuth roles={ADMIN_ROLES}>
+            <AuditLogPage />
           </RequireAuth>
         ),
       },

@@ -1,4 +1,5 @@
 import { apiClient } from './api-client';
+import { downloadBlob } from './utils';
 import type {
   Category,
   CreateReportInput,
@@ -7,6 +8,7 @@ import type {
   Paginated,
   ReportDetail,
   ReportListItem,
+  RevealedIdentity,
   Status,
   Urgency,
 } from '../types/domain';
@@ -83,4 +85,20 @@ export async function assignReport(args: {
 export async function fetchOfficers(): Promise<Officer[]> {
   const { data } = await apiClient.get<Officer[]>('/auth/officers/');
   return data;
+}
+
+export async function revealIdentity(reportId: string): Promise<RevealedIdentity> {
+  const { data } = await apiClient.post<RevealedIdentity>(`/reports/${reportId}/reveal/`);
+  return data;
+}
+
+export async function downloadReportsExport(
+  filters: Pick<ReportQueueFilters, 'status' | 'category' | 'urgency'>,
+  exportFormat: 'csv' | 'pdf',
+): Promise<void> {
+  const response = await apiClient.get('/reports/export/', {
+    params: { ...filters, export_format: exportFormat },
+    responseType: 'blob',
+  });
+  downloadBlob(response.data as Blob, `reports.${exportFormat}`);
 }

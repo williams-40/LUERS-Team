@@ -5,6 +5,7 @@ import { fetchReportDetail } from '../lib/reports-api';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { StatusUpdateControl } from '../components/reports/StatusUpdateControl';
 import { AssignControl } from '../components/reports/AssignControl';
+import { RevealIdentityControl } from '../components/reports/RevealIdentityControl';
 import { ReportChat } from '../components/reports/ReportChat';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { CATEGORY_LABELS } from '../lib/labels';
@@ -110,6 +111,8 @@ export function ReportDetailPage() {
       {user?.role === Role.SECURITY && <StatusUpdateControl report={report} onUpdated={refetch} />}
 
       {user && ASSIGN_ROLES.includes(user.role) && <AssignControl report={report} onUpdated={refetch} />}
+
+      {user?.role === Role.MANAGEMENT && <RevealIdentityControl reportId={report.id} />}
 
       {report.evidence.length > 0 && (
         <div className="mb-5">

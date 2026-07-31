@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { Category, Status, Urgency } from '../types/domain';
 import { CATEGORY_LABELS } from '../lib/labels';
+import { downloadReportsExport } from '../lib/reports-api';
 
 const STATUS_OPTIONS = Object.values(Status);
 const CATEGORY_OPTIONS = Object.values(Category);
@@ -46,6 +47,7 @@ function FilterSelect<T extends string>({
 
 export function TriageQueuePage() {
   const [filters, setFilters] = useState<QueueFilterState>({});
+  const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
   const { data, isLoading, isError, page, setPage, refresh, isFetching, applyLiveEvent } =
     useReportQueue(filters);
   const { status: socketStatus } = useReportSocket({
@@ -57,6 +59,15 @@ export function TriageQueuePage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
+  async function handleExport(exportFormat: 'csv' | 'pdf') {
+    setExporting(exportFormat);
+    try {
+      await downloadReportsExport(filters, exportFormat);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-5 py-8">
       <div className="mb-5 flex items-center justify-between">
@@ -64,9 +75,17 @@ export function TriageQueuePage() {
           <h1 className="text-2xl">Report queue</h1>
           <LiveIndicator status={socketStatus} />
         </div>
-        <Button variant="secondary" size="sm" onClick={() => refresh()} disabled={isFetching}>
-          {isFetching ? 'Refreshing…' : 'Refresh'}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm" onClick={() => handleExport('csv')} disabled={exporting !== null}>
+            {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => handleExport('pdf')} disabled={exporting !== null}>
+            {exporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => refresh()} disabled={isFetching}>
+            {isFetching ? 'Refreshing…' : 'Refresh'}
+          </Button>
+        </div>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-3">

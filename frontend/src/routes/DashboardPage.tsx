@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { ROLE_LABELS } from '../lib/labels';
 import { ADMIN_ROLES, REPORTER_ROLES, Role } from '../types/domain';
 import { DashboardSummaryPanel } from '../components/dashboard/DashboardSummaryPanel';
+import { DashboardTrendsPanel } from '../components/dashboard/DashboardTrendsPanel';
 
 /** Matches DashboardSummaryView's IsSecurity | IsICTAdmin permission — narrower than ADMIN_ROLES. */
 const DASHBOARD_ROLES: Role[] = [Role.SECURITY, Role.ICT_ADMIN];
@@ -37,10 +38,14 @@ export function DashboardPage() {
           <Link to="/admin">
             <Button variant="primary">Report queue</Button>
           </Link>
+          <Link to="/admin/audit">
+            <Button variant="secondary">Audit log</Button>
+          </Link>
         </div>
       )}
 
       {canSeeSummary && <DashboardSummaryPanel />}
+      {canSeeSummary && <DashboardTrendsPanel />}
 
       <Button variant="ghost" onClick={logout}>
         Sign out

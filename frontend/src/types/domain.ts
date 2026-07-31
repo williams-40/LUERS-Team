@@ -139,3 +139,40 @@ export interface DashboardSummary {
   urgency_counts: { urgency: Urgency; count: number }[];
   average_response_time_hours: number | null;
 }
+
+export interface DashboardTrends {
+  daily_counts: { date: string; count: number }[];
+}
+
+export const Action = {
+  CREATE: 'create',
+  STATUS_UPDATE: 'status_update',
+  ASSIGN: 'assign',
+  EVIDENCE_UPLOAD: 'evidence_upload',
+  DEANONYMIZE: 'deanonymize',
+} as const;
+export type Action = (typeof Action)[keyof typeof Action];
+
+export interface AuditLogEntry {
+  id: string;
+  report: string | null;
+  report_category: Category | null;
+  actor: string | null;
+  actor_username: string | null;
+  action: Action;
+  action_display: string;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  ip_address: string | null;
+  client_timestamp: string | null;
+  sync_origin: 'live' | 'sync';
+  sync_origin_display: string;
+  created_at: string;
+}
+
+export interface RevealedIdentity {
+  reporter_id: string;
+  username: string;
+  email: string;
+  university_id: string | null;
+}
