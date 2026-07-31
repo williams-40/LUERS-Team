@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
 import { Logo } from '../components/layout/Logo';
@@ -34,6 +34,8 @@ export function LoginPage() {
     return <Navigate to={from as unknown as string} replace />;
   }
 
+  const passwordReset = Boolean((location.state as { passwordReset?: boolean } | null)?.passwordReset);
+
   async function onSubmit(values: LoginFormValues) {
     setServerError(null);
     try {
@@ -57,6 +59,12 @@ export function LoginPage() {
         <h1 className="text-xl">Sign in to LUERS</h1>
       </div>
 
+      {passwordReset && (
+        <p className="bg-status-good/10 mb-4 rounded-lg px-3 py-2 text-center text-sm font-semibold text-[#0a6b0a]">
+          Password reset. Sign in with your new password.
+        </p>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="username" className="text-ink-secondary text-[12.5px] font-semibold">
@@ -74,9 +82,14 @@ export function LoginPage() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="text-ink-secondary text-[12.5px] font-semibold">
-            Password
-          </label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="text-ink-secondary text-[12.5px] font-semibold">
+              Password
+            </label>
+            <Link to="/forgot-password" className="text-brand text-[12.5px] font-semibold hover:underline">
+              Forgot password?
+            </Link>
+          </div>
           <input
             id="password"
             type="password"

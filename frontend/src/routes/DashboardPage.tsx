@@ -47,7 +47,7 @@ export function DashboardPage() {
       {canSeeSummary && <DashboardSummaryPanel />}
       {canSeeSummary && <DashboardTrendsPanel />}
 
-      <Button variant="ghost" onClick={logout}>
+      <Button variant="ghost" onClick={() => void logout()}>
         Sign out
       </Button>
     </div>

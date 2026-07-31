@@ -21,9 +21,33 @@ export async function fetchMe(): Promise<User> {
   return data;
 }
 
-export function logout(): void {
-  // No dedicated logout/blacklist endpoint on this backend today — clearing
-  // the stored tokens client-side is sufficient (the refresh token simply
-  // stops being used; it still expires naturally at REFRESH_TOKEN_LIFETIME).
-  tokenStorage.clear();
+export async function logout(): Promise<void> {
+  // Must fire before clearing storage — the access token needs to still be
+  // there for the request interceptor to attach it as Authorization.
+  const refresh = tokenStorage.getRefresh();
+  try {
+    if (refresh) {
+      await apiClient.post('/auth/logout/', { refresh });
+    }
+  } catch {
+    // best-effort — the refresh token will simply expire naturally if this fails
+  } finally {
+    tokenStorage.clear();
+  }
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await apiClient.post('/auth/password-reset/', { email });
+}
+
+export async function confirmPasswordReset(input: {
+  uid: string;
+  token: string;
+  newPassword: string;
+}): Promise<void> {
+  await apiClient.post('/auth/password-reset/confirm/', {
+    uid: input.uid,
+    token: input.token,
+    new_password: input.newPassword,
+  });
 }

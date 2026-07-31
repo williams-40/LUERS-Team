@@ -3,6 +3,8 @@ import { AuthProvider } from './lib/auth-context';
 import { AppLayout } from './components/layout/AppLayout';
 import { RequireAuth } from './components/auth/RequireAuth';
 import { LoginPage } from './routes/LoginPage';
+import { ForgotPasswordPage } from './routes/ForgotPasswordPage';
+import { ResetPasswordPage } from './routes/ResetPasswordPage';
 import { DashboardPage } from './routes/DashboardPage';
 import { TriageQueuePage } from './routes/TriageQueuePage';
 import { AuditLogPage } from './routes/AuditLogPage';
@@ -68,6 +70,8 @@ const router = createBrowserRouter([
         ),
       },
       { path: 'login', element: <LoginPage /> },
+      { path: 'forgot-password', element: <ForgotPasswordPage /> },
+      { path: 'reset-password', element: <ResetPasswordPage /> },
       { path: 'style-guide', element: <StyleGuidePage /> },
       { path: 'forbidden', element: <ForbiddenPage /> },
       { path: '*', element: <NotFoundPage /> },

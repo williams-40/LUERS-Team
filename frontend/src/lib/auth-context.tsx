@@ -9,7 +9,7 @@ export interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (input: LoginInput) => Promise<User>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -42,11 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return queryClient.fetchQuery({ queryKey: ['auth', 'me'], queryFn: fetchMe });
   }
 
-  function logout(): void {
-    logoutRequest();
+  async function logout(): Promise<void> {
+    // logoutRequest blacklists the refresh token server-side, then clears
+    // local storage — start it, but clear UI state immediately rather than
+    // waiting on the network round-trip.
+    const pending = logoutRequest();
     setHasToken(false);
     queryClient.setQueryData(['auth', 'me'], null);
     queryClient.removeQueries({ queryKey: ['auth', 'me'] });
+    await pending;
   }
 
   const value: AuthContextValue = {
