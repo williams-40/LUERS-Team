@@ -20,6 +20,7 @@ sentry-sdk
 # Testing
 pytest
 pytest-django
+pytest-asyncio
 pytest-cov
 factory_boy
 Faker
