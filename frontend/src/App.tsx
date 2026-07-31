@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './lib/auth-context';
 import { AppLayout } from './components/layout/AppLayout';
 import { RequireAuth } from './components/auth/RequireAuth';
+import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 import { LoginPage } from './routes/LoginPage';
 import { ForgotPasswordPage } from './routes/ForgotPasswordPage';
 import { ResetPasswordPage } from './routes/ResetPasswordPage';
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         index: true,

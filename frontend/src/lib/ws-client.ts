@@ -44,15 +44,28 @@ export class ReportSocket {
   private reconnectAttempts = 0;
   private closedByCaller = false;
 
+  private readonly baseUrl: string;
+  private readonly getToken: () => string | null;
+  private readonly reportId: string | undefined;
+  private readonly handlers: {
+    onMessage: (msg: ServerMessage) => void;
+    onStatusChange: (status: SocketStatus) => void;
+  };
+
   constructor(
-    private readonly baseUrl: string,
-    private readonly getToken: () => string | null,
-    private readonly reportId: string | undefined,
-    private readonly handlers: {
+    baseUrl: string,
+    getToken: () => string | null,
+    reportId: string | undefined,
+    handlers: {
       onMessage: (msg: ServerMessage) => void;
       onStatusChange: (status: SocketStatus) => void;
     },
-  ) {}
+  ) {
+    this.baseUrl = baseUrl;
+    this.getToken = getToken;
+    this.reportId = reportId;
+    this.handlers = handlers;
+  }
 
   connect(): void {
     const token = this.getToken();
