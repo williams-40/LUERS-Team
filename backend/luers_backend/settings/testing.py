@@ -23,3 +23,7 @@ CACHES = {
         'LOCATION': 'unique-snowflake',
     }
 }
+
+# In-memory email backend so password-reset tests can assert on
+# django.core.mail.outbox without hitting real SMTP.
+EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'

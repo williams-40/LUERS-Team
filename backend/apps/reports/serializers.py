@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.reports.models import Report, Evidence, ReportIdentity
 from apps.core.choices import Category, Urgency, Status
+from apps.reports.validators import validate_evidence_file
 
 User = get_user_model()
 
@@ -119,6 +120,13 @@ class ReportCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'custom_department': 'Please specify a department when selecting "Other".'
             })
+
+        for file in attrs.get('evidence', []):
+            try:
+                validate_evidence_file(file)
+            except ValueError as e:
+                raise serializers.ValidationError({'evidence': str(e)})
+
         return attrs
 
     def create(self, validated_data):
@@ -135,20 +143,12 @@ class ReportCreateSerializer(serializers.ModelSerializer):
             IdentityService.create_identity(report, user)
 
         for file in evidence_files:
-            file_type = self._get_file_type(file)
+            # Already validated in validate() above; re-running here just to
+            # get the classified file_type back (cheap — reads a few bytes).
+            file_type = validate_evidence_file(file)
             Evidence.objects.create(report=report, file=file, file_type=file_type)
 
         return report
-
-    def _get_file_type(self, file):
-        content_type = getattr(file, 'content_type', '')
-        if content_type.startswith('image/'):
-            return 'image'
-        elif content_type.startswith('video/'):
-            return 'video'
-        elif content_type.startswith('audio/'):
-            return 'audio'
-        return 'other'
 
 
 class ReportUpdateStatusSerializer(serializers.Serializer):

@@ -29,7 +29,9 @@ def test_mine_evidence_and_dashboard_smoke():
     assert report_id in ids, f"mine/ did not return own report: {response.data}"
 
     # Bug #2 check: evidence upload by the actual reporter must not 500
-    fake_file = io.BytesIO(b"fake image bytes")
+    # (real JPEG magic bytes — Phase 6 added content-sniffing validation
+    # that a plain "fake image bytes" placeholder no longer passes)
+    fake_file = io.BytesIO(b'\xff\xd8\xff\xe0' + b'\x00' * 32)
     fake_file.name = "evidence.jpg"
     response = client.post(f'/api/v1/reports/{report_id}/evidence/', {
         'file': fake_file,

@@ -1,5 +1,4 @@
-﻿import os
-from datetime import datetime
+﻿from datetime import datetime
 from django.utils import timezone
 from rest_framework import generics, status, permissions
 from rest_framework.response import Response
@@ -15,6 +14,7 @@ from apps.reports.serializers import (
     ReportUpdateStatusSerializer, ReportAssignSerializer, EvidenceSerializer
 )
 from apps.reports.services import ReportService, IdentityService, MessageService, get_accessible_reports, filter_reports  # ✅ added
+from apps.reports.validators import validate_evidence_file
 from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsStudentOrStaff, IsManagement, IsAdminTier
 from apps.core.export import csv_response, pdf_response
 from apps.core.pagination import StandardPagination
@@ -29,11 +29,6 @@ def get_client_ip(request):
     if x_forwarded_for:
         return x_forwarded_for.split(',')[0].strip()
     return request.META.get('REMOTE_ADDR', '0.0.0.0')
-
-
-# Allowed file extensions for evidence uploads
-ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mp3', '.wav', '.pdf']
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
 @method_decorator(ratelimit(key='user', rate='5/h', method='POST', block=True), name='post')
@@ -237,7 +232,8 @@ class ReportAssignView(APIView):
 class EvidenceUploadView(APIView):
     """
     POST /api/v1/reports/{id}/evidence/
-    Upload evidence file. Validates file size and extension.
+    Upload evidence file. Validates extension, size, and that the file's
+    content actually matches its claimed extension (magic-byte sniffing).
     """
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = EvidenceSerializer
@@ -258,28 +254,10 @@ class EvidenceUploadView(APIView):
         if not file:
             return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if file.size > MAX_FILE_SIZE:
-            return Response(
-                {'error': f'File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        ext = os.path.splitext(file.name)[1].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            return Response(
-                {'error': f'File type not allowed. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        content_type = getattr(file, 'content_type', '')
-        if content_type.startswith('image/'):
-            file_type = 'image'
-        elif content_type.startswith('video/'):
-            file_type = 'video'
-        elif content_type.startswith('audio/'):
-            file_type = 'audio'
-        else:
-            file_type = 'other'
+        try:
+            file_type = validate_evidence_file(file)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         ip = get_client_ip(request)
         evidence = ReportService.add_evidence(

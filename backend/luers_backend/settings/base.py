@@ -179,6 +179,14 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Lira University Emergency Reporting System",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "SECURITY": [{"BearerAuth": []}],
+    "SECURITY_DEFINITIONS": {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    },
 }
 
 # Twilio
@@ -196,16 +204,9 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="LUERS <noreply@luers.com>")
 
 
-SPECTACULAR_SETTINGS = {
-    "SECURITY": [{"BearerAuth": []}],
-    "SECURITY_DEFINITIONS": {
-        "BearerAuth": {
-            "type": "http",
-            "scheme": "bearer",
-            "bearerFormat": "JWT",
-        }
-    },
-}
+# Used to build links in outbound emails (e.g. password reset) that point
+# back at the SPA, which lives on a different origin than this API.
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:5175")
 
 # Disable rate limiting in development
 if DEBUG:
