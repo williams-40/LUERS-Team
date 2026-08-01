@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -78,7 +78,7 @@ function CreateUserForm() {
         </label>
         <input
           id="username"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           aria-invalid={Boolean(errors.username)}
           {...register('username')}
         />
@@ -92,7 +92,7 @@ function CreateUserForm() {
         <input
           id="email"
           type="email"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           aria-invalid={Boolean(errors.email)}
           {...register('email')}
         />
@@ -106,7 +106,7 @@ function CreateUserForm() {
           </label>
           <input
             id="first_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             {...register('first_name')}
           />
         </div>
@@ -116,7 +116,7 @@ function CreateUserForm() {
           </label>
           <input
             id="last_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             {...register('last_name')}
           />
         </div>
@@ -128,7 +128,7 @@ function CreateUserForm() {
         </label>
         <input
           id="phone_number"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           {...register('phone_number')}
         />
       </div>
@@ -139,7 +139,7 @@ function CreateUserForm() {
         </label>
         <input
           id="university_id"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           {...register('university_id')}
         />
       </div>
@@ -159,7 +159,7 @@ function CreateUserForm() {
           id="password"
           type="password"
           autoComplete="new-password"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           aria-invalid={Boolean(errors.password)}
           {...register('password')}
         />
@@ -246,7 +246,7 @@ function EditUserForm({ userId }: { userId: string }) {
           </label>
           <input
             id="first_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             {...register('first_name')}
           />
         </div>
@@ -256,7 +256,7 @@ function EditUserForm({ userId }: { userId: string }) {
           </label>
           <input
             id="last_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             {...register('last_name')}
           />
         </div>
@@ -269,7 +269,7 @@ function EditUserForm({ userId }: { userId: string }) {
         <input
           id="email"
           type="email"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           aria-invalid={Boolean(errors.email)}
           {...register('email')}
         />
@@ -282,7 +282,7 @@ function EditUserForm({ userId }: { userId: string }) {
         </label>
         <input
           id="phone_number"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           {...register('phone_number')}
         />
       </div>
@@ -293,7 +293,7 @@ function EditUserForm({ userId }: { userId: string }) {
         </label>
         <input
           id="university_id"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           {...register('university_id')}
         />
       </div>

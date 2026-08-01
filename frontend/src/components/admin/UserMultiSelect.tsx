@@ -1,4 +1,4 @@
-import type { User } from '../../types/domain';
+﻿import type { User } from '../../types/domain';
 
 /** Checkbox picker over a pre-fetched list of admin-tier users — see DepartmentFormPage,
  * which fetches that list once via fetchUsers({ role: 'security,ict_admin,management,system_admin' })
@@ -21,7 +21,7 @@ export function UserMultiSelect({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border-[1.5px] border-black/15 p-3">
+    <div className="flex flex-col gap-2 rounded-lg border-[1.5px] border-ink/15 p-3">
       {users.map((user) => (
         <label key={user.id} className="flex cursor-pointer items-center gap-2.5">
           <input

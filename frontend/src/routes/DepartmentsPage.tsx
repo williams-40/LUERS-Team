@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchDepartments } from '../lib/departments-api';
@@ -9,7 +9,7 @@ function DepartmentRow({ department }: { department: Department }) {
   return (
     <Link
       to={`/admin/departments/${department.id}/edit`}
-      className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-4 py-3 transition hover:border-black/20"
+      className="flex items-center justify-between gap-3 rounded-xl border border-ink/10 px-4 py-3 transition hover:border-ink/20"
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2">
@@ -60,7 +60,7 @@ export function DepartmentsPage() {
           <select
             value={isActive === undefined ? '' : String(isActive)}
             onChange={(e) => setActiveFilter(e.target.value)}
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">All</option>
             <option value="true">Active</option>

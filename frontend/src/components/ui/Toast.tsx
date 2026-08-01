@@ -5,7 +5,7 @@ import type { ToastItem, ToastVariant } from '../../lib/toast-context';
 const toastVariants = cva('flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm shadow-lg', {
   variants: {
     variant: {
-      success: 'bg-status-good/15 text-[#0a6b0a]',
+      success: 'bg-status-good/15 text-status-good-ink',
       error: 'bg-status-critical/15 text-status-critical',
       info: 'bg-ink-muted/15 text-ink-secondary',
     },

@@ -16,17 +16,17 @@ const STATUS_STYLES: Record<Status, { label: string; dot: string; classes: strin
   [Status.ACKNOWLEDGED]: {
     label: 'Acknowledged',
     dot: 'bg-status-warning',
-    classes: 'bg-status-warning/20 text-[#8a6000]',
+    classes: 'bg-status-warning/20 text-status-warning-ink',
   },
   [Status.IN_PROGRESS]: {
     label: 'In progress',
     dot: 'bg-status-serious',
-    classes: 'bg-status-serious/18 text-[#8a3d1f]',
+    classes: 'bg-status-serious/18 text-status-serious-ink',
   },
   [Status.RESOLVED]: {
     label: 'Resolved',
     dot: 'bg-status-good',
-    classes: 'bg-status-good/16 text-[#0a6b0a]',
+    classes: 'bg-status-good/16 text-status-good-ink',
   },
   [Status.CLOSED]: {
     label: 'Closed',

@@ -34,6 +34,24 @@ export default defineConfig({
             src: '/brand/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            // Upscaled from the 192x192 source mark — the only art that
+            // exists; a real 512x512 design asset can swap this in later.
+            src: '/brand/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            // Solid brand-ink background + the mark scaled to fit inside
+            // the maskable safe zone, so OS icon masks (circle, squircle,
+            // etc.) never crop into the logo.
+            src: '/brand/icon-512-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
           },
         ],
       },

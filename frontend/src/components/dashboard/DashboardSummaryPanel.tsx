@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+﻿import { useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchDashboardSummary } from '../../lib/dashboard-api';
 import { useReportSocket } from '../../hooks/useReportSocket';
@@ -36,7 +36,7 @@ export function DashboardSummaryPanel() {
   });
 
   return (
-    <div className="mb-6 rounded-xl border border-black/10 p-4">
+    <div className="mb-6 rounded-xl border border-ink/10 p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-ink-secondary text-[12.5px] font-semibold">Campus summary</h2>
         <LiveIndicator status={socketStatus} onReconnect={reconnect} />

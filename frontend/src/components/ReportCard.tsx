@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import { Urgency } from '../types/domain';
 import type { ReportListItem } from '../types/domain';
 import { StatusBadge } from './ui/StatusBadge';
@@ -28,8 +28,8 @@ export function ReportCard({ report }: { report: ReportListItem }) {
     <Link
       to={`/reports/${report.id}`}
       className={cn(
-        'bg-surface-2 relative flex gap-3.5 overflow-hidden rounded-xl border border-black/10 py-3.5 pr-4 pl-[18px]',
-        'transition hover:border-black/20',
+        'bg-surface-2 relative flex gap-3.5 overflow-hidden rounded-xl border border-ink/10 py-3.5 pr-4 pl-[18px]',
+        'transition hover:border-ink/20',
         isPanic && 'animate-[rail-pulse_2.4s_ease-in-out_infinite] motion-reduce:animate-none',
       )}
     >

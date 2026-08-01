@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { ROLE_LABELS } from '../lib/labels';
 import { changePassword, updateMe } from '../lib/auth-api';
 import type { ApiError } from '../lib/api-client';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
 
 const profileSchema = z.object({
   first_name: z.string().max(150).optional().or(z.literal('')),
@@ -74,7 +75,7 @@ function ProfileForm() {
           </label>
           <input
             id="first_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             aria-invalid={Boolean(errors.first_name)}
             {...register('first_name')}
           />
@@ -85,7 +86,7 @@ function ProfileForm() {
           </label>
           <input
             id="last_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             aria-invalid={Boolean(errors.last_name)}
             {...register('last_name')}
           />
@@ -99,7 +100,7 @@ function ProfileForm() {
         <input
           id="phone_number"
           type="tel"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           aria-invalid={Boolean(errors.phone_number)}
           {...register('phone_number')}
         />
@@ -114,7 +115,7 @@ function ProfileForm() {
           id="email"
           type="email"
           autoComplete="email"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           aria-invalid={Boolean(errors.email)}
           {...register('email')}
         />
@@ -176,7 +177,7 @@ function ChangePasswordForm() {
           id="currentPassword"
           type="password"
           autoComplete="current-password"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           aria-invalid={Boolean(errors.currentPassword)}
           {...register('currentPassword')}
         />
@@ -193,7 +194,7 @@ function ChangePasswordForm() {
           id="newPassword"
           type="password"
           autoComplete="new-password"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           aria-invalid={Boolean(errors.newPassword)}
           {...register('newPassword')}
         />
@@ -208,7 +209,7 @@ function ChangePasswordForm() {
           id="confirmPassword"
           type="password"
           autoComplete="new-password"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
           aria-invalid={Boolean(errors.confirmPassword)}
           {...register('confirmPassword')}
         />
@@ -250,9 +251,14 @@ export function ProfilePage() {
         <ProfileForm />
       </section>
 
-      <section>
+      <section className="mb-8">
         <h2 className="mb-3 text-base font-semibold">Change password</h2>
         <ChangePasswordForm />
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-base font-semibold">Preferences</h2>
+        <ThemeToggle />
       </section>
     </div>
   );

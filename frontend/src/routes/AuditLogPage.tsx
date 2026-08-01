@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchAuditLog, downloadAuditLogExport } from '../lib/audit-api';
@@ -15,7 +15,7 @@ function AuditLogEntryRow({ entry }: { entry: AuditLogEntry }) {
   const hasState = entry.before_state || entry.after_state;
 
   return (
-    <div className="rounded-xl border border-black/10 px-4 py-3">
+    <div className="rounded-xl border border-ink/10 px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <span className="bg-brand/10 text-brand rounded-full px-2 py-0.5 text-[11px] font-semibold">
@@ -49,7 +49,7 @@ function AuditLogEntryRow({ entry }: { entry: AuditLogEntry }) {
           {entry.before_state && (
             <div>
               <p className="text-ink-muted mb-0.5 font-semibold uppercase">Before</p>
-              <pre className="overflow-x-auto rounded-lg bg-black/4 p-2">
+              <pre className="overflow-x-auto rounded-lg bg-ink/4 p-2">
                 {JSON.stringify(entry.before_state, null, 2)}
               </pre>
             </div>
@@ -57,7 +57,7 @@ function AuditLogEntryRow({ entry }: { entry: AuditLogEntry }) {
           {entry.after_state && (
             <div>
               <p className="text-ink-muted mb-0.5 font-semibold uppercase">After</p>
-              <pre className="overflow-x-auto rounded-lg bg-black/4 p-2">
+              <pre className="overflow-x-auto rounded-lg bg-ink/4 p-2">
                 {JSON.stringify(entry.after_state, null, 2)}
               </pre>
             </div>
@@ -112,7 +112,7 @@ export function AuditLogPage() {
           <select
             value={filters.action ?? ''}
             onChange={(e) => setFilter('action', (e.target.value || undefined) as Action | undefined)}
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">All</option>
             {ACTION_OPTIONS.map((action) => (
@@ -128,7 +128,7 @@ export function AuditLogPage() {
             type="date"
             value={filters.date_from?.slice(0, 10) ?? ''}
             onChange={(e) => setFilter('date_from', e.target.value || undefined)}
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-[12.5px]">
@@ -137,7 +137,7 @@ export function AuditLogPage() {
             type="date"
             value={filters.date_to?.slice(0, 10) ?? ''}
             onChange={(e) => setFilter('date_to', e.target.value || undefined)}
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           />
         </label>
       </div>

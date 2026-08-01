@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchMessages } from '../../lib/notifications-api';
 import type { ChatMessagePayload } from '../../lib/ws-client';
@@ -59,7 +59,7 @@ export function ReportChat({
   }
 
   return (
-    <div className="mb-5 rounded-xl border border-black/10 p-4">
+    <div className="mb-5 rounded-xl border border-ink/10 p-4">
       <h2 className="text-ink-secondary mb-3 text-[12.5px] font-semibold">Messages</h2>
 
       {isLoading && <p className="text-ink-muted text-sm">Loading…</p>}
@@ -73,7 +73,7 @@ export function ReportChat({
               key={m.id}
               className={cn(
                 'max-w-[80%] rounded-lg px-3 py-1.5 text-sm',
-                isMine ? 'bg-brand/10 self-end' : 'bg-black/4 self-start',
+                isMine ? 'bg-brand/10 self-end' : 'bg-ink/4 self-start',
               )}
             >
               {!isMine && <p className="text-ink-muted mb-0.5 text-[11px] font-semibold">{m.sender}</p>}
@@ -92,7 +92,7 @@ export function ReportChat({
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder={canSend ? 'Write a message…' : 'Connecting…'}
           disabled={!canSend}
-          className="flex-1 rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm disabled:opacity-50"
+          className="flex-1 rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm disabled:opacity-50"
         />
         <Button size="sm" onClick={handleSend} disabled={!canSend || !draft.trim()}>
           Send

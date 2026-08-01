@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { updateReportStatus } from '../../lib/reports-api';
 import { Status } from '../../types/domain';
@@ -46,7 +46,7 @@ export function StatusUpdateControl({
   }
 
   return (
-    <div className="mb-5 rounded-xl border border-black/10 p-4">
+    <div className="mb-5 rounded-xl border border-ink/10 p-4">
       <h2 className="text-ink-secondary mb-3 text-[12.5px] font-semibold">Update status</h2>
 
       {conflict && (
@@ -72,7 +72,7 @@ export function StatusUpdateControl({
         <select
           value={selected}
           onChange={(e) => setSelected(e.target.value as Status)}
-          className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+          className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
         >
           {STATUS_OPTIONS.map((status) => (
             <option key={status} value={status}>

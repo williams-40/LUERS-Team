@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -118,7 +118,7 @@ export function DepartmentFormPage() {
           </label>
           <input
             id="name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             aria-invalid={Boolean(errors.name)}
             {...register('name')}
           />
@@ -132,7 +132,7 @@ export function DepartmentFormPage() {
           <textarea
             id="description"
             rows={3}
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             {...register('description')}
           />
         </div>
@@ -145,7 +145,7 @@ export function DepartmentFormPage() {
             id="head"
             value={head}
             onChange={(e) => setValue('head', e.target.value)}
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">No head assigned</option>
             {(adminTierUsers?.results ?? []).map((user) => (

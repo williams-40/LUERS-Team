@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchUsers } from '../lib/admin-users-api';
@@ -12,7 +12,7 @@ function UserRow({ user }: { user: User }) {
   return (
     <Link
       to={`/admin/users/${user.id}/edit`}
-      className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-4 py-3 transition hover:border-black/20"
+      className="flex items-center justify-between gap-3 rounded-xl border border-ink/10 px-4 py-3 transition hover:border-ink/20"
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2">
@@ -76,7 +76,7 @@ export function AdminUsersPage() {
               setPage(1);
             }}
             placeholder="Username or email"
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-[12.5px]">
@@ -84,7 +84,7 @@ export function AdminUsersPage() {
           <select
             value={filters.role ?? ''}
             onChange={(e) => setRoleFilter(e.target.value as Role | '')}
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">All</option>
             {Object.values(Role).map((role) => (
@@ -99,7 +99,7 @@ export function AdminUsersPage() {
           <select
             value={filters.is_active === undefined ? '' : String(filters.is_active)}
             onChange={(e) => setActiveFilter(e.target.value)}
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">All</option>
             <option value="true">Active</option>

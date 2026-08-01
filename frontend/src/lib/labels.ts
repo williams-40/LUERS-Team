@@ -1,30 +1,27 @@
-import { Action, Category, Role } from '../types/domain';
+import type { Action, Category, Role } from '../types/domain';
+import i18n from './i18n';
 
-export const CATEGORY_LABELS: Record<Category, string> = {
-  [Category.THEFT]: 'Theft',
-  [Category.ASSAULT]: 'Assault',
-  [Category.MEDICAL]: 'Medical',
-  [Category.FIRE]: 'Fire',
-  [Category.HARASSMENT_GBV]: 'Harassment / GBV',
-  [Category.ACADEMIC]: 'Academic',
-  [Category.OTHER]: 'Other',
-};
+/**
+ * Backed by i18next (locales/en/common.json's category/role/action keys)
+ * behind a Proxy so every existing `CATEGORY_LABELS[x]` call site across
+ * the app keeps working unchanged — this is the migration path for
+ * already-centralized label maps, see docs note in lib/i18n.ts.
+ *
+ * Known limitation: components reading through this Proxy (rather than
+ * calling `useTranslation()`'s `t()` directly) won't automatically
+ * re-render on a language change, since they're not subscribed to i18next.
+ * Invisible today (English is the only locale, no switcher exists yet) —
+ * if a second language + switcher is ever added, migrate hot call sites to
+ * `useTranslation()` directly instead of relying on this Proxy.
+ */
+function createLabelProxy<T extends string>(namespace: string): Record<T, string> {
+  return new Proxy({} as Record<T, string>, {
+    get(_target, key: string) {
+      return i18n.t(`${namespace}.${key}`);
+    },
+  });
+}
 
-export const ROLE_LABELS: Record<Role, string> = {
-  [Role.STUDENT]: 'Student',
-  [Role.STAFF]: 'Staff',
-  [Role.SECURITY]: 'Security Officer',
-  [Role.ICT_ADMIN]: 'ICT Admin',
-  [Role.MANAGEMENT]: 'Management',
-  [Role.SYSTEM_ADMIN]: 'System Admin',
-};
-
-export const ACTION_LABELS: Record<Action, string> = {
-  [Action.CREATE]: 'Create',
-  [Action.STATUS_UPDATE]: 'Status Update',
-  [Action.ASSIGN]: 'Assign',
-  [Action.EVIDENCE_UPLOAD]: 'Evidence Upload',
-  [Action.DEANONYMIZE]: 'Deanonymize',
-  [Action.SOFT_DELETE]: 'Soft Delete',
-  [Action.RESTORE]: 'Restore',
-};
+export const CATEGORY_LABELS: Record<Category, string> = createLabelProxy('category');
+export const ROLE_LABELS: Record<Role, string> = createLabelProxy('role');
+export const ACTION_LABELS: Record<Action, string> = createLabelProxy('action');

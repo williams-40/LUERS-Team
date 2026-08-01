@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -200,7 +200,7 @@ export function ReportCreatePage() {
             <input
               id="custom_department"
               type="text"
-              className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+              className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
               {...register('custom_department')}
             />
             {errors.custom_department && (
@@ -216,7 +216,7 @@ export function ReportCreatePage() {
           <textarea
             id="description"
             rows={mode === 'panic' ? 2 : 4}
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             {...register('description')}
           />
           {errors.description && <p className="text-status-critical text-xs">{errors.description.message}</p>}

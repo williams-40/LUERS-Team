@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { deleteReport, fetchReportDetail } from '../lib/reports-api';
@@ -91,7 +91,7 @@ export function ReportDetailPage() {
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
       {justCreated && (
-        <div className="bg-status-good/10 mb-5 rounded-xl px-4 py-3 text-sm font-semibold text-[#0a6b0a]">
+        <div className="bg-status-good/10 text-status-good-ink mb-5 rounded-xl px-4 py-3 text-sm font-semibold">
           Report submitted{report.is_anonymous ? ' anonymously' : ''}. You'll see status updates here.
         </div>
       )}
@@ -144,7 +144,7 @@ export function ReportDetailPage() {
           </h2>
           <ul className="flex flex-col gap-1.5">
             {report.evidence.map((item) => (
-              <li key={item.id} className="rounded-lg bg-black/4 px-3 py-1.5 text-sm">
+              <li key={item.id} className="rounded-lg bg-ink/4 px-3 py-1.5 text-sm">
                 {item.file_url ? (
                   <a
                     href={item.file_url}

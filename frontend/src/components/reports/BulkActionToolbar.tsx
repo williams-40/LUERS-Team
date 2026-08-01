@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchOfficers } from '../../lib/reports-api';
 import { Button } from '../ui/Button';
@@ -29,7 +29,7 @@ export function BulkActionToolbar({
   if (count === 0) return null;
 
   return (
-    <div className="bg-brand/8 mb-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-black/10 px-4 py-3">
+    <div className="bg-brand/8 mb-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-ink/10 px-4 py-3">
       <span className="text-sm font-semibold">
         {count} report{count === 1 ? '' : 's'} selected
       </span>
@@ -37,7 +37,7 @@ export function BulkActionToolbar({
       <select
         value={status}
         onChange={(e) => setStatus(e.target.value as Status)}
-        className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+        className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
       >
         {STATUS_OPTIONS.map((s) => (
           <option key={s} value={s}>
@@ -53,7 +53,7 @@ export function BulkActionToolbar({
         value={officerId}
         onChange={(e) => setOfficerId(e.target.value)}
         disabled={officersLoading}
-        className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+        className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
       >
         <option value="" disabled>
           {officersLoading ? 'Loading officers…' : 'Select an officer'}

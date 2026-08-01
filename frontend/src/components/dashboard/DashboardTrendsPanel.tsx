@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+﻿import { useQuery } from '@tanstack/react-query';
 import { fetchDashboardTrends } from '../../lib/dashboard-api';
 
 const TREND_DAYS = 14;
@@ -17,7 +17,7 @@ export function DashboardTrendsPanel() {
   const max = Math.max(1, ...data.daily_counts.map((d) => d.count));
 
   return (
-    <div className="mb-6 rounded-xl border border-black/10 p-4">
+    <div className="mb-6 rounded-xl border border-ink/10 p-4">
       <h2 className="text-ink-secondary mb-3 text-[12.5px] font-semibold">
         Reports per day (last {TREND_DAYS} days)
       </h2>

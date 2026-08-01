@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+﻿import { useRef } from 'react';
 import { X } from 'lucide-react';
 import { ALLOWED_EVIDENCE_EXTENSIONS, validateEvidenceFile } from '../../lib/evidence-constraints';
 
@@ -41,7 +41,7 @@ export function EvidencePicker({ files, onChange, errors, onErrorsChange }: Evid
         multiple
         accept={ALLOWED_EVIDENCE_EXTENSIONS.join(',')}
         onChange={(e) => handleFiles(e.target.files)}
-        className="text-ink-secondary text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-black/6 file:px-3 file:py-1.5 file:text-sm file:font-semibold"
+        className="text-ink-secondary text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-ink/6 file:px-3 file:py-1.5 file:text-sm file:font-semibold"
       />
       <p className="text-ink-muted text-xs">
         Photos, video, or audio up to 5MB each ({ALLOWED_EVIDENCE_EXTENSIONS.join(', ')}).
@@ -60,7 +60,7 @@ export function EvidencePicker({ files, onChange, errors, onErrorsChange }: Evid
           {files.map((file, index) => (
             <li
               key={`${file.name}-${index}`}
-              className="flex items-center justify-between rounded-lg bg-black/4 px-3 py-1.5 text-sm"
+              className="flex items-center justify-between rounded-lg bg-ink/4 px-3 py-1.5 text-sm"
             >
               <span className="truncate">{file.name}</span>
               <button

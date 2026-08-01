@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchDeletedReports, restoreReport } from '../lib/reports-api';
 import { Button } from '../components/ui/Button';
@@ -19,7 +19,7 @@ function DeletedReportRow({ report }: { report: ReportListItem }) {
   });
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-4 py-3">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-ink/10 px-4 py-3">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-heading truncate text-[14.5px] font-bold">{CATEGORY_LABELS[report.category]}</span>
@@ -66,7 +66,7 @@ export function AdminDeletedReportsPage() {
               setPage(1);
             }}
             placeholder="Description, department, officer"
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           />
         </label>
       </div>

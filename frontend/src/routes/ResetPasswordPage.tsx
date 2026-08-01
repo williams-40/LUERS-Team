@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -74,7 +74,7 @@ export function ResetPasswordPage() {
             id="newPassword"
             type="password"
             autoComplete="new-password"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             aria-invalid={Boolean(errors.newPassword)}
             {...register('newPassword')}
           />
@@ -89,7 +89,7 @@ export function ResetPasswordPage() {
             id="confirmPassword"
             type="password"
             autoComplete="new-password"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-black/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             aria-invalid={Boolean(errors.confirmPassword)}
             {...register('confirmPassword')}
           />

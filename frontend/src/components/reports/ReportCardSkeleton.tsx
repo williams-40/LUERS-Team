@@ -1,10 +1,10 @@
-import { Skeleton } from '../ui/Skeleton';
+﻿import { Skeleton } from '../ui/Skeleton';
 
 /** Matches ReportCard's layout (severity rail, category/status row, 2-line
  * description, metadata row) so loading doesn't visually jump once content arrives. */
 export function ReportCardSkeleton() {
   return (
-    <div className="bg-surface-2 relative flex gap-3.5 overflow-hidden rounded-xl border border-black/10 py-3.5 pr-4 pl-[18px]">
+    <div className="bg-surface-2 relative flex gap-3.5 overflow-hidden rounded-xl border border-ink/10 py-3.5 pr-4 pl-[18px]">
       <span className="bg-ink-muted/15 absolute inset-y-0 left-0 w-[5px]" aria-hidden />
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex items-center justify-between gap-2">

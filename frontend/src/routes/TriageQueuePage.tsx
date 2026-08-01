@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useReportQueue } from '../hooks/useReportQueue';
 import type { QueueFilterState } from '../hooks/useReportQueue';
 import { useReportSocket } from '../hooks/useReportSocket';
@@ -37,7 +37,7 @@ function FilterSelect<T extends string>({
       <select
         value={value ?? ''}
         onChange={(e) => onChange((e.target.value || undefined) as T | undefined)}
-        className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+        className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
       >
         <option value="">All</option>
         {options.map((option) => (
@@ -163,7 +163,7 @@ export function TriageQueuePage() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Description, department, officer…"
-            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           />
         </label>
         <FilterSelect
