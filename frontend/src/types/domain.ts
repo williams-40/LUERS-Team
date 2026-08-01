@@ -118,6 +118,7 @@ export interface ReportListItem {
   created_at: string;
   updated_at: string;
   evidence_count: number;
+  deleted_at: string | null;
   department_id: string | null;
   department_name: string | null;
 }
@@ -173,6 +174,8 @@ export const Action = {
   ASSIGN: 'assign',
   EVIDENCE_UPLOAD: 'evidence_upload',
   DEANONYMIZE: 'deanonymize',
+  SOFT_DELETE: 'soft_delete',
+  RESTORE: 'restore',
 } as const;
 export type Action = (typeof Action)[keyof typeof Action];
 

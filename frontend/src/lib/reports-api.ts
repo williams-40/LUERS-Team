@@ -129,3 +129,20 @@ export async function bulkAssignReports(reportIds: string[], assignedTo: string)
   });
   return data;
 }
+
+export async function deleteReport(reportId: string): Promise<{ id: string; deleted_at: string }> {
+  const { data } = await apiClient.post<{ id: string; deleted_at: string }>(`/reports/${reportId}/delete/`);
+  return data;
+}
+
+export async function restoreReport(reportId: string): Promise<{ id: string; deleted_at: null }> {
+  const { data } = await apiClient.post<{ id: string; deleted_at: null }>(`/reports/${reportId}/restore/`);
+  return data;
+}
+
+export async function fetchDeletedReports(
+  filters: Pick<ReportQueueFilters, 'page' | 'search'> = {},
+): Promise<Paginated<ReportListItem>> {
+  const { data } = await apiClient.get<Paginated<ReportListItem>>('/reports/deleted/', { params: filters });
+  return data;
+}

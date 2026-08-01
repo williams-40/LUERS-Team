@@ -53,6 +53,9 @@ export function DashboardPage() {
           <Link to="/admin/departments">
             <Button variant="secondary">Departments</Button>
           </Link>
+          <Link to="/admin/reports/deleted">
+            <Button variant="secondary">Deleted reports</Button>
+          </Link>
         </div>
       )}
 

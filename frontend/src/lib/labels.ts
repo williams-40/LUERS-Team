@@ -25,4 +25,6 @@ export const ACTION_LABELS: Record<Action, string> = {
   [Action.ASSIGN]: 'Assign',
   [Action.EVIDENCE_UPLOAD]: 'Evidence Upload',
   [Action.DEANONYMIZE]: 'Deanonymize',
+  [Action.SOFT_DELETE]: 'Soft Delete',
+  [Action.RESTORE]: 'Restore',
 };

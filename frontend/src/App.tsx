@@ -42,6 +42,9 @@ const DepartmentsPage = lazy(() =>
 const DepartmentFormPage = lazy(() =>
   import('./routes/DepartmentFormPage').then((m) => ({ default: m.DepartmentFormPage })),
 );
+const AdminDeletedReportsPage = lazy(() =>
+  import('./routes/AdminDeletedReportsPage').then((m) => ({ default: m.AdminDeletedReportsPage })),
+);
 
 const router = createBrowserRouter([
   {
@@ -150,6 +153,14 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
             <DepartmentFormPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/reports/deleted',
+        element: (
+          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+            <AdminDeletedReportsPage />
           </RequireAuth>
         ),
       },

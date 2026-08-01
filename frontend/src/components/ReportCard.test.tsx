@@ -24,6 +24,7 @@ function baseReport(overrides: Partial<ReportListItem> = {}): ReportListItem {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     evidence_count: 0,
+    deleted_at: null,
     department_id: null,
     department_name: null,
     ...overrides,
