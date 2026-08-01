@@ -9,9 +9,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env = environ.Env()
 environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
-# Encryption keys for identity escrow (anonymity system)
-FERNET_KEY = env("FERNET_KEY")          # used to encrypt/decrypt the reporter's real identity
-IDENTITY_HASH_KEY = env("IDENTITY_HASH_KEY")  # used only to look up "is this report mine", never reversible
+# Encryption keys for identity escrow (anonymity system).
+# FERNET_KEYS is a comma-separated list, newest key first — encryption uses
+# the first key, decryption tries each in turn, which is what makes key
+# rotation possible (see apps/core/management/commands/rotate_fernet_key.py
+# and docs/identity-escrow-key-rotation.md) without invalidating data
+# encrypted under an older key. Falls back to the legacy singular
+# FERNET_KEY so an un-rotated .env keeps working unchanged.
+FERNET_KEYS = env.list("FERNET_KEYS", default=None) or [env("FERNET_KEY")]
+# One-way HMAC key for "is this report mine" lookups — deliberately NOT part
+# of the rotation scheme above (see docs/identity-escrow-key-rotation.md for
+# why: an HMAC has no "try the old key too" fallback, so rotating it would
+# silently break every existing reporter_hash with no way to detect it).
+IDENTITY_HASH_KEY = env("IDENTITY_HASH_KEY")
 
 # SECURITY
 SECRET_KEY = env("SECRET_KEY")

@@ -1,4 +1,4 @@
-﻿from cryptography.fernet import Fernet, InvalidToken
+﻿from cryptography.fernet import Fernet, MultiFernet, InvalidToken
 from django.conf import settings
 import hashlib
 import hmac
@@ -10,19 +10,24 @@ class BaseService:
 
 
 def _fernet():
-    key = settings.FERNET_KEY
-    if isinstance(key, str):
-        key = key.encode()
-    return Fernet(key)
+    """
+    MultiFernet over settings.FERNET_KEYS (newest first): encrypt() always
+    uses the first key, decrypt() tries each key in turn — this is what
+    lets FERNET_KEY be rotated without invalidating previously-encrypted
+    ReportIdentity rows. See rotate_fernet_key management command.
+    """
+    keys = settings.FERNET_KEYS
+    fernets = [Fernet(k.encode() if isinstance(k, str) else k) for k in keys]
+    return MultiFernet(fernets)
 
 
 class EncryptionService:
     """
     Handles real encryption/decryption for anonymous identities.
 
-    encrypt()/decrypt() use Fernet (AES-128-CBC + HMAC), so the stored value
-    is genuinely unreadable without FERNET_KEY — unlike Django's Signer,
-    which only signs plaintext and does not hide it.
+    encrypt()/decrypt() use Fernet (AES-128-CBC + HMAC) via MultiFernet, so
+    the stored value is genuinely unreadable without a FERNET_KEYS entry —
+    unlike Django's Signer, which only signs plaintext and does not hide it.
 
     hash_for_lookup() produces a one-way, deterministic HMAC used ONLY to
     answer "does this identity belong to user X" without ever decrypting or

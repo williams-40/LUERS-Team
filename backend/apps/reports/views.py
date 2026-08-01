@@ -15,7 +15,7 @@ from apps.reports.serializers import (
 )
 from apps.reports.services import ReportService, IdentityService, MessageService, get_accessible_reports, filter_reports  # ✅ added
 from apps.reports.validators import validate_evidence_file
-from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsStudentOrStaff, IsManagement, IsAdminTier
+from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsStudentOrStaff, IsManagement, IsAdminTier, IsAccountAdmin
 from apps.core.export import csv_response, pdf_response
 from apps.core.pagination import StandardPagination
 from apps.reports.serializers import SyncRequestSerializer, SyncResultSerializer
@@ -305,6 +305,59 @@ class ReportRevealIdentityView(APIView):
             'email': reporter.email,
             'university_id': reporter.university_id,
         })
+
+
+class ReportDeleteView(APIView):
+    """
+    POST /api/v1/reports/{id}/delete/
+    Soft-deletes a report (sets deleted_at) — excludes it from the triage
+    queue, dashboards, search, and every reporter's own view, but keeps the
+    row (and its Evidence/ReportIdentity) intact until purge_deleted_reports
+    hard-deletes it after the retention window. Account-admin only (not
+    Management — that's the escrow-reveal governance role, a separate
+    concern from day-to-day account/report administration).
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAccountAdmin]
+
+    def post(self, request, id):
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        ip = get_client_ip(request)
+        ReportService.soft_delete(report, request.user, ip_address=ip, sync_origin=SyncOrigin.LIVE)
+        return Response({'id': str(report.id), 'deleted_at': report.deleted_at})
+
+
+class ReportRestoreView(APIView):
+    """
+    POST /api/v1/reports/{id}/restore/
+    Clears deleted_at on a soft-deleted report. Account-admin only.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAccountAdmin]
+
+    def post(self, request, id):
+        report = get_object_or_404(
+            get_accessible_reports(request.user, include_deleted=True).filter(deleted_at__isnull=False),
+            id=id,
+        )
+        ip = get_client_ip(request)
+        ReportService.restore(report, request.user, ip_address=ip, sync_origin=SyncOrigin.LIVE)
+        return Response({'id': str(report.id), 'deleted_at': None})
+
+
+class ReportDeletedListView(generics.ListAPIView):
+    """
+    GET /api/v1/reports/deleted/
+    Lists soft-deleted reports (deleted_at set) so an admin can review and
+    restore them. Without this endpoint, soft-delete would be write-only.
+    Account-admin only.
+    """
+    serializer_class = ReportListSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAccountAdmin]
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        queryset = get_accessible_reports(self.request.user, include_deleted=True).filter(deleted_at__isnull=False)
+        queryset = filter_reports(queryset, self.request.query_params)
+        return queryset.order_by('-deleted_at')
 
 
 class MyReportsView(generics.ListAPIView):

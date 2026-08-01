@@ -315,6 +315,41 @@ class ReportService:
         return evidence
 
     @staticmethod
+    @transaction.atomic
+    def soft_delete(report, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
+        report.deleted_at = timezone.now()
+        report.save(update_fields=['deleted_at', 'updated_at'])
+
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.SOFT_DELETE,
+            before_state={'deleted_at': None},
+            after_state={'deleted_at': report.deleted_at.isoformat()},
+            ip_address=ip_address,
+            sync_origin=sync_origin,
+        )
+        return report
+
+    @staticmethod
+    @transaction.atomic
+    def restore(report, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
+        old_deleted_at = report.deleted_at
+        report.deleted_at = None
+        report.save(update_fields=['deleted_at', 'updated_at'])
+
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.RESTORE,
+            before_state={'deleted_at': old_deleted_at.isoformat() if old_deleted_at else None},
+            after_state={'deleted_at': None},
+            ip_address=ip_address,
+            sync_origin=sync_origin,
+        )
+        return report
+
+    @staticmethod
     def _check_version(report, expected_updated_at):
         if expected_updated_at is not None:
             if timezone.is_naive(expected_updated_at):
@@ -367,26 +402,36 @@ def filter_reports(queryset, params):
     return queryset
 
 
-def get_accessible_reports(user):
+def get_accessible_reports(user, include_deleted=False):
     """
     Return a QuerySet of reports the user is allowed to see.
+
+    Soft-deleted reports (deleted_at set) are excluded by default for
+    everyone, including admin tiers — they're only visible via
+    ReportDeletedListView (`include_deleted=True`), which is gated on
+    IsAccountAdmin, so a report being soft-deleted doesn't leak into the
+    triage queue, dashboards, or search just because the viewer is an admin.
     """
     # Admins see all
     if user.role in ['security', 'ict_admin', 'management', 'system_admin']:
-        return Report.objects.all()
+        queryset = Report.objects.all()
+    else:
+        # Department head: see reports of their department
+        dept_as_head = Department.objects.filter(head=user)
+        if dept_as_head.exists():
+            queryset = Report.objects.filter(department__in=dept_as_head)
+        else:
+            # Department member: see reports of their departments
+            dept_as_member = user.department_members.all()
+            if dept_as_member.exists():
+                queryset = Report.objects.filter(department__in=dept_as_member)
+            else:
+                # Students/staff: only own non‑anonymous reports
+                reporter_hash = EncryptionService.hash_for_lookup(user.id)
+                identities = ReportIdentity.objects.filter(reporter_hash=reporter_hash)
+                report_ids = identities.values_list('report_id', flat=True)
+                queryset = Report.objects.filter(id__in=report_ids, is_anonymous=False)
 
-    # Department head: see reports of their department
-    dept_as_head = Department.objects.filter(head=user)
-    if dept_as_head.exists():
-        return Report.objects.filter(department__in=dept_as_head)
-
-    # Department member: see reports of their departments
-    dept_as_member = user.department_members.all()
-    if dept_as_member.exists():
-        return Report.objects.filter(department__in=dept_as_member)
-
-    # Students/staff: only own non‑anonymous reports
-    reporter_hash = EncryptionService.hash_for_lookup(user.id)
-    identities = ReportIdentity.objects.filter(reporter_hash=reporter_hash)
-    report_ids = identities.values_list('report_id', flat=True)
-    return Report.objects.filter(id__in=report_ids, is_anonymous=False)
+    if include_deleted:
+        return queryset
+    return queryset.filter(deleted_at__isnull=True)

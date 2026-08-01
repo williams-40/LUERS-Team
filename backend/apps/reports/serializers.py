@@ -44,7 +44,7 @@ class ReportListSerializer(serializers.ModelSerializer):
             'id', 'category', 'category_display', 'description', 'urgency', 'urgency_display',
             'status', 'status_display', 'latitude', 'longitude', 'location_accuracy',
             'assigned_to', 'assigned_to_username', 'is_anonymous', 'created_at', 'updated_at',
-            'evidence_count',
+            'evidence_count', 'deleted_at',
             'department_id', 'department_name',  # ✅ new fields
         ]
 

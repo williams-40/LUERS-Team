@@ -45,6 +45,8 @@ class Action(models.TextChoices):
     ASSIGN = 'assign', 'Assign'
     EVIDENCE_UPLOAD = 'evidence_upload', 'Evidence Upload'
     DEANONYMIZE = 'deanonymize', 'Deanonymize'   # Phase 2 backlog but include now
+    SOFT_DELETE = 'soft_delete', 'Soft Delete'
+    RESTORE = 'restore', 'Restore'
 
 class SyncOrigin(models.TextChoices):
     LIVE = 'live', 'Live'
