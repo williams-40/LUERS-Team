@@ -1,4 +1,5 @@
 ﻿from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import APIException
 from asgiref.sync import async_to_sync
@@ -332,16 +333,37 @@ class ReportService:
 # ============================================================
 
 def filter_reports(queryset, params):
-    """Shared status/category/urgency filtering for the queue list and export views."""
+    """
+    Shared status/category/urgency/search filtering for the queue list and
+    export views. `search` is a plain icontains OR across description,
+    custom_department, department name, and assigned officer username —
+    deliberately excludes ReportIdentity (encrypted reporter identity must
+    never be searchable in plaintext) and category/status/urgency (already
+    exact-match filterable above; substring-matching them too would be
+    redundant and could mislead officers about what search actually does).
+
+    icontains can't use a plain btree index, so this scans on `description`
+    for now — fine at this app's current scale. A pg_trgm GIN index would
+    accelerate it but needs a new Postgres extension + migration; revisit
+    only if EXPLAIN ANALYZE ever shows it matters.
+    """
     status = params.get('status')
     category = params.get('category')
     urgency = params.get('urgency')
+    search = params.get('search')
     if status:
         queryset = queryset.filter(status=status)
     if category:
         queryset = queryset.filter(category=category)
     if urgency:
         queryset = queryset.filter(urgency=urgency)
+    if search:
+        queryset = queryset.filter(
+            Q(description__icontains=search)
+            | Q(custom_department__icontains=search)
+            | Q(department__name__icontains=search)
+            | Q(assigned_to__username__icontains=search)
+        ).distinct()
     return queryset
 
 

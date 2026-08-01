@@ -172,6 +172,29 @@ class ReportAssignSerializer(serializers.Serializer):
         return user
 
 
+class BulkStatusUpdateSerializer(serializers.Serializer):
+    """Used for bulk status updates from the triage queue's selection toolbar."""
+    report_ids = serializers.ListField(
+        child=serializers.UUIDField(), min_length=1, max_length=100,
+    )
+    status = serializers.ChoiceField(choices=Status.choices)
+
+
+class BulkAssignSerializer(serializers.Serializer):
+    """Used for bulk assignment from the triage queue's selection toolbar."""
+    report_ids = serializers.ListField(
+        child=serializers.UUIDField(), min_length=1, max_length=100,
+    )
+    assigned_to = serializers.UUIDField()
+
+    def validate_assigned_to(self, value):
+        try:
+            user = User.objects.get(id=value, role='security')
+        except User.DoesNotExist:
+            raise serializers.ValidationError("User not found or not a Security Officer.")
+        return user
+
+
 class SyncActionSerializer(serializers.Serializer):
     """Serializer for a single sync action."""
     action = serializers.ChoiceField(choices=['create_report', 'update_status', 'send_message'])
