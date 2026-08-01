@@ -1,26 +1,47 @@
+import { lazy } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './lib/auth-context';
+import { ToastProvider } from './lib/toast-context';
 import { AppLayout } from './components/layout/AppLayout';
 import { RequireAuth } from './components/auth/RequireAuth';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
-import { LoginPage } from './routes/LoginPage';
-import { ForgotPasswordPage } from './routes/ForgotPasswordPage';
-import { ResetPasswordPage } from './routes/ResetPasswordPage';
-import { DashboardPage } from './routes/DashboardPage';
-import { TriageQueuePage } from './routes/TriageQueuePage';
-import { AuditLogPage } from './routes/AuditLogPage';
-import { ReportCreatePage } from './routes/ReportCreatePage';
-import { MyReportsPage } from './routes/MyReportsPage';
-import { ReportDetailPage } from './routes/ReportDetailPage';
-import { StyleGuidePage } from './routes/StyleGuidePage';
-import { ForbiddenPage } from './routes/ForbiddenPage';
-import { NotFoundPage } from './routes/NotFoundPage';
-import { ProfilePage } from './routes/ProfilePage';
-import { AdminUsersPage } from './routes/AdminUsersPage';
-import { AdminUserFormPage } from './routes/AdminUserFormPage';
-import { DepartmentsPage } from './routes/DepartmentsPage';
-import { DepartmentFormPage } from './routes/DepartmentFormPage';
 import { ACCOUNT_ADMIN_ROLES, ADMIN_ROLES, REPORTER_ROLES } from './types/domain';
+
+const LoginPage = lazy(() => import('./routes/LoginPage').then((m) => ({ default: m.LoginPage })));
+const ForgotPasswordPage = lazy(() =>
+  import('./routes/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import('./routes/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })),
+);
+const DashboardPage = lazy(() => import('./routes/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const TriageQueuePage = lazy(() =>
+  import('./routes/TriageQueuePage').then((m) => ({ default: m.TriageQueuePage })),
+);
+const AuditLogPage = lazy(() => import('./routes/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
+const ReportCreatePage = lazy(() =>
+  import('./routes/ReportCreatePage').then((m) => ({ default: m.ReportCreatePage })),
+);
+const MyReportsPage = lazy(() => import('./routes/MyReportsPage').then((m) => ({ default: m.MyReportsPage })));
+const ReportDetailPage = lazy(() =>
+  import('./routes/ReportDetailPage').then((m) => ({ default: m.ReportDetailPage })),
+);
+const StyleGuidePage = lazy(() => import('./routes/StyleGuidePage').then((m) => ({ default: m.StyleGuidePage })));
+const ForbiddenPage = lazy(() => import('./routes/ForbiddenPage').then((m) => ({ default: m.ForbiddenPage })));
+const NotFoundPage = lazy(() => import('./routes/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
+const ProfilePage = lazy(() => import('./routes/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const AdminUsersPage = lazy(() =>
+  import('./routes/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })),
+);
+const AdminUserFormPage = lazy(() =>
+  import('./routes/AdminUserFormPage').then((m) => ({ default: m.AdminUserFormPage })),
+);
+const DepartmentsPage = lazy(() =>
+  import('./routes/DepartmentsPage').then((m) => ({ default: m.DepartmentsPage })),
+);
+const DepartmentFormPage = lazy(() =>
+  import('./routes/DepartmentFormPage').then((m) => ({ default: m.DepartmentFormPage })),
+);
 
 const router = createBrowserRouter([
   {
@@ -145,7 +166,9 @@ const router = createBrowserRouter([
 function App() {
   return (
     <AuthProvider>
-      <RouterProvider router={router} />
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </AuthProvider>
   );
 }

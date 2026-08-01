@@ -1,6 +1,8 @@
+import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Logo } from './Logo';
 import { PendingReportsIndicator } from './PendingReportsIndicator';
+import { RouteLoadingFallback } from './RouteLoadingFallback';
 
 export function AppLayout() {
   return (
@@ -11,7 +13,9 @@ export function AppLayout() {
         <PendingReportsIndicator />
       </header>
       <main className="flex-1">
-        <Outlet />
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

@@ -41,6 +41,7 @@ export interface ReportQueueFilters {
   status?: Status;
   category?: Category;
   urgency?: Urgency;
+  search?: string;
   since?: string;
   page?: number;
 }
@@ -93,7 +94,7 @@ export async function revealIdentity(reportId: string): Promise<RevealedIdentity
 }
 
 export async function downloadReportsExport(
-  filters: Pick<ReportQueueFilters, 'status' | 'category' | 'urgency'>,
+  filters: Pick<ReportQueueFilters, 'status' | 'category' | 'urgency' | 'search'>,
   exportFormat: 'csv' | 'pdf',
 ): Promise<void> {
   const response = await apiClient.get('/reports/export/', {
@@ -101,4 +102,30 @@ export async function downloadReportsExport(
     responseType: 'blob',
   });
   downloadBlob(response.data as Blob, `reports.${exportFormat}`);
+}
+
+export interface BulkActionResult {
+  report_id: string;
+  status: 'success' | 'error';
+  error?: string;
+}
+
+export interface BulkActionResponse {
+  results: BulkActionResult[];
+}
+
+export async function bulkUpdateStatus(reportIds: string[], newStatus: Status): Promise<BulkActionResponse> {
+  const { data } = await apiClient.post<BulkActionResponse>('/reports/bulk/status/', {
+    report_ids: reportIds,
+    status: newStatus,
+  });
+  return data;
+}
+
+export async function bulkAssignReports(reportIds: string[], assignedTo: string): Promise<BulkActionResponse> {
+  const { data } = await apiClient.post<BulkActionResponse>('/reports/bulk/assign/', {
+    report_ids: reportIds,
+    assigned_to: assignedTo,
+  });
+  return data;
 }

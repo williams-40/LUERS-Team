@@ -7,12 +7,18 @@ export interface QueueFilterState {
   status?: Status;
   category?: Category;
   urgency?: Urgency;
+  search?: string;
 }
 
 function matchesFilters(report: ReportListItem, filters: QueueFilterState): boolean {
   if (filters.status && report.status !== filters.status) return false;
   if (filters.category && report.category !== filters.category) return false;
   if (filters.urgency && report.urgency !== filters.urgency) return false;
+  // Narrower than the backend's multi-field search (description, custom
+  // department, department name, assigned officer) — a live-pushed report
+  // should only auto-insert into the visible page on an unambiguous match;
+  // being conservative here costs less than a false-positive insert.
+  if (filters.search && !report.description.toLowerCase().includes(filters.search.toLowerCase())) return false;
   return true;
 }
 
@@ -32,7 +38,7 @@ export function useReportQueue(filters: QueueFilterState) {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const cursorRef = useRef<string | null>(null);
-  const filtersKey = `${filters.status ?? ''}|${filters.category ?? ''}|${filters.urgency ?? ''}`;
+  const filtersKey = `${filters.status ?? ''}|${filters.category ?? ''}|${filters.urgency ?? ''}|${filters.search ?? ''}`;
   const queryKey = ['reports', 'queue', filtersKey, page] as const;
 
   const query = useQuery({

@@ -1,13 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useReportQueue } from '../hooks/useReportQueue';
 import type { QueueFilterState } from '../hooks/useReportQueue';
 import { useReportSocket } from '../hooks/useReportSocket';
-import { ReportCard } from '../components/ReportCard';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { SelectableReportRow } from '../components/reports/SelectableReportRow';
+import { BulkActionToolbar } from '../components/reports/BulkActionToolbar';
+import { ReportCardSkeleton } from '../components/reports/ReportCardSkeleton';
 import { Button } from '../components/ui/Button';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { Category, Status, Urgency } from '../types/domain';
+import type { BulkActionResponse } from '../lib/reports-api';
 import { CATEGORY_LABELS } from '../lib/labels';
-import { downloadReportsExport } from '../lib/reports-api';
+import { downloadReportsExport, bulkUpdateStatus, bulkAssignReports } from '../lib/reports-api';
+import { useToast } from '../lib/toast-context';
 
 const STATUS_OPTIONS = Object.values(Status);
 const CATEGORY_OPTIONS = Object.values(Category);
@@ -47,24 +52,86 @@ function FilterSelect<T extends string>({
 
 export function TriageQueuePage() {
   const [filters, setFilters] = useState<QueueFilterState>({});
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebouncedValue(searchInput, 300);
   const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const queueFilters: QueueFilterState = { ...filters, search: debouncedSearch || undefined };
   const { data, isLoading, isError, page, setPage, refresh, isFetching, applyLiveEvent } =
-    useReportQueue(filters);
+    useReportQueue(queueFilters);
   const { status: socketStatus, reconnect } = useReportSocket({
     onReportCreated: applyLiveEvent,
     onReportUpdated: applyLiveEvent,
   });
+  const toast = useToast();
+
+  // Selection shouldn't silently carry across a re-filter/page change — the
+  // officer could otherwise bulk-act on a report they can no longer see.
+  useEffect(() => {
+    setSelectedIds(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.status, filters.category, filters.urgency, debouncedSearch, page]);
 
   function setFilter<K extends keyof QueueFilterState>(key: K, value: QueueFilterState[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
   async function handleExport(exportFormat: 'csv' | 'pdf') {
     setExporting(exportFormat);
     try {
-      await downloadReportsExport(filters, exportFormat);
+      await downloadReportsExport(queueFilters, exportFormat);
     } finally {
       setExporting(null);
+    }
+  }
+
+  function reportBulkResults(response: BulkActionResponse) {
+    const successCount = response.results.filter((r) => r.status === 'success').length;
+    const failCount = response.results.length - successCount;
+    if (failCount === 0) {
+      toast.show(`Updated ${successCount} report${successCount === 1 ? '' : 's'}.`, 'success');
+    } else if (successCount === 0) {
+      toast.show(`Couldn't update any of the ${failCount} selected reports.`, 'error');
+    } else {
+      toast.show(`Updated ${successCount} report${successCount === 1 ? '' : 's'}, ${failCount} failed.`, 'error');
+    }
+  }
+
+  async function handleBulkStatus(newStatus: Status) {
+    setBulkBusy(true);
+    try {
+      const response = await bulkUpdateStatus(Array.from(selectedIds), newStatus);
+      reportBulkResults(response);
+      clearSelection();
+      await refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleBulkAssign(officerId: string) {
+    setBulkBusy(true);
+    try {
+      const response = await bulkAssignReports(Array.from(selectedIds), officerId);
+      reportBulkResults(response);
+      clearSelection();
+      await refresh();
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -89,6 +156,16 @@ export function TriageQueuePage() {
       </div>
 
       <div className="mb-6 flex flex-wrap gap-3">
+        <label className="flex flex-col gap-1 text-[12.5px]">
+          <span className="text-ink-secondary font-semibold">Search</span>
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Description, department, officer…"
+            className="rounded-lg border-[1.5px] border-black/15 px-2.5 py-1.5 text-sm"
+          />
+        </label>
         <FilterSelect
           label="Status"
           value={filters.status}
@@ -112,9 +189,19 @@ export function TriageQueuePage() {
         />
       </div>
 
+      <BulkActionToolbar
+        count={selectedIds.size}
+        onBulkStatus={handleBulkStatus}
+        onBulkAssign={handleBulkAssign}
+        onClear={clearSelection}
+        busy={bulkBusy}
+      />
+
       {isLoading && (
-        <div className="flex justify-center py-10">
-          <div className="border-brand h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+        <div className="flex flex-col gap-2.5">
+          {Array.from({ length: 5 }, (_, i) => (
+            <ReportCardSkeleton key={i} />
+          ))}
         </div>
       )}
 
@@ -131,7 +218,12 @@ export function TriageQueuePage() {
       {data && data.results.length > 0 && (
         <div className="flex flex-col gap-2.5">
           {data.results.map((report) => (
-            <ReportCard key={report.id} report={report} />
+            <SelectableReportRow
+              key={report.id}
+              report={report}
+              selected={selectedIds.has(report.id)}
+              onToggle={toggleSelected}
+            />
           ))}
         </div>
       )}
