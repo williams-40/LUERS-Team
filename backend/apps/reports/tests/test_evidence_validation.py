@@ -1,7 +1,7 @@
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
-from apps.core.factories import SecurityFactory, StaffFactory, ReportFactory
+from apps.core.factories import SecurityFactory, StaffFactory, ReportFactory, DepartmentFactory
 
 VALID_JPEG_BYTES = b'\xff\xd8\xff\xe0' + b'\x00' * 32
 SPOOFED_PDF_AS_JPEG = b'%PDF-1.4\n' + b'\x00' * 32
@@ -52,12 +52,13 @@ def test_evidence_upload_rejects_disallowed_extension():
 @pytest.mark.django_db
 def test_report_create_rejects_spoofed_inline_evidence():
     staff = StaffFactory()
+    department = DepartmentFactory()
     client = APIClient()
     client.force_authenticate(user=staff)
 
     file = SimpleUploadedFile('evidence.jpg', SPOOFED_PDF_AS_JPEG, content_type='image/jpeg')
     resp = client.post('/api/v1/reports/create/', {
-        'category': 'theft',
+        'department': str(department.id),
         'description': 'Inline evidence spoof test',
         'urgency': 'normal',
         'is_anonymous': False,

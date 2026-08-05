@@ -2,8 +2,9 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from apps.reports.serializers import BulkStatusUpdateSerializer, BulkAssignSerializer
-from apps.reports.services import ReportService, get_accessible_reports
-from apps.accounts.permissions import IsSecurity, IsICTAdmin
+from apps.reports.services import (
+    ReportService, get_accessible_reports, is_department_head_or_system_admin, is_department_member_or_head,
+)
 from apps.core.choices import SyncOrigin
 
 
@@ -18,7 +19,9 @@ class BulkStatusUpdateView(APIView):
     """
     POST /api/v1/reports/bulk/status/
     Bulk status update from the triage queue's multi-select toolbar.
-    Security only, mirroring ReportStatusUpdateView. Deliberately omits
+    Any user who can see the report (its department head, assigned
+    responder, or System Admin — see get_accessible_reports) may update
+    its status, mirroring ReportStatusUpdateView. Deliberately omits
     expected_updated_at — there's no clean bulk UX for capturing "the
     updated_at I last saw" per selected row, so this applies against
     current server state ("do this to whatever's selected right now")
@@ -26,7 +29,7 @@ class BulkStatusUpdateView(APIView):
     Always returns 200 with a per-item results list; a bad request_ids/
     status shape still raises a normal 400 via serializer validation.
     """
-    permission_classes = [permissions.IsAuthenticated, IsSecurity]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         serializer = BulkStatusUpdateSerializer(data=request.data)
@@ -62,11 +65,15 @@ class BulkStatusUpdateView(APIView):
 class BulkAssignView(APIView):
     """
     POST /api/v1/reports/bulk/assign/
-    Bulk assignment from the triage queue's multi-select toolbar.
-    Security or ICT Admin, mirroring ReportAssignView. Same
-    no-expected_updated_at rationale as BulkStatusUpdateView.
+    Bulk assignment from the triage queue's multi-select toolbar. Only a
+    report's own department head (or System Admin) can assign it, and
+    only to a member/head of that *same* report's department — mirrors
+    ReportAssignView's per-report checks, applied per item since a bulk
+    selection can span multiple departments (each row is judged on its
+    own report + its own department, not the caller's "home" department).
+    Same no-expected_updated_at rationale as BulkStatusUpdateView.
     """
-    permission_classes = [permissions.IsAuthenticated, IsSecurity | IsICTAdmin]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         serializer = BulkAssignSerializer(data=request.data)
@@ -83,6 +90,18 @@ class BulkAssignView(APIView):
                 results.append({
                     'report_id': str(report_id), 'status': 'error',
                     'error': 'Report not found or not accessible.',
+                })
+                continue
+            if not is_department_head_or_system_admin(request.user, report):
+                results.append({
+                    'report_id': str(report_id), 'status': 'error',
+                    'error': "Only this report's department head or a System Admin can assign it.",
+                })
+                continue
+            if not is_department_member_or_head(assigned_to, report.department):
+                results.append({
+                    'report_id': str(report_id), 'status': 'error',
+                    'error': "This user is not a member of the report's department.",
                 })
                 continue
             try:

@@ -19,8 +19,7 @@ from apps.accounts.serializers import (
     UserSerializer,
 )
 from apps.accounts.services import PasswordResetService, blacklist_all_tokens_for, filter_users
-from apps.accounts.permissions import IsAccountAdmin, IsSecurity, IsICTAdmin
-from apps.core.choices import Role
+from apps.accounts.permissions import CanManageUsers, IsSecurity, IsICTAdmin
 from apps.core.pagination import StandardPagination
 
 User = get_user_model()
@@ -194,7 +193,7 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
     Create a new account — the only non-shell way to provision a user now
     that this phase exists.
     """
-    permission_classes = [IsAuthenticated, IsAccountAdmin]
+    permission_classes = [IsAuthenticated, CanManageUsers]
     pagination_class = StandardPagination
 
     def get_serializer_class(self):
@@ -202,6 +201,18 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return filter_users(User.objects.all().order_by('username'), self.request.query_params)
+
+    def create(self, request, *args, **kwargs):
+        # AdminUserCreateSerializer's own representation would return `role`
+        # as a bare slug (SlugRelatedField) rather than the nested
+        # role+permissions shape every other endpoint returns — re-serialize
+        # the saved instance through UserSerializer so the response is
+        # consistent everywhere.
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(UserSerializer(serializer.instance).data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class AdminUserDetailView(generics.RetrieveUpdateAPIView):
@@ -212,7 +223,7 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
     path. Deactivating a user (is_active True -> False) blacklists their
     outstanding refresh tokens so a live session can't outlive the change.
     """
-    permission_classes = [IsAuthenticated, IsAccountAdmin]
+    permission_classes = [IsAuthenticated, CanManageUsers]
     queryset = User.objects.all()
     lookup_field = 'id'
 
@@ -225,6 +236,16 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
         if was_active and not user.is_active:
             blacklist_all_tokens_for(user)
 
+    def update(self, request, *args, **kwargs):
+        # Same reshaping as AdminUserListCreateView.create() above — the
+        # PATCH input serializer's own representation is a bare role slug.
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(UserSerializer(serializer.instance).data)
+
 
 class SecurityOfficersView(generics.ListAPIView):
     """
@@ -236,4 +257,4 @@ class SecurityOfficersView(generics.ListAPIView):
     serializer_class = OfficerSerializer
     permission_classes = [IsAuthenticated, IsSecurity | IsICTAdmin]
     pagination_class = None
-    queryset = User.objects.filter(role=Role.SECURITY).order_by('username')
+    queryset = User.objects.filter(role__slug='security').order_by('username')

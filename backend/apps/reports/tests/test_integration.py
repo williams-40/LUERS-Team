@@ -1,6 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, SecurityFactory
+from apps.core.factories import UserFactory, SecurityFactory, DepartmentFactory
 from apps.reports.models import Report
 from apps.core.choices import Status
 
@@ -8,11 +8,19 @@ from apps.core.choices import Status
 def test_full_lifecycle():
     client = APIClient()
 
+    # Phase 14: the department a report lands in is chosen directly by
+    # the reporter (not inferred from a fixed Category), and only that
+    # department's head (or System Admin) can assign it to one of its
+    # own members.
+    security = SecurityFactory()
+    department = DepartmentFactory(head=security)
+    department.members.add(security)
+
     # 1. Create a student and login
     student = UserFactory(role='student')
     client.force_authenticate(user=student)
     response = client.post('/api/v1/reports/create/', {
-        'category': 'theft',
+        'department': str(department.id),
         'description': 'Integration test',
         'urgency': 'normal',
         'is_anonymous': False,
@@ -22,8 +30,7 @@ def test_full_lifecycle():
     assert response.status_code == 201
     report_id = response.data['id']
 
-    # 2. Login as security and assign
-    security = SecurityFactory()
+    # 2. Login as the department head and assign to a member (themselves)
     client.force_authenticate(user=security)
     response = client.post(f'/api/v1/reports/{report_id}/assign/', {
         'assigned_to': str(security.id)

@@ -4,7 +4,10 @@ from apps.core.choices import Category, Urgency, Status, FileType
 from apps.core.models import BaseModel
 
 class Report(BaseModel):
-    category = models.CharField(max_length=20, choices=Category.choices)
+    # Legacy incident-type classifier — retired as of the department-routing
+    # rework (Phase 14). Existing reports keep their value as read-only
+    # history; new reports leave this null and use `department` instead.
+    category = models.CharField(max_length=20, choices=Category.choices, null=True, blank=True)
     description = models.TextField()   # stored raw for future NLP
     urgency = models.CharField(max_length=10, choices=Urgency.choices, default=Urgency.NORMAL)
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.NEW)
@@ -12,13 +15,15 @@ class Report(BaseModel):
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     location_accuracy = models.FloatField(null=True, blank=True)
+    # Responders are department members now, not a fixed Role — see
+    # apps.reports.services.is_department_head_or_system_admin and
+    # ReportAssignSerializer for the real (department-membership) check.
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='assigned_reports',
-        limit_choices_to={'role': 'security'}
     )
     metadata = models.JSONField(default=dict, blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True)

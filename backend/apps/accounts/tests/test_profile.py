@@ -61,7 +61,7 @@ def test_patch_me_silently_ignores_role_university_id_and_username():
 
     assert response.status_code == 200
     user.refresh_from_db()
-    assert user.role == 'student'
+    assert user.role.slug == 'student'
     assert user.university_id == 'STU-1'
     assert user.username == original_username
     assert user.first_name == 'Still Works'

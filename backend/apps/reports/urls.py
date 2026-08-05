@@ -3,7 +3,8 @@ from apps.reports.views import (
     ReportCreateView, ReportListView, ReportDetailView,
     ReportStatusUpdateView, ReportAssignView, EvidenceUploadView,
     MyReportsView, SyncView, ReportRevealIdentityView, ReportExportView,
-    ReportDeleteView, ReportRestoreView, ReportDeletedListView
+    ReportDeleteView, ReportRestoreView, ReportDeletedListView,
+    ReportAssignableOfficersView, ReportTransferView, ReportEscalateView,
 )
 from apps.reports.views_bulk import BulkStatusUpdateView, BulkAssignView
 
@@ -18,6 +19,9 @@ urlpatterns = [
     path('<uuid:id>/', ReportDetailView.as_view(), name='report_detail'),
     path('<uuid:id>/status/', ReportStatusUpdateView.as_view(), name='report_status'),
     path('<uuid:id>/assign/', ReportAssignView.as_view(), name='report_assign'),
+    path('<uuid:id>/assignable-officers/', ReportAssignableOfficersView.as_view(), name='report_assignable_officers'),
+    path('<uuid:id>/transfer/', ReportTransferView.as_view(), name='report_transfer'),
+    path('<uuid:id>/escalate/', ReportEscalateView.as_view(), name='report_escalate'),
     path('<uuid:id>/evidence/', EvidenceUploadView.as_view(), name='report_evidence'),
     path('<uuid:id>/reveal/', ReportRevealIdentityView.as_view(), name='report_reveal'),
     path('<uuid:id>/delete/', ReportDeleteView.as_view(), name='report_delete'),

@@ -4,7 +4,7 @@ from channels.testing import WebsocketCommunicator
 from rest_framework_simplejwt.tokens import AccessToken
 from apps.notifications.consumers import ReportConsumer
 from apps.notifications.models import Message
-from apps.core.factories import UserFactory, SecurityFactory, ReportFactory, AnonymousReportFactory
+from apps.core.factories import UserFactory, SecurityFactory, ReportFactory, AnonymousReportFactory, DepartmentFactory
 from apps.core.choices import Status
 from apps.reports.services import IdentityService
 
@@ -47,7 +47,12 @@ async def test_connect_accepted_for_admin_tier_role():
 @pytest.mark.django_db(transaction=True)
 async def test_admin_tier_receives_broadcast_via_general_group():
     security = await _acreate(SecurityFactory)
-    report = await _acreate(ReportFactory)
+    # Phase 14: status-update access is scoped via get_accessible_reports
+    # (assigned responder / department head / System Admin), not a
+    # blanket "any admin-tier role" — assign the report to this officer,
+    # who must also be a real department member for that scoping to apply.
+    department = await _adept_member(security)
+    report = await _acreate(ReportFactory, department=department, assigned_to=security)
 
     communicator, connected = await connect(f'token={token_for(security)}')
     assert connected is True
@@ -100,7 +105,12 @@ async def test_reporter_joins_own_report_group_via_report_id():
     communicator, connected = await connect(f'token={token_for(student)}&report_id={report.id}')
     assert connected is True
 
+    # Phase 14: joining the report-specific group is scoped via
+    # get_accessible_reports too — this officer needs a real relationship
+    # to the report (assigned responder) to join it.
     other = await _acreate(SecurityFactory)
+    other_department = await _adept_member(other)
+    await _aassign(report, other, department=other_department)
     other_comm, other_connected = await connect(f'token={token_for(other)}&report_id={report.id}')
     assert other_connected is True
 
@@ -174,7 +184,14 @@ async def test_receive_unknown_message_type_sends_validation_error():
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-async def test_status_update_rejected_for_non_security():
+async def test_status_update_rejected_for_user_without_report_access():
+    """
+    Phase 14: status-update eligibility is no longer a fixed 'security'
+    Role check — it's folded into the same get_accessible_reports scoping
+    as everything else. An ICT Admin with no relationship to this report
+    (not its department head, not assigned) is rejected on access grounds,
+    not role.
+    """
     ict_admin = await _acreate(UserFactory, role='ict_admin')
     report = await _acreate(ReportFactory)
     communicator, _ = await connect(f'token={token_for(ict_admin)}')
@@ -186,7 +203,7 @@ async def test_status_update_rejected_for_non_security():
     }))
     response = json.loads(await communicator.receive_from())
     assert response['type'] == 'error'
-    assert response['message'] == 'Only security officers can update status'
+    assert response['message'] == 'You do not have permission to update this report'
 
     await communicator.disconnect()
 
@@ -195,7 +212,8 @@ async def test_status_update_rejected_for_non_security():
 @pytest.mark.django_db(transaction=True)
 async def test_status_update_persists_and_broadcasts():
     security = await _acreate(SecurityFactory)
-    report = await _acreate(ReportFactory, status=Status.NEW)
+    department = await _adept_member(security)
+    report = await _acreate(ReportFactory, department=department, status=Status.NEW, assigned_to=security)
     communicator, _ = await connect(f'token={token_for(security)}')
 
     await communicator.send_to(text_data=json.dumps({
@@ -236,7 +254,8 @@ async def test_chat_message_rejected_without_report_access():
 @pytest.mark.django_db(transaction=True)
 async def test_chat_message_creates_message_row():
     security = await _acreate(SecurityFactory)
-    report = await _acreate(ReportFactory)
+    department = await _adept_member(security)
+    report = await _acreate(ReportFactory, department=department, assigned_to=security)
     communicator, _ = await connect(f'token={token_for(security)}&report_id={report.id}')
 
     await communicator.send_to(text_data=json.dumps({
@@ -293,5 +312,27 @@ async def _arefresh(instance):
     await sync_to_async(instance.refresh_from_db)()
 
 
+async def _aassign(report, user, department=None):
+    def _do():
+        report.assigned_to = user
+        fields = ['assigned_to']
+        if department is not None:
+            report.department = department
+            fields.append('department')
+        report.save(update_fields=fields)
+    await sync_to_async(_do)()
+
+
 async def _acount(model):
     return await sync_to_async(model.objects.count)()
+
+
+async def _adept_member(user):
+    """Create a department and add `user` as a member — access scoping
+    (get_accessible_reports) requires real department membership, not
+    just report.assigned_to, for a responder to see a report."""
+    def _do():
+        department = DepartmentFactory()
+        department.members.add(user)
+        return department
+    return await sync_to_async(_do)()

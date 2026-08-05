@@ -1,18 +1,23 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import SecurityFactory, ReportFactory, DepartmentFactory
+from apps.core.factories import SecurityFactory, SystemAdminFactory, ReportFactory, DepartmentFactory
 from apps.core.choices import Status
 from apps.reports.services import IdentityService
+
+# These tests are about the search/filter logic itself, not access
+# scoping — the acting user is System Admin throughout (sees everything
+# unconditionally) so department/assignment setup doesn't get in the way
+# of what's actually being tested.
 
 
 @pytest.mark.django_db
 def test_search_matches_description_substring():
-    security = SecurityFactory()
+    system_admin = SystemAdminFactory()
     ReportFactory(description='Someone stole my bike from the rack.')
     ReportFactory(description='Fire alarm went off in the library.')
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/', {'search': 'bike'})
 
     assert response.status_code == 200
@@ -22,11 +27,11 @@ def test_search_matches_description_substring():
 
 @pytest.mark.django_db
 def test_search_is_case_insensitive():
-    security = SecurityFactory()
+    system_admin = SystemAdminFactory()
     ReportFactory(description='Someone stole my BIKE from the rack.')
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/', {'search': 'bike'})
 
     assert response.status_code == 200
@@ -35,13 +40,13 @@ def test_search_is_case_insensitive():
 
 @pytest.mark.django_db
 def test_search_matches_assigned_officer_username():
+    system_admin = SystemAdminFactory()
     officer = SecurityFactory(username='officer_jane')
-    security = SecurityFactory()
     ReportFactory(assigned_to=officer, description='unrelated')
     ReportFactory(description='also unrelated')
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/', {'search': 'officer_jane'})
 
     assert response.status_code == 200
@@ -51,12 +56,12 @@ def test_search_matches_assigned_officer_username():
 
 @pytest.mark.django_db
 def test_search_matches_custom_department():
-    security = SecurityFactory()
+    system_admin = SystemAdminFactory()
     ReportFactory(custom_department='Housing Office', description='x')
     ReportFactory(custom_department='', description='y')
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/', {'search': 'Housing'})
 
     assert response.status_code == 200
@@ -65,13 +70,13 @@ def test_search_matches_custom_department():
 
 @pytest.mark.django_db
 def test_search_matches_department_name():
-    security = SecurityFactory()
+    system_admin = SystemAdminFactory()
     dept = DepartmentFactory(name='Health & Safety')
     ReportFactory(department=dept, description='x')
     ReportFactory(description='y')
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/', {'search': 'Health'})
 
     assert response.status_code == 200
@@ -80,11 +85,11 @@ def test_search_matches_department_name():
 
 @pytest.mark.django_db
 def test_search_excludes_non_matching_reports():
-    security = SecurityFactory()
+    system_admin = SystemAdminFactory()
     ReportFactory(description='completely unrelated text')
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/', {'search': 'nonexistent-term-xyz'})
 
     assert response.status_code == 200
@@ -93,12 +98,12 @@ def test_search_excludes_non_matching_reports():
 
 @pytest.mark.django_db
 def test_search_combines_with_status_filter():
-    security = SecurityFactory()
+    system_admin = SystemAdminFactory()
     ReportFactory(description='bike theft', status=Status.NEW)
     ReportFactory(description='bike theft', status=Status.RESOLVED)
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/', {'search': 'bike', 'status': Status.RESOLVED})
 
     assert response.status_code == 200
@@ -108,13 +113,13 @@ def test_search_combines_with_status_filter():
 
 @pytest.mark.django_db
 def test_search_does_not_expose_reporter_identity():
-    security = SecurityFactory()
+    system_admin = SystemAdminFactory()
     reporter = SecurityFactory(username='real_reporter_name')
     report = ReportFactory(is_anonymous=False, description='some incident')
     IdentityService.create_identity(report, reporter)
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/', {'search': 'real_reporter_name'})
 
     assert response.status_code == 200
@@ -123,12 +128,12 @@ def test_search_does_not_expose_reporter_identity():
 
 @pytest.mark.django_db
 def test_export_respects_search_filter():
-    security = SecurityFactory()
+    system_admin = SystemAdminFactory()
     ReportFactory(description='unique-search-term-bike')
     ReportFactory(description='something else entirely')
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/export/', {'export_format': 'csv', 'search': 'unique-search-term'})
 
     assert response.status_code == 200

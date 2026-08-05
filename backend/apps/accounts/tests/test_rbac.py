@@ -1,6 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, ManagementFactory, StaffFactory
+from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, ManagementFactory, StaffFactory, DepartmentFactory
 
 ENDPOINTS = {
     '/api/v1/reports/': 'GET',
@@ -35,16 +35,20 @@ ROLE_MATRIX = {
         '/api/v1/reports/': 200,
         '/api/v1/reports/mine/': 403,
         '/api/v1/reports/create/': 403,
-        '/api/v1/dashboard/summary/': 403,
+        # Phase 14: dashboard views opened from IsSecurity|IsICTAdmin to the
+        # full IsAdminTier (management/system_admin were an accidental gap,
+        # not a deliberate exclusion).
+        '/api/v1/dashboard/summary/': 200,
     },
 }
 
 @pytest.mark.django_db
 def test_rbac_matrix():
     client = APIClient()
+    department = DepartmentFactory()
     # Valid data for report creation
     valid_create_data = {
-        'category': 'theft',
+        'department': str(department.id),
         'description': 'Test RBAC',
         'urgency': 'normal',
         'is_anonymous': False,

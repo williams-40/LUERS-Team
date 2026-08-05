@@ -96,7 +96,7 @@ def test_admin_can_update_role_and_active_state():
 
     assert response.status_code == 200
     target.refresh_from_db()
-    assert target.role == 'security'
+    assert target.role.slug == 'security'
 
 
 @pytest.mark.django_db
@@ -157,7 +157,7 @@ def test_filter_users_by_role():
     response = client.get('/api/v1/auth/users/', {'role': 'security'})
 
     assert response.status_code == 200
-    assert all(u['role'] == 'security' for u in response.data['results'])
+    assert all(u['role']['slug'] == 'security' for u in response.data['results'])
     assert len(response.data['results']) == 2
 
 
@@ -173,7 +173,7 @@ def test_filter_users_by_comma_separated_roles():
     response = client.get('/api/v1/auth/users/', {'role': 'security,management'})
 
     assert response.status_code == 200
-    roles = {u['role'] for u in response.data['results']}
+    roles = {u['role']['slug'] for u in response.data['results']}
     assert roles == {'security', 'management'}
 
 

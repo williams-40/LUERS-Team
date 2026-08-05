@@ -5,12 +5,12 @@ from rest_framework.exceptions import APIException
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from apps.reports.models import Report, Evidence, ReportIdentity, Department
-from apps.core.choices import Action, Channel, SyncOrigin, Category
+from apps.core.choices import Action, Channel, SyncOrigin
 from apps.audit.models import AuditLog
 from apps.notifications.models import Notification, Message
 from apps.notifications.services import NotificationService
 from apps.core.services import EncryptionService
-from apps.reports.mapping import get_department_for_category
+from apps.reports.routing import DepartmentRoutingService, get_confidence_tier
 from apps.accounts.models import User
 
 
@@ -133,26 +133,24 @@ class ReportService:
         idempotency_key = validated_data.pop('idempotency_key', None)
         client_created_at = validated_data.pop('client_created_at', None)
 
-        # Auto-route department based on category
-        category = validated_data.get('category')
-        custom_dept = validated_data.pop('custom_department', None)
+        # Department is now selected directly by the reporter (Phase 14 —
+        # replaces the old fixed-Category-with-hardcoded-routing scheme).
+        # "Other" gets a shot at keyword-based auto-routing; everything
+        # else is used exactly as chosen.
+        department = validated_data.get('department')
+        department_source = 'user_selected'
+        routing_result = None
+        tier = None
 
-        # Determine department
-        if category == Category.OTHER:
-            # For 'other', assign the 'Other' department (head is system_admin)
-            try:
-                department = Department.objects.get(name='Other')
-            except Department.DoesNotExist:
-                department = None
-            if custom_dept:
-                validated_data['custom_department'] = custom_dept
-        else:
-            department = get_department_for_category(category)
-            # store custom_dept if provided (optional)
-            if custom_dept:
-                validated_data['custom_department'] = custom_dept
-
-        validated_data['department'] = department
+        if department and department.name == 'Other':
+            routing_result = DepartmentRoutingService().classify(validated_data.get('description', ''))
+            tier = get_confidence_tier(routing_result.confidence) if routing_result.department else 'low'
+            if tier == 'high':
+                department = routing_result.department
+                validated_data['department'] = department
+                department_source = 'auto_inferred'
+            else:
+                department_source = 'unclassified_pending_review'
 
         if idempotency_key:
             existing = Report.objects.filter(idempotency_key=idempotency_key).first()
@@ -170,16 +168,52 @@ class ReportService:
             report=report,
             actor=user,
             action=Action.CREATE,
-            after_state={'category': report.category, 'status': report.status},
+            after_state={
+                'department': department.name if department else None,
+                'department_source': department_source,
+                'status': report.status,
+            },
             ip_address=ip_address,
             client_timestamp=client_created_at,
             sync_origin=sync_origin,
         )
 
-        classification = ReportClassifierService.classify(report.category, report.description)
-        if report.metadata is None:
-            report.metadata = {}
-        report.metadata['classification'] = classification
+        metadata_updates = {'classification': ReportClassifierService.classify(None, report.description)}
+        if routing_result is not None and tier == 'high':
+            AuditLog.objects.create(
+                report=report,
+                actor=user,
+                action=Action.AUTO_ROUTE,
+                after_state={
+                    'department': routing_result.department.name,
+                    'confidence': routing_result.confidence,
+                    'strategy': routing_result.strategy,
+                    'matched_keywords': routing_result.matched_keywords,
+                },
+                ip_address=ip_address,
+                sync_origin=sync_origin,
+            )
+        elif routing_result is not None and tier == 'medium':
+            metadata_updates['routing_suggestion'] = {
+                'suggested_department': routing_result.department.name,
+                'confidence': routing_result.confidence,
+                'matched_keywords': routing_result.matched_keywords,
+            }
+            AuditLog.objects.create(
+                report=report,
+                actor=user,
+                action=Action.ROUTING_SUGGESTION,
+                after_state={
+                    'suggested_department': routing_result.department.name,
+                    'confidence': routing_result.confidence,
+                    'strategy': routing_result.strategy,
+                    'matched_keywords': routing_result.matched_keywords,
+                },
+                ip_address=ip_address,
+                sync_origin=sync_origin,
+            )
+
+        report.metadata = {**(report.metadata or {}), **metadata_updates}
         report.save(update_fields=['metadata'])
 
         Notification.objects.create(
@@ -296,6 +330,65 @@ class ReportService:
 
     @staticmethod
     @transaction.atomic
+    def transfer_department(report, new_department, actor, reason=None, ip_address=None, sync_origin=SyncOrigin.LIVE):
+        """
+        Routine re-routing correction by the report's current department
+        head (or System Admin) — distinct from `escalate`, which is for
+        exceptional situations rather than "this actually belongs to ICT."
+        Clears any existing responder assignment since it doesn't carry
+        across departments.
+        """
+        old_department = report.department
+        old_assigned = report.assigned_to
+        report.department = new_department
+        report.assigned_to = None
+        report.save(update_fields=['department', 'assigned_to', 'updated_at'])
+
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.DEPARTMENT_TRANSFER,
+            before_state={
+                'department': old_department.name if old_department else None,
+                'assigned_to': str(old_assigned.id) if old_assigned else None,
+            },
+            after_state={'department': new_department.name, 'reason': reason},
+            ip_address=ip_address,
+            sync_origin=sync_origin,
+        )
+
+        ReportService._notify_department(report, new_department)
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
+        return report
+
+    @staticmethod
+    @transaction.atomic
+    def escalate(report, actor, reason=None, ip_address=None, sync_origin=SyncOrigin.LIVE):
+        """
+        For genuinely exceptional situations needing admin intervention —
+        NOT for routine department-routing corrections, which use
+        `transfer_department` instead. Notifies every System Admin.
+        """
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.ESCALATE,
+            after_state={'reason': reason},
+            ip_address=ip_address,
+            sync_origin=sync_origin,
+        )
+
+        for admin in User.objects.filter(role__permissions__slug='view_all_reports', is_active=True).distinct():
+            Notification.objects.create(
+                recipient=admin,
+                report=report,
+                channel=Channel.WEBSOCKET,
+                sent_at=timezone.now(),
+            )
+        return report
+
+    @staticmethod
+    @transaction.atomic
     def add_evidence(report, file, file_type, user, ip_address=None,
                      client_timestamp=None, sync_origin=SyncOrigin.LIVE):
         evidence = Evidence.objects.create(
@@ -384,12 +477,15 @@ def filter_reports(queryset, params):
     """
     status = params.get('status')
     category = params.get('category')
+    department = params.get('department')
     urgency = params.get('urgency')
     search = params.get('search')
     if status:
         queryset = queryset.filter(status=status)
     if category:
         queryset = queryset.filter(category=category)
+    if department:
+        queryset = queryset.filter(department_id=department)
     if urgency:
         queryset = queryset.filter(urgency=urgency)
     if search:
@@ -406,25 +502,40 @@ def get_accessible_reports(user, include_deleted=False):
     """
     Return a QuerySet of reports the user is allowed to see.
 
+    As of Phase 14, visibility is Department-based rather than tied to a
+    fixed account Role — "Department Head" and "Department Responder"
+    (member) are their own axis (any user can be either, see
+    `apps.reports.serializers_department`), and a report's classification
+    IS its department (the old fixed Category enum is retired for new
+    reports — see `apps.reports.routing`):
+    - System Admin sees everything, unconditionally.
+    - A Department Head sees every report in the department(s) they head
+      ("Department Heads... View every report assigned to their
+      department").
+    - A Department Responder (member, non-head) sees only reports
+      *assigned to them* — even within their own department — not every
+      report their department owns ("Responders... should only View
+      reports assigned to them... not... reports assigned to other
+      responders").
+    - Everyone else (students/staff, the actual reporters) sees only
+      their own non-anonymous reports.
+
     Soft-deleted reports (deleted_at set) are excluded by default for
-    everyone, including admin tiers — they're only visible via
+    everyone, including System Admin — they're only visible via
     ReportDeletedListView (`include_deleted=True`), which is gated on
-    IsAccountAdmin, so a report being soft-deleted doesn't leak into the
+    CanDeleteReport, so a report being soft-deleted doesn't leak into the
     triage queue, dashboards, or search just because the viewer is an admin.
     """
-    # Admins see all
-    if user.role in ['security', 'ict_admin', 'management', 'system_admin']:
+    if user.has_permission('view_all_reports'):
         queryset = Report.objects.all()
     else:
-        # Department head: see reports of their department
         dept_as_head = Department.objects.filter(head=user)
         if dept_as_head.exists():
             queryset = Report.objects.filter(department__in=dept_as_head)
         else:
-            # Department member: see reports of their departments
             dept_as_member = user.department_members.all()
             if dept_as_member.exists():
-                queryset = Report.objects.filter(department__in=dept_as_member)
+                queryset = Report.objects.filter(department__in=dept_as_member, assigned_to=user)
             else:
                 # Students/staff: only own non‑anonymous reports
                 reporter_hash = EncryptionService.hash_for_lookup(user.id)
@@ -435,3 +546,47 @@ def get_accessible_reports(user, include_deleted=False):
     if include_deleted:
         return queryset
     return queryset.filter(deleted_at__isnull=True)
+
+
+def get_accessible_audit_logs(user):
+    """
+    Audit-log analog of `get_accessible_reports`, same Department Head /
+    Responder axis: System Admin sees every entry; a Department Head sees
+    every entry for reports in the department(s) they head (full
+    oversight, not just their own actions); a Responder (member, non-head)
+    sees only entries where *they* are the actor; everyone else sees
+    nothing (the audit log endpoints are IsAdminTier-ish gated anyway, but
+    this stays safe if ever called for a plain reporter).
+    """
+    if user.has_permission('view_all_reports'):
+        return AuditLog.objects.all()
+
+    dept_as_head = Department.objects.filter(head=user)
+    if dept_as_head.exists():
+        accessible_reports = Report.objects.filter(department__in=dept_as_head)
+        return AuditLog.objects.filter(report__in=accessible_reports)
+
+    dept_as_member = user.department_members.all()
+    if dept_as_member.exists():
+        return AuditLog.objects.filter(actor=user)
+
+    return AuditLog.objects.none()
+
+
+def is_department_head_or_system_admin(user, report):
+    """
+    Who may assign/reassign/transfer a report, or receive its escalation:
+    the report's own department head, or System Admin (any department).
+    """
+    if user.has_permission('view_all_reports'):
+        return True
+    return bool(report.department_id and report.department.head_id == user.id)
+
+
+def is_department_member_or_head(user, department):
+    """Whether `user` is eligible to be assigned a report in `department` — its head or one of its members."""
+    if department is None:
+        return False
+    if department.head_id == user.id:
+        return True
+    return department.members.filter(id=user.id).exists()

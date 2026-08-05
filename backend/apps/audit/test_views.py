@@ -1,6 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, ReportFactory
+from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, ReportFactory, DepartmentFactory
 from apps.reports.services import ReportService
 from apps.core.choices import Status, Action
 
@@ -17,7 +17,9 @@ def test_audit_list_requires_admin_tier():
 @pytest.mark.django_db
 def test_audit_list_visible_to_admin_tier():
     security = SecurityFactory()
-    report = ReportFactory()
+    department = DepartmentFactory()
+    department.members.add(security)
+    report = ReportFactory(department=department, assigned_to=security)
     ReportService.update_status(report, Status.ACKNOWLEDGED, security, ip_address='127.0.0.1')
 
     client = APIClient()

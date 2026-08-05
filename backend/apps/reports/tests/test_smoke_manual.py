@@ -1,7 +1,7 @@
 import io
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, SecurityFactory
+from apps.core.factories import UserFactory, SecurityFactory, DepartmentFactory
 from apps.core.choices import Status
 
 
@@ -9,10 +9,13 @@ from apps.core.choices import Status
 def test_mine_evidence_and_dashboard_smoke():
     client = APIClient()
 
+    security = SecurityFactory()
+    department = DepartmentFactory(head=security)
+
     student = UserFactory(role='student')
     client.force_authenticate(user=student)
     response = client.post('/api/v1/reports/create/', {
-        'category': 'theft',
+        'department': str(department.id),
         'description': 'Smoke test report',
         'urgency': 'normal',
         'is_anonymous': False,
@@ -39,7 +42,7 @@ def test_mine_evidence_and_dashboard_smoke():
     assert response.status_code == 201, f"evidence upload failed: {response.status_code} {response.data}"
 
     # Resolve the report so dashboard average_response_time is exercised
-    security = SecurityFactory()
+    # (security is already this report's department head, from setup above)
     client.force_authenticate(user=security)
     response = client.post(f'/api/v1/reports/{report_id}/assign/', {'assigned_to': str(security.id)})
     assert response.status_code == 200

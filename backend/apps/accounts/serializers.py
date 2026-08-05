@@ -1,17 +1,29 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
-from apps.core.choices import Role
+from apps.accounts.models import Role
+from apps.accounts.serializers_role import RoleSerializer
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
-    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    """
+    `role` is nested metadata only (slug/label/description/is_builtin) — no
+    booleans. `permissions` is a flat, efficient slug list straight from the
+    user's role, so the frontend can gate on it without extra API calls.
+    """
+    role = RoleSerializer(read_only=True)
+    permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_display', 'university_id', 'phone_number', 'date_joined', 'is_active']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'permissions', 'university_id', 'phone_number', 'date_joined', 'is_active']
         read_only_fields = ['id', 'date_joined']
+
+    def get_permissions(self, obj):
+        if not obj.role_id:
+            return []
+        return sorted(obj.role.permissions.values_list('slug', flat=True))
 
 
 class OfficerSerializer(serializers.ModelSerializer):
@@ -74,6 +86,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class AdminUserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    role = serializers.SlugRelatedField(slug_field='slug', queryset=Role.objects.filter(is_active=True))
 
     class Meta:
         model = User
@@ -99,6 +112,8 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
     """Admin-tier account management: role/active-state changes, no
     username/password here — see AdminUserCreateSerializer for creation and
     ChangePasswordSerializer for self-service password changes."""
+    role = serializers.SlugRelatedField(slug_field='slug', queryset=Role.objects.filter(is_active=True))
+
     class Meta:
         model = User
         fields = ['first_name', 'last_name', 'email', 'phone_number', 'role', 'university_id', 'is_active']

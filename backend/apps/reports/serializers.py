@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.reports.models import Report, Evidence, ReportIdentity
-from apps.core.choices import Category, Urgency, Status
+from apps.reports.models import Report, Evidence, ReportIdentity, Department
+from apps.core.choices import Urgency, Status
 from apps.reports.validators import validate_evidence_file
 
 User = get_user_model()
@@ -37,6 +37,10 @@ class ReportListSerializer(serializers.ModelSerializer):
     # ✅ Department fields
     department_id = serializers.UUIDField(source='department.id', read_only=True, default=None)
     department_name = serializers.CharField(source='department.name', read_only=True, default=None)
+    # Lets the frontend decide whether the *viewer* is this report's
+    # department head (assign/transfer/escalate authority) without a
+    # separate lookup.
+    department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
 
     class Meta:
         model = Report
@@ -45,7 +49,7 @@ class ReportListSerializer(serializers.ModelSerializer):
             'status', 'status_display', 'latitude', 'longitude', 'location_accuracy',
             'assigned_to', 'assigned_to_username', 'is_anonymous', 'created_at', 'updated_at',
             'evidence_count', 'deleted_at',
-            'department_id', 'department_name',  # ✅ new fields
+            'department_id', 'department_name', 'department_head_id',
         ]
 
 
@@ -59,6 +63,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
     # ✅ Department fields
     department_id = serializers.UUIDField(source='department.id', read_only=True, default=None)
     department_name = serializers.CharField(source='department.name', read_only=True, default=None)
+    department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
 
     class Meta:
         model = Report
@@ -67,7 +72,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
             'status', 'status_display', 'latitude', 'longitude', 'location_accuracy',
             'assigned_to', 'assigned_to_username', 'is_anonymous', 'metadata', 'created_at', 'updated_at',
             'evidence',
-            'department_id', 'department_name',  # ✅ new fields
+            'department_id', 'department_name', 'department_head_id',
         ]
 
 
@@ -82,11 +87,13 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         write_only=True
     )
 
+    department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.filter(is_active=True))
+
     class Meta:
         model = Report
         fields = [
             'id',
-            'category',
+            'department',
             'description',
             'urgency',
             'is_anonymous',
@@ -100,27 +107,22 @@ class ReportCreateSerializer(serializers.ModelSerializer):
             # Offline support
             'idempotency_key',
             'client_created_at',
-            # Department routing
-            'custom_department',   # only used when category == 'other'
         ]
-        read_only_fields = ['id', 'status', 'created_at']
+        # assigned_to is read-only here (not "required": {} — assignment
+        # only ever happens via the dedicated assign endpoint). Before
+        # Phase 14, `assigned_to`'s model-level limit_choices_to={'role':
+        # 'security'} incidentally restricted what a reporter could set
+        # here too; now that responders are department-membership-based
+        # rather than role-based, that incidental restriction is gone, so
+        # this must be explicit instead of relying on it.
+        read_only_fields = ['id', 'status', 'created_at', 'assigned_to']
         extra_kwargs = {
-            'category': {'required': True},
             'description': {'required': True},
             'idempotency_key': {'required': False, 'allow_blank': True, 'max_length': 64},
             'client_created_at': {'required': False, 'allow_null': True},
-            'custom_department': {'required': False, 'allow_blank': True, 'max_length': 200},
         }
 
     def validate(self, attrs):
-        category = attrs.get('category')
-        custom_dept = attrs.get('custom_department', '').strip()
-
-        if category == Category.OTHER and not custom_dept:
-            raise serializers.ValidationError({
-                'custom_department': 'Please specify a department when selecting "Other".'
-            })
-
         for file in attrs.get('evidence', []):
             try:
                 validate_evidence_file(file)
@@ -158,17 +160,36 @@ class ReportUpdateStatusSerializer(serializers.Serializer):
     client_timestamp = serializers.DateTimeField(required=False, allow_null=True)
 
 
+class ReportTransferSerializer(serializers.Serializer):
+    """Used by a report's department head (or System Admin) to move it to a different department."""
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.filter(is_active=True), source='department'
+    )
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+
+class ReportEscalateSerializer(serializers.Serializer):
+    """Used by a report's department head to flag it for System Admin attention."""
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+
 class ReportAssignSerializer(serializers.Serializer):
-    """Used for assignment by Security/ICT Admin."""
+    """
+    Used for assignment by a department head or System Admin. Only checks
+    the user exists here — whether they're actually eligible (a member or
+    head of the *target report's* department) needs the report instance,
+    which this serializer doesn't have, so that check happens in the view
+    (see ReportAssignView / apps.reports.services.assert_can_assign_to).
+    """
     assigned_to = serializers.UUIDField()
     expected_updated_at = serializers.DateTimeField(required=False, allow_null=True)
     client_timestamp = serializers.DateTimeField(required=False, allow_null=True)
 
     def validate_assigned_to(self, value):
         try:
-            user = User.objects.get(id=value, role='security')
+            user = User.objects.get(id=value, is_active=True)
         except User.DoesNotExist:
-            raise serializers.ValidationError("User not found or not a Security Officer.")
+            raise serializers.ValidationError("User not found.")
         return user
 
 
@@ -189,9 +210,9 @@ class BulkAssignSerializer(serializers.Serializer):
 
     def validate_assigned_to(self, value):
         try:
-            user = User.objects.get(id=value, role='security')
+            user = User.objects.get(id=value, is_active=True)
         except User.DoesNotExist:
-            raise serializers.ValidationError("User not found or not a Security Officer.")
+            raise serializers.ValidationError("User not found.")
         return user
 
 
@@ -210,17 +231,10 @@ class SyncActionSerializer(serializers.Serializer):
         report_id = attrs.get('report_id')
 
         if action == 'create_report':
-            required = ['category', 'description']
+            required = ['department', 'description']
             for field in required:
                 if field not in data:
                     raise serializers.ValidationError(f"Missing required field '{field}' for create_report")
-            # Optional: validate custom_department if category is 'other'
-            category = data.get('category')
-            custom_dept = data.get('custom_department', '').strip()
-            if category == Category.OTHER and not custom_dept:
-                raise serializers.ValidationError(
-                    "custom_department is required when category is 'other' for create_report"
-                )
         elif action == 'update_status':
             if not report_id:
                 raise serializers.ValidationError("report_id is required for update_status")

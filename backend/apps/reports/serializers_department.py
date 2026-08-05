@@ -1,22 +1,14 @@
 """
 Department CRUD serializers.
 
-NOTE on `name`: apps/reports/mapping.py's CATEGORY_DEPARTMENT_MAP hardcodes
-5 department names (Security, Academic Affairs, Health & Safety,
-Administration, Other) that get_department_for_category looks up by exact
-match. Renaming one of those 5 via this API will silently break
-category-based auto-routing for that category — get_department_for_category
-will just return None from then on, no error, no log. Not guarded at
-runtime here (deliberately out of scope); flagging for whoever edits
-departments later.
+As of Phase 14, Department Head/Responder (member) is its own axis,
+decoupled from the account Role enum — any active user can be a head or
+member (departments like Finance/HR/Library have no corresponding Role
+at all). `validate_head`/`validate_members` used to reject non-admin-tier
+users; that restriction is gone.
 """
 from rest_framework import serializers
 from apps.reports.models import Department
-
-# Mirrors the role list used by get_accessible_reports (apps/reports/services.py)
-# and IsAdminTier (apps/accounts/permissions.py) — head/members must be
-# admin-tier because both grant department-wide report visibility there.
-ADMIN_TIER_ROLES = ['security', 'ict_admin', 'management', 'system_admin']
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -44,18 +36,14 @@ class DepartmentWriteSerializer(serializers.ModelSerializer):
         fields = ['name', 'description', 'head', 'members', 'is_active']
 
     def validate_head(self, value):
-        if value is not None and value.role not in ADMIN_TIER_ROLES:
-            raise serializers.ValidationError(
-                f"{value.username} has role '{value.role}' — department head must be admin-tier "
-                f"({', '.join(ADMIN_TIER_ROLES)}), since Department.head grants full visibility "
-                f"into that department's reports."
-            )
+        if value is not None and not value.is_active:
+            raise serializers.ValidationError(f"{value.username} is not an active account.")
         return value
 
     def validate_members(self, value):
-        bad = [u.username for u in value if u.role not in ADMIN_TIER_ROLES]
-        if bad:
+        inactive = [u.username for u in value if not u.is_active]
+        if inactive:
             raise serializers.ValidationError(
-                f"These users are not admin-tier and cannot be department members: {', '.join(bad)}"
+                f"These users are not active accounts and cannot be department members: {', '.join(inactive)}"
             )
         return value

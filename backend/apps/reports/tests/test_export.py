@@ -1,6 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, SecurityFactory, ReportFactory
+from apps.core.factories import UserFactory, SystemAdminFactory, ReportFactory
 
 
 @pytest.mark.django_db
@@ -14,12 +14,14 @@ def test_reports_export_requires_admin_tier():
 
 @pytest.mark.django_db
 def test_reports_export_csv():
-    security = SecurityFactory()
+    # System Admin — sees everything unconditionally, so no department/
+    # assignment setup is needed just to prove export itself works.
+    system_admin = SystemAdminFactory()
     ReportFactory()
     ReportFactory()
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/export/', {'export_format': 'csv'})
     assert response.status_code == 200
     assert response['Content-Type'] == 'text/csv'
@@ -30,12 +32,12 @@ def test_reports_export_csv():
 @pytest.mark.django_db
 def test_reports_export_respects_status_filter():
     from apps.core.choices import Status
-    security = SecurityFactory()
+    system_admin = SystemAdminFactory()
     ReportFactory(status=Status.NEW)
     ReportFactory(status=Status.RESOLVED)
 
     client = APIClient()
-    client.force_authenticate(user=security)
+    client.force_authenticate(user=system_admin)
     response = client.get('/api/v1/reports/export/', {'export_format': 'csv', 'status': Status.RESOLVED})
     assert response.status_code == 200
     body = b''.join(response.streaming_content) if response.streaming else response.content

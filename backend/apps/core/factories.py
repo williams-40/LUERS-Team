@@ -16,6 +16,19 @@ class UserFactory(factory.django.DjangoModelFactory):
     password = factory.PostGenerationMethodCall('set_password', 'password123')
     role = Role.STUDENT
 
+    @classmethod
+    def _create(cls, model_class, *args, **kwargs):
+        # `role` is a plain slug string on every factory declaration below
+        # (Role.STUDENT etc. from apps.core.choices, kept only as a string
+        # constant now) — resolve it to the real accounts.models.Role row
+        # seeded by migration 0004, so every UserFactory(role='security')
+        # call site across the test suite keeps working unchanged.
+        role = kwargs.get('role')
+        if isinstance(role, str):
+            from apps.accounts.models import Role as RoleModel
+            kwargs['role'] = RoleModel.objects.get(slug=role)
+        return super()._create(model_class, *args, **kwargs)
+
 class SecurityFactory(UserFactory):
     role = Role.SECURITY
 

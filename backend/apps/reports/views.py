@@ -8,14 +8,18 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
-from apps.reports.models import Report, Evidence, ReportIdentity
+from apps.reports.models import Report, Evidence, ReportIdentity, Department
 from apps.reports.serializers import (
     ReportListSerializer, ReportDetailSerializer, ReportCreateSerializer,
-    ReportUpdateStatusSerializer, ReportAssignSerializer, EvidenceSerializer
+    ReportUpdateStatusSerializer, ReportAssignSerializer, EvidenceSerializer,
+    ReportTransferSerializer, ReportEscalateSerializer,
 )
-from apps.reports.services import ReportService, IdentityService, MessageService, get_accessible_reports, filter_reports  # ✅ added
+from apps.reports.services import (
+    ReportService, IdentityService, MessageService, get_accessible_reports, filter_reports,
+    is_department_head_or_system_admin, is_department_member_or_head,
+)
 from apps.reports.validators import validate_evidence_file
-from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsStudentOrStaff, IsManagement, IsAdminTier, IsAccountAdmin
+from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsStudentOrStaff, IsManagement, IsAdminTier, CanDeleteReport
 from apps.core.export import csv_response, pdf_response
 from apps.core.pagination import StandardPagination
 from apps.reports.serializers import SyncRequestSerializer, SyncResultSerializer
@@ -158,10 +162,14 @@ class ReportDetailView(generics.RetrieveAPIView):
         raise PermissionDenied("You do not have access to this report.")
 
     def retrieve(self, request, *args, **kwargs):
+        # No extra is_anonymous gate needed beyond get_object()'s
+        # get_accessible_reports() check above: that already only returns
+        # a reporter's own *non*-anonymous reports (see
+        # apps.reports.services.get_accessible_reports), so anyone who
+        # reaches this point either legitimately owns the report or is
+        # its department head/assigned responder/System Admin — all of
+        # whom are meant to see anonymous report content too.
         instance = self.get_object()
-        user = request.user
-        if user.role not in ['security', 'ict_admin', 'management', 'system_admin'] and instance.is_anonymous:
-            raise PermissionDenied("You cannot view anonymous reports.")
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
@@ -169,10 +177,14 @@ class ReportDetailView(generics.RetrieveAPIView):
 class ReportStatusUpdateView(APIView):
     """
     PATCH /api/v1/reports/{id}/status/
-    Update report status. Only Security can change status.
+    Update report status — any user who can see the report (its
+    department head, or the responder it's assigned to, or System Admin;
+    see get_accessible_reports) may update it. No longer tied to the
+    fixed 'security' Role — responders are department members now,
+    regardless of account role.
     Supports conflict detection via expected_updated_at.
     """
-    permission_classes = [permissions.IsAuthenticated, IsSecurity]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = ReportUpdateStatusSerializer
 
     def patch(self, request, id):
@@ -202,17 +214,27 @@ class ReportStatusUpdateView(APIView):
 class ReportAssignView(APIView):
     """
     POST /api/v1/reports/{id}/assign/
-    Assign a report to a security officer. Allowed for Security and ICT Admin.
+    Assign (or reassign) a report to a responder within its own
+    department. Only that department's Head, or System Admin, may do
+    this — a plain responder can't self-assign or assign others, and a
+    head can't reach into another department's report at all (the
+    get_accessible_reports() lookup below already 404s it for them).
     Supports conflict detection via expected_updated_at.
     """
-    permission_classes = [permissions.IsAuthenticated, IsSecurity | IsICTAdmin]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = ReportAssignSerializer
 
     def post(self, request, id):
         report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        if not is_department_head_or_system_admin(request.user, report):
+            raise PermissionDenied("Only this report's department head or a System Admin can assign it.")
+
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         assigned_to = serializer.validated_data['assigned_to']
+        if not is_department_member_or_head(assigned_to, report.department):
+            raise DRFValidationError({'assigned_to': "This user is not a member of the report's department."})
+
         expected_updated_at = serializer.validated_data.get('expected_updated_at')
         client_timestamp = serializer.validated_data.get('client_timestamp')
 
@@ -229,6 +251,88 @@ class ReportAssignView(APIView):
         return Response({'assigned_to': result['assigned_to']})
 
 
+class ReportAssignableOfficersView(APIView):
+    """
+    GET /api/v1/reports/{id}/assignable-officers/
+    Returns the report's department head + members — the pool a head (or
+    System Admin) can assign the report to. Replaces the old unscoped
+    `/auth/officers/` (all security officers, campus-wide) for this
+    purpose now that responders are department-scoped, not role-scoped.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, id):
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        if not is_department_head_or_system_admin(request.user, report):
+            raise PermissionDenied("Only this report's department head or a System Admin can view its assignable officers.")
+
+        department = report.department
+        if department is None:
+            return Response([])
+
+        candidates = list(department.members.all())
+        if department.head and department.head not in candidates:
+            candidates.append(department.head)
+
+        return Response([{'id': str(u.id), 'username': u.username} for u in candidates])
+
+
+class ReportTransferView(APIView):
+    """
+    POST /api/v1/reports/{id}/transfer/
+    Routine re-routing correction — moves the report to a different
+    department, clearing any existing assignment (it doesn't carry over).
+    Only the report's *current* department head, or System Admin, may
+    transfer it. This is also how a Medium-confidence routing suggestion
+    (see apps.reports.routing) gets acted on — System Admin reviews it on
+    the report detail page and transfers if they agree.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ReportTransferSerializer
+
+    def post(self, request, id):
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        if not is_department_head_or_system_admin(request.user, report):
+            raise PermissionDenied("Only this report's department head or a System Admin can transfer it.")
+
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_department = serializer.validated_data['department']
+        reason = serializer.validated_data.get('reason') or None
+
+        ip = get_client_ip(request)
+        ReportService.transfer_department(
+            report, new_department, request.user, reason=reason, ip_address=ip, sync_origin=SyncOrigin.LIVE
+        )
+        return Response({'id': str(report.id), 'department_id': str(new_department.id), 'department_name': new_department.name})
+
+
+class ReportEscalateView(APIView):
+    """
+    POST /api/v1/reports/{id}/escalate/
+    For genuinely exceptional situations needing System Admin
+    intervention — NOT for routine department-routing corrections, which
+    use ReportTransferView instead. Only the report's own department head
+    may escalate it (System Admin escalating to themselves is meaningless).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ReportEscalateSerializer
+
+    def post(self, request, id):
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        is_own_head = bool(report.department_id and report.department.head_id == request.user.id)
+        if not is_own_head:
+            raise PermissionDenied("Only this report's department head can escalate it.")
+
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reason = serializer.validated_data.get('reason') or None
+
+        ip = get_client_ip(request)
+        ReportService.escalate(report, request.user, reason=reason, ip_address=ip, sync_origin=SyncOrigin.LIVE)
+        return Response({'id': str(report.id), 'escalated': True})
+
+
 class EvidenceUploadView(APIView):
     """
     POST /api/v1/reports/{id}/evidence/
@@ -241,7 +345,7 @@ class EvidenceUploadView(APIView):
     def post(self, request, id):
         report = get_object_or_404(Report, id=id)
         user = request.user
-        is_security = user.role == 'security'
+        is_security = user.role.slug == 'security'
         is_owner = False
         if not report.is_anonymous:
             identity = ReportIdentity.objects.filter(report=report).first()
@@ -317,7 +421,7 @@ class ReportDeleteView(APIView):
     Management — that's the escrow-reveal governance role, a separate
     concern from day-to-day account/report administration).
     """
-    permission_classes = [permissions.IsAuthenticated, IsAccountAdmin]
+    permission_classes = [permissions.IsAuthenticated, CanDeleteReport]
 
     def post(self, request, id):
         report = get_object_or_404(get_accessible_reports(request.user), id=id)
@@ -331,7 +435,7 @@ class ReportRestoreView(APIView):
     POST /api/v1/reports/{id}/restore/
     Clears deleted_at on a soft-deleted report. Account-admin only.
     """
-    permission_classes = [permissions.IsAuthenticated, IsAccountAdmin]
+    permission_classes = [permissions.IsAuthenticated, CanDeleteReport]
 
     def post(self, request, id):
         report = get_object_or_404(
@@ -351,7 +455,7 @@ class ReportDeletedListView(generics.ListAPIView):
     Account-admin only.
     """
     serializer_class = ReportListSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAccountAdmin]
+    permission_classes = [permissions.IsAuthenticated, CanDeleteReport]
     pagination_class = StandardPagination
 
     def get_queryset(self):
@@ -426,11 +530,8 @@ class SyncView(APIView):
                     })
 
                 elif action_type == 'update_status':
-                    if not IsSecurity().has_permission(request, None):
-                        raise PermissionDenied("Only security officers can update report status")
-
                     try:
-                        report = Report.objects.get(id=report_id)
+                        report = get_accessible_reports(request.user).get(id=report_id)
                     except Report.DoesNotExist:
                         raise DRFValidationError(f"Report with id {report_id} not found")
 
@@ -470,23 +571,11 @@ class SyncView(APIView):
                         raise DRFValidationError(f"Report with id {report_id} not found")
 
                     user = request.user
-                    has_access = False
-                    # Admin roles
-                    if user.role in ['security', 'ict_admin', 'management', 'system_admin']:
-                        has_access = True
-                    else:
-                        # Reporter check (non-anonymous only)
-                        if not report.is_anonymous:
-                            try:
-                                identity = ReportIdentity.objects.get(report=report)
-                                reporter_id = IdentityService.get_reporter(identity)
-                                if reporter_id and str(user.id) == reporter_id:
-                                    has_access = True
-                            except ReportIdentity.DoesNotExist:
-                                pass
-                        # Assigned officer check
-                        if report.assigned_to and report.assigned_to.id == user.id:
-                            has_access = True
+                    # get_accessible_reports already covers every legitimate
+                    # case here: the reporter (own non-anonymous report),
+                    # the assigned responder, the department head, or
+                    # System Admin.
+                    has_access = get_accessible_reports(user).filter(id=report.id).exists()
 
                     if not has_access:
                         raise PermissionDenied("You do not have permission to send messages for this report")

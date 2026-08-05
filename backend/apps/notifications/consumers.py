@@ -16,9 +16,6 @@ from apps.notifications.serializers import WebSocketMessageSerializer
 
 User = get_user_model()
 
-# Roles with campus-wide visibility (matches get_accessible_reports in apps.reports.services)
-ADMIN_ROLES = ['security', 'ict_admin', 'management', 'system_admin']
-
 class ReportConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         # Get JWT token and optional report_id from query string
@@ -48,8 +45,10 @@ class ReportConsumer(AsyncWebsocketConsumer):
 
         # Only admin-tier roles get the campus-wide broadcast group; students/staff
         # would otherwise see report_created/report_updated events for every report,
-        # including other users' anonymous ones.
-        if user.role in ADMIN_ROLES:
+        # including other users' anonymous ones. has_permission() was already
+        # primed synchronously in get_user_from_token() below, so this is a
+        # plain in-memory read, not a DB query from async code.
+        if user.has_permission('view_admin_dashboard'):
             self.groups.append('reports')
             await self.channel_layer.group_add('reports', self.channel_name)
 
@@ -73,32 +72,20 @@ class ReportConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _can_access_report(self, user, report_id):
-        """Check if a user has permission to access a specific report."""
-        try:
-            report = Report.objects.get(id=report_id)
-        except Report.DoesNotExist:
-            return False
-
-        # Admin roles have full access
-        if user.role in ADMIN_ROLES:
-            return True
-
-        # Check if user is the reporter (non-anonymous only)
-        if not report.is_anonymous:
-            from apps.reports.models import ReportIdentity
-            try:
-                identity = ReportIdentity.objects.get(report=report)
-                reporter_id = IdentityService.get_reporter(identity)
-                if reporter_id and str(user.id) == reporter_id:
-                    return True
-            except ReportIdentity.DoesNotExist:
-                pass
-
-        # Check if user is the assigned officer
-        if report.assigned_to and report.assigned_to.id == user.id:
-            return True
-
-        return False
+        """
+        Check if a user has permission to access a specific report — real
+        scoped access via get_accessible_reports, not a blanket "any
+        admin-tier role" trust. That blanket trust used to let a
+        since-descoped security/ict_admin/management user still push
+        status updates or join a report's live channel over the socket
+        even after REST-level access was scoped by department/assignment
+        — get_accessible_reports already covers the reporter, the
+        assigned responder, the department head, and System Admin
+        uniformly, so this is now the single source of truth for both
+        REST and WebSocket access.
+        """
+        from apps.reports.services import get_accessible_reports
+        return get_accessible_reports(user, include_deleted=True).filter(id=report_id).exists()
 
     async def _get_report_and_check_access(self, user, report_id):
         """Fetch report and check access."""
@@ -145,13 +132,11 @@ class ReportConsumer(AsyncWebsocketConsumer):
             expected_updated_at = validated_data.get('expected_updated_at')
             client_timestamp = validated_data.get('client_timestamp')
 
-            # Only security can update status
-            if self.user.role != 'security':
-                await self.send(text_data=json.dumps({
-                    'type': 'error',
-                    'message': 'Only security officers can update status'
-                }))
-                return
+            # Status-update eligibility is no longer a fixed 'security'
+            # Role check — responders are department members now,
+            # regardless of account role — so this is folded into the
+            # access check below (get_accessible_reports already only
+            # returns reports the user is legitimately allowed to touch).
 
             # Check access to the report
             report, has_access = await self._get_report_and_check_access(self.user, report_id)
@@ -253,6 +238,11 @@ class ReportConsumer(AsyncWebsocketConsumer):
         try:
             access_token = AccessToken(token)
             user_id = access_token['user_id']
-            return User.objects.get(id=user_id)
+            user = User.objects.select_related('role').get(id=user_id)
+            # Prime User.has_permission()'s per-instance cache here, while
+            # still inside this sync-wrapped method — connect() below reads
+            # it from plain async code, where a fresh DB query would crash.
+            user._permission_slugs = set(user.role.permissions.values_list('slug', flat=True)) if user.role_id else set()
+            return user
         except (InvalidToken, TokenError, User.DoesNotExist):
             return None

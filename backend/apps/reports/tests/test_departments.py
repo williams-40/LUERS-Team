@@ -6,10 +6,14 @@ from apps.core.factories import (
     SystemAdminFactory, ReportFactory, DepartmentFactory,
 )
 
+# Phase 14: GET /departments/ opened to any authenticated user (reporters
+# need the active department list to submit a report against; a
+# department head needs to see their own department). Only POST/PATCH/
+# DELETE stay IsAccountAdmin-gated (see test_non_admin_cannot_create_department).
 ROLE_MATRIX = {
-    'student': 403,
-    'security': 403,
-    'management': 403,
+    'student': 200,
+    'security': 200,
+    'management': 200,
     'ict_admin': 200,
     'system_admin': 200,
 }
@@ -52,40 +56,46 @@ def test_admin_can_create_department_with_valid_head():
 
 
 @pytest.mark.django_db
-def test_create_department_rejects_non_admin_tier_head():
+def test_create_department_accepts_non_admin_tier_head():
+    """
+    Phase 14: Department Head/Responder is decoupled from the Role enum —
+    departments like Finance/HR/Library have no corresponding Role at all,
+    so any active user can be a head now.
+    """
     admin = SystemAdminFactory()
     student = UserFactory(role='student')
     client = APIClient()
     client.force_authenticate(user=admin)
 
     response = client.post('/api/v1/departments/', {
-        'name': 'Bad Head Dept',
+        'name': 'Student-Headed Dept',
         'description': '',
         'head': str(student.id),
         'members': [],
         'is_active': True,
     })
 
-    assert response.status_code == 400
-    assert 'head' in response.data
+    assert response.status_code == 201
+    assert Department.objects.filter(name='Student-Headed Dept', head=student).exists()
 
 
 @pytest.mark.django_db
-def test_create_department_rejects_non_admin_tier_members():
+def test_create_department_accepts_non_admin_tier_members():
     admin = ICTAdminFactory()
     staff = UserFactory(role='staff')
     client = APIClient()
     client.force_authenticate(user=admin)
 
     response = client.post('/api/v1/departments/', {
-        'name': 'Bad Members Dept',
+        'name': 'Staff-Membered Dept',
         'description': '',
         'members': [str(staff.id)],
         'is_active': True,
     })
 
-    assert response.status_code == 400
-    assert 'members' in response.data
+    assert response.status_code == 201
+    dept = Department.objects.get(name='Staff-Membered Dept')
+    assert staff in dept.members.all()
 
 
 @pytest.mark.django_db

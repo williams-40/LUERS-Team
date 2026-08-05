@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from apps.reports.models import Report, ReportIdentity, Evidence, Department
 from apps.core.choices import Category, Urgency, Status, Role
+from apps.accounts.models import Role as RoleModel
 from apps.audit.models import AuditLog
 
 User = get_user_model()
@@ -22,10 +23,16 @@ class Command(BaseCommand):
         """Create default departments and optionally assign heads."""
         dept_data = [
             {'name': 'Security', 'description': 'Handles theft, assault, harassment, and other security-related incidents'},
+            {'name': 'ICT Services', 'description': 'Handles computer, network, and account/access issues'},
             {'name': 'Academic Affairs', 'description': 'Handles academic issues, disputes, and student affairs'},
+            {'name': 'Student Affairs', 'description': 'Handles accommodation, welfare, and student support matters'},
+            {'name': 'Finance', 'description': 'Handles fees, tuition, refunds, and payment issues'},
             {'name': 'Health & Safety', 'description': 'Handles medical emergencies, fire, and safety hazards'},
+            {'name': 'Estates / Maintenance', 'description': 'Handles facilities, plumbing, electrical, and repair issues'},
+            {'name': 'Library', 'description': 'Handles library resources and access issues'},
+            {'name': 'Human Resources', 'description': 'Handles staff conduct, employment, and payroll matters'},
             {'name': 'Administration', 'description': 'Handles general administrative matters'},
-            {'name': 'Other', 'description': 'Uncategorized reports; handled by system admin'},
+            {'name': 'Other', 'description': 'Uncategorized reports; routed automatically where possible, otherwise handled by system admin'},
         ]
 
         departments = []
@@ -50,6 +57,12 @@ class Command(BaseCommand):
             admin_dept.head = users.get('management')
             admin_dept.save()
             self.stdout.write("  Assigned management_user as head of Administration")
+
+        if 'ict_admin' in users:
+            ict_dept = Department.objects.get(name='ICT Services')
+            ict_dept.head = users.get('ict_admin')
+            ict_dept.save()
+            self.stdout.write("  Assigned ict_admin_user as head of ICT Services")
 
         # ✅ Assign system admin as head of the 'Other' department
         if 'system_admin' in users:
@@ -76,7 +89,7 @@ class Command(BaseCommand):
                 username=username,
                 defaults={
                     'email': email,
-                    'role': role,
+                    'role': RoleModel.objects.get(slug=role),
                     'phone_number': f'+2567{random.randint(10000000,99999999)}' if role == Role.SECURITY else None,
                 }
             )

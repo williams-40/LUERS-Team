@@ -47,6 +47,10 @@ class Action(models.TextChoices):
     DEANONYMIZE = 'deanonymize', 'Deanonymize'   # Phase 2 backlog but include now
     SOFT_DELETE = 'soft_delete', 'Soft Delete'
     RESTORE = 'restore', 'Restore'
+    AUTO_ROUTE = 'auto_route', 'Auto Route'
+    ROUTING_SUGGESTION = 'routing_suggestion', 'Routing Suggestion'
+    DEPARTMENT_TRANSFER = 'department_transfer', 'Department Transfer'
+    ESCALATE = 'escalate', 'Escalate'
 
 class SyncOrigin(models.TextChoices):
     LIVE = 'live', 'Live'

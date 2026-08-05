@@ -35,7 +35,7 @@ def filter_users(queryset, params):
     if role:
         roles = [r.strip() for r in role.split(',') if r.strip()]
         if roles:
-            queryset = queryset.filter(role__in=roles)
+            queryset = queryset.filter(role__slug__in=roles)
     if is_active is not None:
         queryset = queryset.filter(is_active=is_active.lower() == 'true')
     if search:
