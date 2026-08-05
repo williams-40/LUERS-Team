@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { assignReport, fetchOfficers } from '../../lib/reports-api';
+import { assignReport, fetchAssignableOfficers } from '../../lib/reports-api';
 import type { ReportDetail } from '../../types/domain';
 import type { ApiError } from '../../lib/api-client';
 import { Button } from '../ui/Button';
@@ -16,9 +16,12 @@ export function AssignControl({
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Scoped to this report's own department (head + members) — replaces
+  // the old campus-wide "every security officer" list now that
+  // responders are department-scoped, not role-scoped.
   const { data: officers, isLoading: officersLoading } = useQuery({
-    queryKey: ['officers'],
-    queryFn: fetchOfficers,
+    queryKey: ['reports', report.id, 'assignable-officers'],
+    queryFn: () => fetchAssignableOfficers(report.id),
   });
 
   const mutation = useMutation({
@@ -49,7 +52,7 @@ export function AssignControl({
 
   return (
     <div className="mb-5 rounded-xl border border-ink/10 p-4">
-      <h2 className="text-ink-secondary mb-3 text-[12.5px] font-semibold">Assign officer</h2>
+      <h2 className="text-ink-secondary mb-3 text-[12.5px] font-semibold">Assign responder</h2>
 
       {conflict && (
         <div role="alert" className="bg-status-warning/15 mb-3 rounded-lg px-3 py-2 text-sm">
@@ -78,7 +81,7 @@ export function AssignControl({
           className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
         >
           <option value="" disabled>
-            {officersLoading ? 'Loading officers…' : 'Select an officer'}
+            {officersLoading ? 'Loading responders…' : 'Select a responder'}
           </option>
           {officers?.map((officer) => (
             <option key={officer.id} value={officer.id}>

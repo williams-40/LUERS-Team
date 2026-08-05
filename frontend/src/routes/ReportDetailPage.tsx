@@ -5,20 +5,20 @@ import { deleteReport, fetchReportDetail } from '../lib/reports-api';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { StatusUpdateControl } from '../components/reports/StatusUpdateControl';
 import { AssignControl } from '../components/reports/AssignControl';
+import { TransferControl } from '../components/reports/TransferControl';
+import { EscalateControl } from '../components/reports/EscalateControl';
 import { RevealIdentityControl } from '../components/reports/RevealIdentityControl';
 import { ReportChat } from '../components/reports/ReportChat';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { Button } from '../components/ui/Button';
 import { CATEGORY_LABELS } from '../lib/labels';
-import { ACCOUNT_ADMIN_ROLES, ADMIN_ROLES, Role, Urgency } from '../types/domain';
-import type { ReportDetail } from '../types/domain';
+import { Urgency } from '../types/domain';
+import type { ReportDetail, RoutingSuggestion } from '../types/domain';
 import type { ApiError } from '../lib/api-client';
 import type { ChatMessagePayload } from '../lib/ws-client';
 import { useAuth } from '../hooks/useAuth';
 import { useReportSocket } from '../hooks/useReportSocket';
 import { useToast } from '../lib/toast-context';
-
-const ASSIGN_ROLES: Role[] = [Role.SECURITY, Role.ICT_ADMIN];
 
 export function ReportDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -88,6 +88,17 @@ export function ReportDetailPage() {
 
   if (!report) return null;
 
+  // Phase 14: assign/transfer authority is "this report's department
+  // head, or System Admin" — not a fixed Role list, since responders are
+  // department members now, regardless of account role. Escalation is
+  // head-only (System Admin escalating to themselves is meaningless).
+  const isDepartmentHead = Boolean(user && report.department_head_id === user.id);
+  const isSystemAdmin = Boolean(user?.permissions.includes('view_all_reports'));
+  const canManageDepartment = isDepartmentHead || isSystemAdmin;
+  const isAssignedResponder = Boolean(user && report.assigned_to === user.id);
+  const canUpdateStatus = isAssignedResponder || canManageDepartment;
+  const routingSuggestion = report.metadata.routing_suggestion as RoutingSuggestion | undefined;
+
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
       {justCreated && (
@@ -97,7 +108,9 @@ export function ReportDetailPage() {
       )}
 
       <div className="mb-1 flex items-center justify-between gap-2">
-        <h1 className="text-2xl">{CATEGORY_LABELS[report.category]}</h1>
+        <h1 className="text-2xl">
+          {report.department_name ?? (report.category ? CATEGORY_LABELS[report.category] : 'Report')}
+        </h1>
         <div className="flex items-center gap-2">
           <LiveIndicator status={socketStatus} onReconnect={reconnect} />
           <StatusBadge status={report.status} />
@@ -111,10 +124,8 @@ export function ReportDetailPage() {
 
       <p className="text-ink mb-5 text-sm leading-relaxed whitespace-pre-wrap">{report.description}</p>
 
-      {report.department_name && (
-        <p className="text-ink-secondary mb-5 text-sm">
-          <span className="font-semibold">Routed to:</span> {report.department_name}
-        </p>
+      {report.category_display && (
+        <p className="text-ink-muted mb-5 text-xs">Legacy category: {report.category_display}</p>
       )}
 
       {report.assigned_to_username && (
@@ -123,13 +134,25 @@ export function ReportDetailPage() {
         </p>
       )}
 
-      {user?.role === Role.SECURITY && <StatusUpdateControl report={report} onUpdated={refetch} />}
+      {routingSuggestion && canManageDepartment && (
+        <p className="bg-status-warning/10 mb-5 rounded-lg px-3 py-2 text-sm">
+          <span className="font-semibold">Suggested department:</span> {routingSuggestion.suggested_department} (
+          {Math.round(routingSuggestion.confidence * 100)}% confidence) — matched:{' '}
+          {routingSuggestion.matched_keywords.join(', ')}
+        </p>
+      )}
 
-      {user && ASSIGN_ROLES.includes(user.role) && <AssignControl report={report} onUpdated={refetch} />}
+      {canUpdateStatus && <StatusUpdateControl report={report} onUpdated={refetch} />}
 
-      {user?.role === Role.MANAGEMENT && <RevealIdentityControl reportId={report.id} />}
+      {canManageDepartment && <AssignControl report={report} onUpdated={refetch} />}
 
-      {user && ACCOUNT_ADMIN_ROLES.includes(user.role) && (
+      {canManageDepartment && <TransferControl report={report} onUpdated={refetch} />}
+
+      {isDepartmentHead && <EscalateControl report={report} />}
+
+      {user?.permissions.includes('reveal_identity') && <RevealIdentityControl reportId={report.id} />}
+
+      {user?.permissions.includes('delete_report') && (
         <div className="mb-5">
           <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleteMutation.isPending}>
             {deleteMutation.isPending ? 'Deleting…' : 'Delete report'}
@@ -171,10 +194,10 @@ export function ReportDetailPage() {
       />
 
       <Link
-        to={user && ADMIN_ROLES.includes(user.role) ? '/admin' : '/reports/mine'}
+        to={user?.permissions.includes('view_admin_dashboard') ? '/admin' : '/reports/mine'}
         className="text-brand text-sm font-semibold hover:underline"
       >
-        {user && ADMIN_ROLES.includes(user.role) ? 'Back to queue' : 'Back to my reports'}
+        {user?.permissions.includes('view_admin_dashboard') ? 'Back to queue' : 'Back to my reports'}
       </Link>
     </div>
   );

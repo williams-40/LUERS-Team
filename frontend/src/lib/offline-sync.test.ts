@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiError } from './api-client';
-import { Category, Urgency } from '../types/domain';
+import { Urgency } from '../types/domain';
 import type { QueuedReport } from './offline-queue';
 
 const { createReport } = vi.hoisted(() => ({ createReport: vi.fn() }));
@@ -18,7 +18,7 @@ const { flushQueue } = await import('./offline-sync');
 function queuedItem(overrides: Partial<QueuedReport> = {}): QueuedReport {
   return {
     id: 'q1',
-    payload: { category: Category.THEFT, description: 'x', urgency: Urgency.NORMAL, is_anonymous: false },
+    payload: { department: 'dept-1', description: 'x', urgency: Urgency.NORMAL, is_anonymous: false },
     hadDroppedEvidence: false,
     createdAt: new Date().toISOString(),
     retryCount: 0,

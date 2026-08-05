@@ -1,4 +1,5 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useReportQueue } from '../hooks/useReportQueue';
 import type { QueueFilterState } from '../hooks/useReportQueue';
 import { useReportSocket } from '../hooks/useReportSocket';
@@ -12,11 +13,13 @@ import { Category, Status, Urgency } from '../types/domain';
 import type { BulkActionResponse } from '../lib/reports-api';
 import { CATEGORY_LABELS } from '../lib/labels';
 import { downloadReportsExport, bulkUpdateStatus, bulkAssignReports } from '../lib/reports-api';
+import { fetchDepartments } from '../lib/departments-api';
 import { useToast } from '../lib/toast-context';
 
 const STATUS_OPTIONS = Object.values(Status);
 const CATEGORY_OPTIONS = Object.values(Category);
 const URGENCY_OPTIONS = Object.values(Urgency);
+const LIVE_REFRESH_DEBOUNCE_MS = 400;
 
 function FilterSelect<T extends string>({
   label,
@@ -58,11 +61,25 @@ export function TriageQueuePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const queueFilters: QueueFilterState = { ...filters, search: debouncedSearch || undefined };
-  const { data, isLoading, isError, page, setPage, refresh, isFetching, applyLiveEvent } =
-    useReportQueue(queueFilters);
+  const { data, isLoading, isError, page, setPage, refresh, isFetching } = useReportQueue(queueFilters);
+  const { data: departments } = useQuery({
+    queryKey: ['departments', { is_active: true, filter: true }],
+    queryFn: () => fetchDepartments({ is_active: true }),
+  });
+
+  // Debounced, delta-fetch refresh instead of inserting the raw WS payload
+  // directly (that used to bypass department/assignment scoping entirely
+  // — a live report_created/report_updated event would show full report
+  // data for reports outside the viewer's now-scoped access). refresh()
+  // already does a real scoped REST call.
+  const liveRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleLiveRefresh = useCallback(() => {
+    if (liveRefreshTimer.current) clearTimeout(liveRefreshTimer.current);
+    liveRefreshTimer.current = setTimeout(() => void refresh(), LIVE_REFRESH_DEBOUNCE_MS);
+  }, [refresh]);
   const { status: socketStatus, reconnect } = useReportSocket({
-    onReportCreated: applyLiveEvent,
-    onReportUpdated: applyLiveEvent,
+    onReportCreated: scheduleLiveRefresh,
+    onReportUpdated: scheduleLiveRefresh,
   });
   const toast = useToast();
 
@@ -71,7 +88,7 @@ export function TriageQueuePage() {
   useEffect(() => {
     setSelectedIds(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.status, filters.category, filters.urgency, debouncedSearch, page]);
+  }, [filters.status, filters.category, filters.urgency, filters.department, debouncedSearch, page]);
 
   function setFilter<K extends keyof QueueFilterState>(key: K, value: QueueFilterState[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -186,6 +203,13 @@ export function TriageQueuePage() {
           onChange={(v) => setFilter('urgency', v)}
           options={URGENCY_OPTIONS}
           labelFor={(u) => u}
+        />
+        <FilterSelect
+          label="Department"
+          value={filters.department}
+          onChange={(v) => setFilter('department', v)}
+          options={(departments?.results ?? []).map((d) => d.id)}
+          labelFor={(id) => departments?.results.find((d) => d.id === id)?.name ?? id}
         />
       </div>
 

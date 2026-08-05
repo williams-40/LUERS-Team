@@ -7,19 +7,8 @@ export interface QueueFilterState {
   status?: Status;
   category?: Category;
   urgency?: Urgency;
+  department?: string;
   search?: string;
-}
-
-function matchesFilters(report: ReportListItem, filters: QueueFilterState): boolean {
-  if (filters.status && report.status !== filters.status) return false;
-  if (filters.category && report.category !== filters.category) return false;
-  if (filters.urgency && report.urgency !== filters.urgency) return false;
-  // Narrower than the backend's multi-field search (description, custom
-  // department, department name, assigned officer) — a live-pushed report
-  // should only auto-insert into the visible page on an unambiguous match;
-  // being conservative here costs less than a false-positive insert.
-  if (filters.search && !report.description.toLowerCase().includes(filters.search.toLowerCase())) return false;
-  return true;
 }
 
 /**
@@ -38,7 +27,7 @@ export function useReportQueue(filters: QueueFilterState) {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const cursorRef = useRef<string | null>(null);
-  const filtersKey = `${filters.status ?? ''}|${filters.category ?? ''}|${filters.urgency ?? ''}|${filters.search ?? ''}`;
+  const filtersKey = `${filters.status ?? ''}|${filters.category ?? ''}|${filters.urgency ?? ''}|${filters.department ?? ''}|${filters.search ?? ''}`;
   const queryKey = ['reports', 'queue', filtersKey, page] as const;
 
   const query = useQuery({
@@ -81,34 +70,5 @@ export function useReportQueue(filters: QueueFilterState) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, filtersKey, queryClient]);
 
-  /**
-   * Patches a single report into the page-1 view from a live WS event —
-   * update in place, insert if it now matches the filters, or drop it if it
-   * no longer does (e.g. a status change filtered it out). Only page 1 is
-   * patchable this way; other pages are left stale until revisited.
-   */
-  const applyLiveEvent = useCallback(
-    (report: ReportListItem) => {
-      if (page !== 1) return;
-      const matches = matchesFilters(report, filters);
-      queryClient.setQueryData<Paginated<ReportListItem>>(queryKey, (old) => {
-        if (!old) return old;
-        const idx = old.results.findIndex((r) => r.id === report.id);
-        if (!matches) {
-          if (idx < 0) return old;
-          return { ...old, results: old.results.filter((r) => r.id !== report.id), count: Math.max(0, old.count - 1) };
-        }
-        if (idx >= 0) {
-          const results = [...old.results];
-          results[idx] = report;
-          return { ...old, results };
-        }
-        return { ...old, results: [report, ...old.results], count: old.count + 1 };
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [page, filtersKey, queryClient],
-  );
-
-  return { ...query, page, setPage: changePage, refresh, applyLiveEvent };
+  return { ...query, page, setPage: changePage, refresh };
 }

@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Category, Urgency } from '../types/domain';
+import { Urgency } from '../types/domain';
 import type { CreateReportInput } from '../types/domain';
 
 const payload: CreateReportInput = {
-  category: Category.THEFT,
+  department: 'dept-1',
   description: 'Bike stolen outside library',
   urgency: Urgency.NORMAL,
   is_anonymous: false,

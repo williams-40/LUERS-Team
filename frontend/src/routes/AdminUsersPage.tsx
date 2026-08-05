@@ -1,11 +1,10 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchUsers } from '../lib/admin-users-api';
 import type { AdminUserFilters } from '../lib/admin-users-api';
+import { fetchRoles } from '../lib/roles-api';
 import { Button } from '../components/ui/Button';
-import { ROLE_LABELS } from '../lib/labels';
-import { Role } from '../types/domain';
 import type { User } from '../types/domain';
 
 function UserRow({ user }: { user: User }) {
@@ -26,7 +25,7 @@ function UserRow({ user }: { user: User }) {
         <p className="text-ink-secondary truncate text-[12.5px]">{user.email}</p>
       </div>
       <span className="bg-brand/10 text-brand shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold">
-        {ROLE_LABELS[user.role] ?? user.role}
+        {user.role.label}
       </span>
     </Link>
   );
@@ -42,7 +41,12 @@ export function AdminUsersPage() {
     queryFn: () => fetchUsers({ ...filters, search: search || undefined, page }),
   });
 
-  function setRoleFilter(role: Role | ''): void {
+  const { data: roles } = useQuery({
+    queryKey: ['roles', { is_active: true, filter: true }],
+    queryFn: () => fetchRoles({ is_active: true }),
+  });
+
+  function setRoleFilter(role: string): void {
     setFilters((prev) => ({ ...prev, role: role || undefined }));
     setPage(1);
   }
@@ -83,13 +87,13 @@ export function AdminUsersPage() {
           <span className="text-ink-secondary font-semibold">Role</span>
           <select
             value={filters.role ?? ''}
-            onChange={(e) => setRoleFilter(e.target.value as Role | '')}
+            onChange={(e) => setRoleFilter(e.target.value)}
             className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">All</option>
-            {Object.values(Role).map((role) => (
-              <option key={role} value={role}>
-                {ROLE_LABELS[role]}
+            {(roles ?? []).map((role) => (
+              <option key={role.slug} value={role.slug}>
+                {role.label}
               </option>
             ))}
           </select>

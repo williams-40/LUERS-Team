@@ -1,20 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { Role } from '../../types/domain';
 import { RequireAuth } from './RequireAuth';
 
 const { useAuth } = vi.hoisted(() => ({ useAuth: vi.fn() }));
 vi.mock('../../hooks/useAuth', () => ({ useAuth }));
 
-function renderProtected(roles?: Role[]) {
+function renderProtected(requirePermission?: string) {
   return render(
     <MemoryRouter initialEntries={['/dashboard']}>
       <Routes>
         <Route
           path="/dashboard"
           element={
-            <RequireAuth roles={roles}>
+            <RequireAuth requirePermission={requirePermission}>
               <div>Protected content</div>
             </RequireAuth>
           }
@@ -24,6 +23,10 @@ function renderProtected(roles?: Role[]) {
       </Routes>
     </MemoryRouter>,
   );
+}
+
+function userWithPermissions(permissions: string[]) {
+  return { role: { slug: 'test-role', label: 'Test Role' }, permissions };
 }
 
 describe('RequireAuth', () => {
@@ -40,21 +43,25 @@ describe('RequireAuth', () => {
     expect(screen.getByText('Login page')).toBeInTheDocument();
   });
 
-  it('renders children when authenticated and no roles are required', () => {
-    useAuth.mockReturnValue({ user: { role: Role.STUDENT }, isAuthenticated: true, isLoading: false });
+  it('renders children when authenticated and no permission is required', () => {
+    useAuth.mockReturnValue({ user: userWithPermissions(['create_report']), isAuthenticated: true, isLoading: false });
     renderProtected();
     expect(screen.getByText('Protected content')).toBeInTheDocument();
   });
 
-  it('renders children when the user has one of the required roles', () => {
-    useAuth.mockReturnValue({ user: { role: Role.SECURITY }, isAuthenticated: true, isLoading: false });
-    renderProtected([Role.SECURITY, Role.ICT_ADMIN]);
+  it('renders children when the user has the required permission', () => {
+    useAuth.mockReturnValue({
+      user: userWithPermissions(['view_admin_dashboard', 'manage_audit_logs']),
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    renderProtected('view_admin_dashboard');
     expect(screen.getByText('Protected content')).toBeInTheDocument();
   });
 
-  it('redirects to /forbidden when the user lacks a required role', () => {
-    useAuth.mockReturnValue({ user: { role: Role.STUDENT }, isAuthenticated: true, isLoading: false });
-    renderProtected([Role.SECURITY]);
+  it('redirects to /forbidden when the user lacks the required permission', () => {
+    useAuth.mockReturnValue({ user: userWithPermissions(['create_report']), isAuthenticated: true, isLoading: false });
+    renderProtected('view_admin_dashboard');
     expect(screen.getByText('Forbidden page')).toBeInTheDocument();
   });
 });

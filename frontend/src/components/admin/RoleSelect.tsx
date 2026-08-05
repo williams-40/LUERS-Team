@@ -1,7 +1,5 @@
-﻿import { Role } from '../../types/domain';
-import { ROLE_LABELS } from '../../lib/labels';
-
-const ROLE_OPTIONS = Object.values(Role);
+import { useQuery } from '@tanstack/react-query';
+import { fetchRoles } from '../../lib/roles-api';
 
 export function RoleSelect({
   id,
@@ -9,19 +7,28 @@ export function RoleSelect({
   onChange,
 }: {
   id?: string;
-  value: Role;
-  onChange: (role: Role) => void;
+  value: string;
+  onChange: (role: string) => void;
 }) {
+  const { data: roles, isLoading } = useQuery({
+    queryKey: ['roles', { is_active: true, picker: true }],
+    queryFn: () => fetchRoles({ is_active: true }),
+  });
+
   return (
     <select
       id={id}
       value={value}
-      onChange={(e) => onChange(e.target.value as Role)}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={isLoading}
       className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
     >
-      {ROLE_OPTIONS.map((role) => (
-        <option key={role} value={role}>
-          {ROLE_LABELS[role]}
+      <option value="" disabled>
+        {isLoading ? 'Loading roles…' : 'Select a role'}
+      </option>
+      {(roles ?? []).map((role) => (
+        <option key={role.slug} value={role.slug}>
+          {role.label}
         </option>
       ))}
     </select>

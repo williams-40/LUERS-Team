@@ -27,6 +27,7 @@ const DEMO_REPORTS: ReportListItem[] = [
     deleted_at: null,
     department_id: null,
     department_name: 'Security',
+    department_head_id: null,
   },
   {
     id: 'a1b2c3d4-0000-0000-0000-000000000002',
@@ -49,6 +50,7 @@ const DEMO_REPORTS: ReportListItem[] = [
     deleted_at: null,
     department_id: null,
     department_name: 'ICT',
+    department_head_id: null,
   },
   {
     id: 'a1b2c3d4-0000-0000-0000-000000000003',
@@ -72,6 +74,7 @@ const DEMO_REPORTS: ReportListItem[] = [
     deleted_at: null,
     department_id: null,
     department_name: 'Facilities',
+    department_head_id: null,
   },
 ];
 

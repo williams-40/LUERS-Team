@@ -7,7 +7,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { createUser, fetchUser, updateUser } from '../lib/admin-users-api';
 import { RoleSelect } from '../components/admin/RoleSelect';
 import { Button } from '../components/ui/Button';
-import { Role } from '../types/domain';
 import type { ApiError } from '../lib/api-client';
 
 const createUserSchema = z.object({
@@ -17,7 +16,7 @@ const createUserSchema = z.object({
   last_name: z.string().optional().or(z.literal('')),
   phone_number: z.string().optional().or(z.literal('')),
   university_id: z.string().optional().or(z.literal('')),
-  role: z.nativeEnum(Role),
+  role: z.string().min(1, 'Please select a role'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
@@ -29,7 +28,7 @@ const editUserSchema = z.object({
   phone_number: z.string().optional().or(z.literal('')),
   university_id: z.string().optional().or(z.literal('')),
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
-  role: z.nativeEnum(Role),
+  role: z.string().min(1, 'Please select a role'),
   is_active: z.boolean(),
 });
 
@@ -51,7 +50,7 @@ function CreateUserForm() {
     formState: { errors, isSubmitting },
   } = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { role: Role.STUDENT },
+    defaultValues: { role: '' },
   });
 
   const createMutation = useMutation({ mutationFn: createUser });
@@ -204,7 +203,7 @@ function EditUserForm({ userId }: { userId: string }) {
           phone_number: user.phone_number ?? '',
           university_id: user.university_id ?? '',
           email: user.email,
-          role: user.role,
+          role: user.role.slug,
           is_active: user.is_active,
         }
       : undefined,

@@ -1,8 +1,8 @@
 import { apiClient } from './api-client';
-import type { Paginated, Role, User } from '../types/domain';
+import type { Paginated, User } from '../types/domain';
 
 export interface AdminUserFilters {
-  /** Comma-separated, e.g. "security,ict_admin". */
+  /** Comma-separated role slugs, e.g. "security,ict_admin". */
   role?: string;
   is_active?: boolean;
   search?: string;
@@ -15,7 +15,8 @@ export interface CreateUserInput {
   first_name?: string;
   last_name?: string;
   phone_number?: string;
-  role: Role;
+  /** Role slug — resolved server-side via SlugRelatedField. */
+  role: string;
   university_id?: string;
   password: string;
 }
@@ -25,7 +26,8 @@ export interface UpdateUserInput {
   last_name?: string;
   email?: string;
   phone_number?: string;
-  role?: Role;
+  /** Role slug — resolved server-side via SlugRelatedField. */
+  role?: string;
   university_id?: string;
   is_active?: boolean;
 }

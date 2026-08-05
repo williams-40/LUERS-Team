@@ -15,8 +15,6 @@ import { UserMultiSelect } from '../components/admin/UserMultiSelect';
 import { Button } from '../components/ui/Button';
 import type { ApiError } from '../lib/api-client';
 
-const ADMIN_TIER_ROLE_QUERY = 'security,ict_admin,management,system_admin';
-
 const departmentSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
   description: z.string(),
@@ -34,9 +32,13 @@ export function DepartmentFormPage() {
   const isEdit = Boolean(id);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const { data: adminTierUsers } = useQuery({
-    queryKey: ['admin', 'users', ADMIN_TIER_ROLE_QUERY],
-    queryFn: () => fetchUsers({ role: ADMIN_TIER_ROLE_QUERY }),
+  // Phase 14: Department Head/Responder is decoupled from the account
+  // Role — any active user is eligible (Finance/HR/Library etc. have no
+  // corresponding Role at all), so this is no longer filtered to
+  // admin-tier roles.
+  const { data: eligibleUsers } = useQuery({
+    queryKey: ['admin', 'users', 'all'],
+    queryFn: () => fetchUsers({}),
   });
 
   const { data: department, isLoading: isLoadingDepartment } = useQuery({
@@ -148,7 +150,7 @@ export function DepartmentFormPage() {
             className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">No head assigned</option>
-            {(adminTierUsers?.results ?? []).map((user) => (
+            {(eligibleUsers?.results ?? []).map((user) => (
               <option key={user.id} value={user.id}>
                 {user.username}
               </option>
@@ -159,7 +161,7 @@ export function DepartmentFormPage() {
         <div className="flex flex-col gap-1.5">
           <span className="text-ink-secondary text-[12.5px] font-semibold">Members</span>
           <UserMultiSelect
-            users={adminTierUsers?.results ?? []}
+            users={eligibleUsers?.results ?? []}
             value={members}
             onChange={(ids) => setValue('members', ids)}
           />

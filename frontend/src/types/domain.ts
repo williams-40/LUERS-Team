@@ -1,23 +1,23 @@
-// Mirrors backend/apps/core/choices.py — keep these in sync with the Django TextChoices.
+// Role/Permission are now backend-managed (Phase 15) — no fixed enum here.
+// Authorization checks go through `user.permissions` (a flat slug list),
+// not a closed set of role names. See RequireAuth.tsx.
 
-export const Role = {
-  STUDENT: 'student',
-  STAFF: 'staff',
-  SECURITY: 'security',
-  ICT_ADMIN: 'ict_admin',
-  MANAGEMENT: 'management',
-  SYSTEM_ADMIN: 'system_admin',
-} as const;
-export type Role = (typeof Role)[keyof typeof Role];
+export interface RoleInfo {
+  id: string;
+  slug: string;
+  label: string;
+  description: string;
+  is_builtin: boolean;
+  is_active: boolean;
+}
 
-/** Matches ADMIN_ROLES in backend/apps/notifications/consumers.py and get_accessible_reports. */
-export const ADMIN_ROLES: Role[] = [Role.SECURITY, Role.ICT_ADMIN, Role.MANAGEMENT, Role.SYSTEM_ADMIN];
-
-/** Matches IsStudentOrStaff in backend/apps/accounts/permissions.py — who can create reports. */
-export const REPORTER_ROLES: Role[] = [Role.STUDENT, Role.STAFF];
-
-/** Matches IsAccountAdmin in backend/apps/accounts/permissions.py — ict_admin + system_admin only. */
-export const ACCOUNT_ADMIN_ROLES: Role[] = [Role.ICT_ADMIN, Role.SYSTEM_ADMIN];
+export interface Permission {
+  id: string;
+  slug: string;
+  label: string;
+  description: string;
+  category: string;
+}
 
 export const Category = {
   THEFT: 'theft',
@@ -60,7 +60,9 @@ export interface User {
   first_name: string;
   last_name: string;
   phone_number: string | null;
-  role: Role;
+  role: RoleInfo;
+  /** Flat permission slugs granted by `role` — see RequireAuth.tsx. */
+  permissions: string[];
   university_id: string | null;
   is_active: boolean;
   date_joined: string;
@@ -102,8 +104,11 @@ export interface Evidence {
 
 export interface ReportListItem {
   id: string;
-  category: Category;
-  category_display: string;
+  // Legacy incident-type classifier — retired as of Phase 14's department-
+  // routing rework. Only ever populated on reports created before that;
+  // new reports leave it null. Department is the current classification.
+  category: Category | null;
+  category_display: string | null;
   description: string;
   urgency: Urgency;
   urgency_display: string;
@@ -121,6 +126,8 @@ export interface ReportListItem {
   deleted_at: string | null;
   department_id: string | null;
   department_name: string | null;
+  /** Lets the frontend decide if the viewer has assign/transfer/escalate authority without a separate lookup. */
+  department_head_id: string | null;
 }
 
 export interface ReportDetail extends Omit<ReportListItem, 'evidence_count'> {
@@ -129,16 +136,21 @@ export interface ReportDetail extends Omit<ReportListItem, 'evidence_count'> {
 }
 
 export interface CreateReportInput {
-  category: Category;
+  department: string;
   description: string;
   urgency: Urgency;
   is_anonymous: boolean;
   latitude?: number;
   longitude?: number;
   location_accuracy?: number;
-  custom_department?: string;
   idempotency_key?: string;
   client_created_at?: string;
+}
+
+export interface RoutingSuggestion {
+  suggested_department: string;
+  confidence: number;
+  matched_keywords: string[];
 }
 
 export interface Paginated<T> {
@@ -158,7 +170,7 @@ export interface Message {
 
 export interface DashboardSummary {
   total: number;
-  category_counts: { category: Category; count: number }[];
+  department_counts: { department_name: string | null; count: number }[];
   status_counts: { status: Status; count: number }[];
   urgency_counts: { urgency: Urgency; count: number }[];
   average_response_time_hours: number | null;
@@ -166,6 +178,27 @@ export interface DashboardSummary {
 
 export interface DashboardTrends {
   daily_counts: { date: string; count: number }[];
+}
+
+export interface DashboardAnalytics {
+  total: number;
+  open: number;
+  in_progress: number;
+  resolved: number;
+  closed: number;
+  average_assignment_time_hours: number | null;
+  average_resolution_time_hours: number | null;
+  overdue: number;
+  urgency_counts: { urgency: Urgency; count: number }[];
+  monthly_trend: { month: string; count: number }[];
+  responder_workload: { responder_id: string; username: string; open_count: number }[];
+  responder_performance: {
+    responder_id: string;
+    username: string;
+    resolved_count: number;
+    average_resolution_time_hours: number | null;
+  }[];
+  top_keywords: { keyword: string; count: number }[];
 }
 
 export const Action = {
@@ -176,6 +209,10 @@ export const Action = {
   DEANONYMIZE: 'deanonymize',
   SOFT_DELETE: 'soft_delete',
   RESTORE: 'restore',
+  AUTO_ROUTE: 'auto_route',
+  ROUTING_SUGGESTION: 'routing_suggestion',
+  DEPARTMENT_TRANSFER: 'department_transfer',
+  ESCALATE: 'escalate',
 } as const;
 export type Action = (typeof Action)[keyof typeof Action];
 

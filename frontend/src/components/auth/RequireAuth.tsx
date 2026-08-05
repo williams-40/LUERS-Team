@@ -1,15 +1,14 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import type { Role } from '../../types/domain';
 
 interface RequireAuthProps {
-  /** Omit to allow any authenticated role. */
-  roles?: Role[];
+  /** Omit to allow any authenticated user, regardless of permissions. */
+  requirePermission?: string;
   children: ReactNode;
 }
 
-export function RequireAuth({ roles, children }: RequireAuthProps) {
+export function RequireAuth({ requirePermission, children }: RequireAuthProps) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
@@ -25,7 +24,7 @@ export function RequireAuth({ roles, children }: RequireAuthProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (roles && user && !roles.includes(user.role)) {
+  if (requirePermission && user && !user.permissions.includes(requirePermission)) {
     return <Navigate to="/forbidden" replace />;
   }
 

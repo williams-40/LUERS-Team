@@ -1,4 +1,4 @@
-import type { Action, Category, Role } from '../types/domain';
+import type { Action, Category } from '../types/domain';
 import i18n from './i18n';
 
 /**
@@ -23,5 +23,4 @@ function createLabelProxy<T extends string>(namespace: string): Record<T, string
 }
 
 export const CATEGORY_LABELS: Record<Category, string> = createLabelProxy('category');
-export const ROLE_LABELS: Record<Role, string> = createLabelProxy('role');
 export const ACTION_LABELS: Record<Action, string> = createLabelProxy('action');

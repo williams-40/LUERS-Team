@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Role } from '../../types/domain';
 import type { User } from '../../types/domain';
 import { UserMultiSelect } from './UserMultiSelect';
 
@@ -13,7 +12,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     first_name: '',
     last_name: '',
     phone_number: null,
-    role: Role.SECURITY,
+    role: { id: 'r1', slug: 'security', label: 'Security Officer', description: '', is_builtin: true, is_active: true },
+    permissions: ['view_admin_dashboard', 'manage_audit_logs'],
     university_id: null,
     is_active: true,
     date_joined: new Date().toISOString(),
@@ -30,7 +30,7 @@ describe('UserMultiSelect', () => {
 
   it('shows a fallback message when there are no users', () => {
     render(<UserMultiSelect users={[]} value={[]} onChange={vi.fn()} />);
-    expect(screen.getByText(/no admin-tier users/i)).toBeInTheDocument();
+    expect(screen.getByText(/no users available/i)).toBeInTheDocument();
   });
 
   it('checks boxes matching the value prop', () => {

@@ -8,14 +8,6 @@
     "academic": "Academic",
     "other": "Other"
   },
-  "role": {
-    "student": "Student",
-    "staff": "Staff",
-    "security": "Security Officer",
-    "ict_admin": "ICT Admin",
-    "management": "Management",
-    "system_admin": "System Admin"
-  },
   "action": {
     "create": "Create",
     "status_update": "Status Update",
@@ -23,7 +15,11 @@
     "evidence_upload": "Evidence Upload",
     "deanonymize": "Deanonymize",
     "soft_delete": "Soft Delete",
-    "restore": "Restore"
+    "restore": "Restore",
+    "auto_route": "Auto Route",
+    "routing_suggestion": "Routing Suggestion",
+    "department_transfer": "Department Transfer",
+    "escalate": "Escalate"
   },
   "theme": {
     "label": "Theme",

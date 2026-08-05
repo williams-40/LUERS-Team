@@ -1,8 +1,10 @@
 ﻿import type { User } from '../../types/domain';
 
-/** Checkbox picker over a pre-fetched list of admin-tier users — see DepartmentFormPage,
- * which fetches that list once via fetchUsers({ role: 'security,ict_admin,management,system_admin' })
- * and shares it with this component and the head <select> alongside it. */
+/** Checkbox picker over a pre-fetched list of users — see DepartmentFormPage,
+ * which fetches the list once via fetchUsers({}) and shares it with this
+ * component and the head <select> alongside it. Phase 14: no longer
+ * filtered to admin-tier roles — Department Head/Responder is its own
+ * axis now, decoupled from the account Role. */
 export function UserMultiSelect({
   users,
   value,
@@ -17,7 +19,7 @@ export function UserMultiSelect({
   }
 
   if (users.length === 0) {
-    return <p className="text-ink-muted text-sm">No admin-tier users available.</p>;
+    return <p className="text-ink-muted text-sm">No users available.</p>;
   }
 
   return (

@@ -40,6 +40,7 @@ export async function fetchReportDetail(id: string): Promise<ReportDetail> {
 export interface ReportQueueFilters {
   status?: Status;
   category?: Category;
+  department?: string;
   urgency?: Urgency;
   search?: string;
   since?: string;
@@ -85,6 +86,31 @@ export async function assignReport(args: {
 
 export async function fetchOfficers(): Promise<Officer[]> {
   const { data } = await apiClient.get<Officer[]>('/auth/officers/');
+  return data;
+}
+
+/** The report's own department head + members — replaces fetchOfficers (all security officers, unscoped) now that responders are department-scoped. */
+export async function fetchAssignableOfficers(reportId: string): Promise<Officer[]> {
+  const { data } = await apiClient.get<Officer[]>(`/reports/${reportId}/assignable-officers/`);
+  return data;
+}
+
+export async function transferReportDepartment(args: {
+  reportId: string;
+  departmentId: string;
+  reason?: string;
+}): Promise<{ id: string; department_id: string; department_name: string }> {
+  const { data } = await apiClient.post<{ id: string; department_id: string; department_name: string }>(
+    `/reports/${args.reportId}/transfer/`,
+    { department_id: args.departmentId, reason: args.reason },
+  );
+  return data;
+}
+
+export async function escalateReport(args: { reportId: string; reason?: string }): Promise<{ id: string; escalated: true }> {
+  const { data } = await apiClient.post<{ id: string; escalated: true }>(`/reports/${args.reportId}/escalate/`, {
+    reason: args.reason,
+  });
   return data;
 }
 

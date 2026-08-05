@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
-import { ROLE_LABELS } from '../lib/labels';
 import { changePassword, updateMe } from '../lib/auth-api';
 import type { ApiError } from '../lib/api-client';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
@@ -243,7 +242,7 @@ export function ProfilePage() {
     <div className="mx-auto max-w-xl px-5 py-8">
       <h1 className="mb-1 text-2xl">My profile</h1>
       <p className="text-ink-secondary mb-6 text-sm">
-        Signed in as {user ? (ROLE_LABELS[user.role] ?? user.role) : '…'}.
+        Signed in as {user ? user.role.label : '…'}.
       </p>
 
       <section className="mb-8">

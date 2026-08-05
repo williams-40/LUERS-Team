@@ -6,7 +6,6 @@ import { ThemeProvider } from './lib/theme-context';
 import { AppLayout } from './components/layout/AppLayout';
 import { RequireAuth } from './components/auth/RequireAuth';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
-import { ACCOUNT_ADMIN_ROLES, ADMIN_ROLES, REPORTER_ROLES } from './types/domain';
 
 const LoginPage = lazy(() => import('./routes/LoginPage').then((m) => ({ default: m.LoginPage })));
 const ForgotPasswordPage = lazy(() =>
@@ -46,6 +45,8 @@ const DepartmentFormPage = lazy(() =>
 const AdminDeletedReportsPage = lazy(() =>
   import('./routes/AdminDeletedReportsPage').then((m) => ({ default: m.AdminDeletedReportsPage })),
 );
+const RolesPage = lazy(() => import('./routes/RolesPage').then((m) => ({ default: m.RolesPage })));
+const RoleFormPage = lazy(() => import('./routes/RoleFormPage').then((m) => ({ default: m.RoleFormPage })));
 
 const router = createBrowserRouter([
   {
@@ -64,7 +65,7 @@ const router = createBrowserRouter([
       {
         path: 'admin',
         element: (
-          <RequireAuth roles={ADMIN_ROLES}>
+          <RequireAuth requirePermission="view_admin_dashboard">
             <TriageQueuePage />
           </RequireAuth>
         ),
@@ -72,7 +73,7 @@ const router = createBrowserRouter([
       {
         path: 'admin/audit',
         element: (
-          <RequireAuth roles={ADMIN_ROLES}>
+          <RequireAuth requirePermission="manage_audit_logs">
             <AuditLogPage />
           </RequireAuth>
         ),
@@ -80,7 +81,7 @@ const router = createBrowserRouter([
       {
         path: 'reports/new',
         element: (
-          <RequireAuth roles={REPORTER_ROLES}>
+          <RequireAuth requirePermission="create_report">
             <ReportCreatePage />
           </RequireAuth>
         ),
@@ -88,7 +89,7 @@ const router = createBrowserRouter([
       {
         path: 'reports/mine',
         element: (
-          <RequireAuth roles={REPORTER_ROLES}>
+          <RequireAuth requirePermission="create_report">
             <MyReportsPage />
           </RequireAuth>
         ),
@@ -112,7 +113,7 @@ const router = createBrowserRouter([
       {
         path: 'admin/users',
         element: (
-          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+          <RequireAuth requirePermission="manage_users">
             <AdminUsersPage />
           </RequireAuth>
         ),
@@ -120,7 +121,7 @@ const router = createBrowserRouter([
       {
         path: 'admin/users/new',
         element: (
-          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+          <RequireAuth requirePermission="manage_users">
             <AdminUserFormPage />
           </RequireAuth>
         ),
@@ -128,7 +129,7 @@ const router = createBrowserRouter([
       {
         path: 'admin/users/:id/edit',
         element: (
-          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+          <RequireAuth requirePermission="manage_users">
             <AdminUserFormPage />
           </RequireAuth>
         ),
@@ -136,7 +137,7 @@ const router = createBrowserRouter([
       {
         path: 'admin/departments',
         element: (
-          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+          <RequireAuth requirePermission="manage_departments">
             <DepartmentsPage />
           </RequireAuth>
         ),
@@ -144,7 +145,7 @@ const router = createBrowserRouter([
       {
         path: 'admin/departments/new',
         element: (
-          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+          <RequireAuth requirePermission="manage_departments">
             <DepartmentFormPage />
           </RequireAuth>
         ),
@@ -152,7 +153,7 @@ const router = createBrowserRouter([
       {
         path: 'admin/departments/:id/edit',
         element: (
-          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+          <RequireAuth requirePermission="manage_departments">
             <DepartmentFormPage />
           </RequireAuth>
         ),
@@ -160,8 +161,32 @@ const router = createBrowserRouter([
       {
         path: 'admin/reports/deleted',
         element: (
-          <RequireAuth roles={ACCOUNT_ADMIN_ROLES}>
+          <RequireAuth requirePermission="delete_report">
             <AdminDeletedReportsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/roles',
+        element: (
+          <RequireAuth requirePermission="manage_roles">
+            <RolesPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/roles/new',
+        element: (
+          <RequireAuth requirePermission="manage_roles">
+            <RoleFormPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/roles/:id/edit',
+        element: (
+          <RequireAuth requirePermission="manage_roles">
+            <RoleFormPage />
           </RequireAuth>
         ),
       },

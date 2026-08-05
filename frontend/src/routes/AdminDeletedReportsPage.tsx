@@ -22,7 +22,9 @@ function DeletedReportRow({ report }: { report: ReportListItem }) {
     <div className="flex items-center justify-between gap-3 rounded-xl border border-ink/10 px-4 py-3">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-heading truncate text-[14.5px] font-bold">{CATEGORY_LABELS[report.category]}</span>
+          <span className="font-heading truncate text-[14.5px] font-bold">
+            {report.department_name ?? (report.category ? CATEGORY_LABELS[report.category] : 'Report')}
+          </span>
           <span className="bg-status-critical/10 text-status-critical rounded-full px-2 py-0.5 text-[11px] font-semibold">
             Deleted {report.deleted_at ? new Date(report.deleted_at).toLocaleDateString() : ''}
           </span>

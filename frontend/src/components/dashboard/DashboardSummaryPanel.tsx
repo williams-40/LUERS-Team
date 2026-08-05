@@ -1,9 +1,10 @@
 ﻿import { useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchDashboardSummary } from '../../lib/dashboard-api';
+import { fetchDepartments } from '../../lib/departments-api';
 import { useReportSocket } from '../../hooks/useReportSocket';
 import { LiveIndicator } from '../ui/LiveIndicator';
-import { CATEGORY_LABELS } from '../../lib/labels';
+import { useAuth } from '../../hooks/useAuth';
 
 const SUMMARY_KEY = ['dashboard', 'summary'];
 const REFRESH_DEBOUNCE_MS = 400;
@@ -17,6 +18,17 @@ const REFRESH_DEBOUNCE_MS = 400;
 export function DashboardSummaryPanel() {
   const queryClient = useQueryClient();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { user } = useAuth();
+  const isSystemAdmin = Boolean(user?.permissions.includes('view_all_reports'));
+  // Heading is a label only — the actual scoping comes from the backend
+  // (get_accessible_reports), this just names what the numbers represent.
+  const { data: departments } = useQuery({
+    queryKey: ['departments', { is_active: true, filter: true }],
+    queryFn: () => fetchDepartments({ is_active: true }),
+    enabled: !isSystemAdmin,
+  });
+  const isDepartmentHead = Boolean(user && departments?.results.some((d) => d.head === user.id));
+  const heading = isSystemAdmin ? 'Campus summary' : isDepartmentHead ? 'Department summary' : 'My reports summary';
 
   const { data, isLoading, isError } = useQuery({
     queryKey: SUMMARY_KEY,
@@ -38,7 +50,7 @@ export function DashboardSummaryPanel() {
   return (
     <div className="mb-6 rounded-xl border border-ink/10 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-ink-secondary text-[12.5px] font-semibold">Campus summary</h2>
+        <h2 className="text-ink-secondary text-[12.5px] font-semibold">{heading}</h2>
         <LiveIndicator status={socketStatus} onReconnect={reconnect} />
       </div>
 
@@ -76,12 +88,12 @@ export function DashboardSummaryPanel() {
               </ul>
             </div>
             <div className="col-span-2">
-              <h3 className="text-ink-muted mb-1 text-[11px] font-semibold uppercase">By category</h3>
+              <h3 className="text-ink-muted mb-1 text-[11px] font-semibold uppercase">By department</h3>
               <ul className="flex flex-col gap-0.5">
-                {data.category_counts.map((c) => (
-                  <li key={c.category} className="flex justify-between">
-                    <span>{CATEGORY_LABELS[c.category] ?? c.category}</span>
-                    <span className="font-semibold">{c.count}</span>
+                {data.department_counts.map((d) => (
+                  <li key={d.department_name ?? 'unassigned'} className="flex justify-between">
+                    <span>{d.department_name ?? 'Unassigned'}</span>
+                    <span className="font-semibold">{d.count}</span>
                   </li>
                 ))}
               </ul>

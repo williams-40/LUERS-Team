@@ -27,6 +27,7 @@ function baseReport(overrides: Partial<ReportListItem> = {}): ReportListItem {
     deleted_at: null,
     department_id: null,
     department_name: null,
+    department_head_id: null,
     ...overrides,
   };
 }

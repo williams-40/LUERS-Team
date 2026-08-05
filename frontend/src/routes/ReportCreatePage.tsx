@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
-import { Category, Urgency } from '../types/domain';
+import { Urgency } from '../types/domain';
 import type { CreateReportInput } from '../types/domain';
 import { createReport, uploadEvidence } from '../lib/reports-api';
 import { getCurrentLocation } from '../lib/geolocation';
@@ -12,27 +12,19 @@ import type { ApiError } from '../lib/api-client';
 import { enqueueReport, OFFLINE_QUEUE_KEY } from '../lib/offline-queue';
 import { Button } from '../components/ui/Button';
 import { PanicButton } from '../components/ui/PanicButton';
-import { CategoryPicker } from '../components/reports/CategoryPicker';
+import { DepartmentPicker } from '../components/reports/DepartmentPicker';
 import { EvidencePicker } from '../components/reports/EvidencePicker';
 import { cn } from '../lib/utils';
 
-const categoryValues = Object.values(Category) as [Category, ...Category[]];
-
-const reportSchema = z
-  .object({
-    category: z.enum(categoryValues, { message: 'Please select a category' }),
-    description: z
-      .string()
-      .trim()
-      .min(10, 'Please add a few more details (at least 10 characters)')
-      .max(2000),
-    is_anonymous: z.boolean(),
-    custom_department: z.string().trim().max(200).optional(),
-  })
-  .refine((data) => data.category !== Category.OTHER || Boolean(data.custom_department), {
-    message: 'Please specify a department when selecting "Other".',
-    path: ['custom_department'],
-  });
+const reportSchema = z.object({
+  department: z.string().min(1, 'Please select a department'),
+  description: z
+    .string()
+    .trim()
+    .min(10, 'Please add a few more details (at least 10 characters)')
+    .max(2000),
+  is_anonymous: z.boolean(),
+});
 
 type ReportFormValues = z.infer<typeof reportSchema>;
 
@@ -59,7 +51,7 @@ export function ReportCreatePage() {
     defaultValues: { is_anonymous: false },
   });
 
-  const category = watch('category');
+  const department = watch('department');
 
   const createMutation = useMutation({ mutationFn: createReport });
   const evidenceMutation = useMutation({
@@ -78,13 +70,10 @@ export function ReportCreatePage() {
     setLocating(false);
 
     const payload: CreateReportInput = {
-      category: values.category,
+      department: values.department,
       description: values.description,
       urgency: mode === 'panic' ? Urgency.PANIC : Urgency.NORMAL,
       is_anonymous: values.is_anonymous,
-      ...(values.category === Category.OTHER && values.custom_department
-        ? { custom_department: values.custom_department }
-        : {}),
       ...(location ?? {}),
     };
 
@@ -184,30 +173,16 @@ export function ReportCreatePage() {
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
-          <span className="text-ink-secondary text-[12.5px] font-semibold">Category</span>
-          <CategoryPicker
-            value={category}
-            onChange={(c) => setValue('category', c, { shouldValidate: true })}
+          <span className="text-ink-secondary text-[12.5px] font-semibold">Department</span>
+          <DepartmentPicker
+            value={department}
+            onChange={(d) => setValue('department', d, { shouldValidate: true })}
           />
-          {errors.category && <p className="text-status-critical text-xs">{errors.category.message}</p>}
+          <p className="text-ink-muted text-xs">
+            Not sure? Pick "Other" — we'll try to route it automatically based on your description.
+          </p>
+          {errors.department && <p className="text-status-critical text-xs">{errors.department.message}</p>}
         </div>
-
-        {category === Category.OTHER && (
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom_department" className="text-ink-secondary text-[12.5px] font-semibold">
-              Which department is this for?
-            </label>
-            <input
-              id="custom_department"
-              type="text"
-              className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-              {...register('custom_department')}
-            />
-            {errors.custom_department && (
-              <p className="text-status-critical text-xs">{errors.custom_department.message}</p>
-            )}
-          </div>
-        )}
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="description" className="text-ink-secondary text-[12.5px] font-semibold">
