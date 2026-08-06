@@ -19,7 +19,12 @@
     "auto_route": "Auto Route",
     "routing_suggestion": "Routing Suggestion",
     "department_transfer": "Department Transfer",
-    "escalate": "Escalate"
+    "escalate": "Escalate",
+    "request_assistance": "Request Assistance",
+    "acknowledge_assistance": "Acknowledge Assistance",
+    "feedback_requested": "Feedback Requested",
+    "submit_feedback": "Submit Feedback",
+    "view_feedback": "View Feedback"
   },
   "theme": {
     "label": "Theme",

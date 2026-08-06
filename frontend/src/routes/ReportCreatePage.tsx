@@ -14,6 +14,7 @@ import { Button } from '../components/ui/Button';
 import { PanicButton } from '../components/ui/PanicButton';
 import { DepartmentPicker } from '../components/reports/DepartmentPicker';
 import { EvidencePicker } from '../components/reports/EvidencePicker';
+import { useToast } from '../lib/toast-context';
 import { cn } from '../lib/utils';
 
 const reportSchema = z.object({
@@ -33,6 +34,7 @@ type Mode = 'panic' | 'detailed';
 export function ReportCreatePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { show } = useToast();
   const [mode, setMode] = useState<Mode>('detailed');
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidenceErrors, setEvidenceErrors] = useState<string[]>([]);
@@ -92,12 +94,18 @@ export function ReportCreatePage() {
         return;
       }
       if (apiError.fieldErrors) {
-        setSubmitError(Object.values(apiError.fieldErrors).flat().join(' '));
+        const message = Object.values(apiError.fieldErrors).flat().join(' ');
+        setSubmitError(message);
+        show(message, 'error');
       } else {
-        setSubmitError(apiError.detail ?? 'Something went wrong. Please try again.');
+        const message = apiError.detail ?? 'Something went wrong. Please try again.';
+        setSubmitError(message);
+        show(message, 'error');
       }
       return;
     }
+
+    show('Report submitted.', 'success');
 
     if (mode === 'detailed' && evidenceFiles.length > 0) {
       for (const file of evidenceFiles) {
@@ -109,6 +117,7 @@ export function ReportCreatePage() {
         } catch {
           // The report itself already exists — don't block navigation on a
           // failed attachment; it can be added again from the detail page.
+          show('Report submitted, but evidence could not be uploaded — add it from the report page.', 'error');
           break;
         }
       }

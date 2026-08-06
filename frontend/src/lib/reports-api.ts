@@ -1,12 +1,14 @@
 import { apiClient } from './api-client';
 import { downloadBlob } from './utils';
 import type {
+  AssistanceRequest,
   Category,
   CreateReportInput,
   Evidence,
   Officer,
   Paginated,
   ReportDetail,
+  ReportFeedback,
   ReportListItem,
   RevealedIdentity,
   Status,
@@ -170,5 +172,55 @@ export async function fetchDeletedReports(
   filters: Pick<ReportQueueFilters, 'page' | 'search'> = {},
 ): Promise<Paginated<ReportListItem>> {
   const { data } = await apiClient.get<Paginated<ReportListItem>>('/reports/deleted/', { params: filters });
+  return data;
+}
+
+export async function requestAssistance(args: {
+  reportId: string;
+  departmentIds: string[];
+  reason: string;
+}): Promise<AssistanceRequest> {
+  const { data } = await apiClient.post<AssistanceRequest>(`/reports/${args.reportId}/request-assistance/`, {
+    departments: args.departmentIds,
+    reason: args.reason,
+  });
+  return data;
+}
+
+export async function acknowledgeAssistance(args: {
+  assistanceRequestId: string;
+  departmentId: string;
+}): Promise<AssistanceRequest> {
+  const { data } = await apiClient.post<AssistanceRequest>(
+    `/reports/assistance-requests/${args.assistanceRequestId}/acknowledge/`,
+    { department_id: args.departmentId },
+  );
+  return data;
+}
+
+export async function submitFeedback(args: {
+  reportId: string;
+  rating: number;
+  comments?: string;
+}): Promise<ReportFeedback> {
+  const { data } = await apiClient.post<ReportFeedback>(`/reports/${args.reportId}/feedback/`, {
+    rating: args.rating,
+    comments: args.comments,
+  });
+  return data;
+}
+
+export async function fetchReportFeedback(reportId: string): Promise<ReportFeedback> {
+  const { data } = await apiClient.get<ReportFeedback>(`/reports/${reportId}/feedback/`);
+  return data;
+}
+
+export async function fetchPendingFeedbackReports(): Promise<{ results: ReportListItem[] }> {
+  const { data } = await apiClient.get<{ results: ReportListItem[] }>('/reports/pending-feedback/');
+  return data;
+}
+
+export async function fetchAllFeedback(page = 1): Promise<Paginated<ReportFeedback>> {
+  const { data } = await apiClient.get<Paginated<ReportFeedback>>('/reports/feedback/', { params: { page } });
   return data;
 }

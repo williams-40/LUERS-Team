@@ -5,6 +5,7 @@ import { Status } from '../../types/domain';
 import type { ReportDetail } from '../../types/domain';
 import type { ApiError } from '../../lib/api-client';
 import { Button } from '../ui/Button';
+import { useToast } from '../../lib/toast-context';
 
 const STATUS_OPTIONS = Object.values(Status);
 
@@ -18,6 +19,7 @@ export function StatusUpdateControl({
   const [selected, setSelected] = useState<Status>(report.status);
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { show } = useToast();
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -29,13 +31,17 @@ export function StatusUpdateControl({
     setConflict(false);
     try {
       await mutation.mutateAsync();
+      show(`Status updated to ${selected.replace('_', ' ')}.`, 'success');
       await onUpdated();
     } catch (err) {
       const apiError = err as ApiError;
       if (apiError.status === 409) {
         setConflict(true);
+        show('This report changed since you loaded it — refresh and try again.', 'error');
       } else {
-        setError(apiError.detail ?? 'Could not update status.');
+        const message = apiError.detail ?? 'Could not update status.';
+        setError(message);
+        show(message, 'error');
       }
     }
   }

@@ -7,6 +7,9 @@ import { StatusUpdateControl } from '../components/reports/StatusUpdateControl';
 import { AssignControl } from '../components/reports/AssignControl';
 import { TransferControl } from '../components/reports/TransferControl';
 import { EscalateControl } from '../components/reports/EscalateControl';
+import { RequestAssistanceControl } from '../components/reports/RequestAssistanceControl';
+import { AssistanceRequestsList } from '../components/reports/AssistanceRequestsList';
+import { FeedbackDisplay } from '../components/reports/FeedbackDisplay';
 import { RevealIdentityControl } from '../components/reports/RevealIdentityControl';
 import { ReportChat } from '../components/reports/ReportChat';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
@@ -34,9 +37,14 @@ export function ReportDetailPage() {
     if (!window.confirm('Delete this report? It will be removed from the queue and can be restored by an admin later.')) {
       return;
     }
-    await deleteMutation.mutateAsync();
-    show('Report deleted.', 'success');
-    navigate('/admin');
+    try {
+      await deleteMutation.mutateAsync();
+      show('Report deleted.', 'success');
+      navigate('/admin');
+    } catch (err) {
+      const apiError = err as ApiError;
+      show(apiError.detail ?? 'Could not delete this report.', 'error');
+    }
   }
 
   const {
@@ -142,6 +150,8 @@ export function ReportDetailPage() {
         </p>
       )}
 
+      <FeedbackDisplay reportId={report.id} />
+
       {canUpdateStatus && <StatusUpdateControl report={report} onUpdated={refetch} />}
 
       {canManageDepartment && <AssignControl report={report} onUpdated={refetch} />}
@@ -149,6 +159,10 @@ export function ReportDetailPage() {
       {canManageDepartment && <TransferControl report={report} onUpdated={refetch} />}
 
       {isDepartmentHead && <EscalateControl report={report} />}
+
+      {canUpdateStatus && <RequestAssistanceControl report={report} onUpdated={refetch} />}
+
+      <AssistanceRequestsList assistanceRequests={report.assistance_requests} onUpdated={refetch} />
 
       {user?.permissions.includes('reveal_identity') && <RevealIdentityControl reportId={report.id} />}
 

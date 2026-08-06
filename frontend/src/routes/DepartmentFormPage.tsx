@@ -14,6 +14,7 @@ import { fetchUsers } from '../lib/admin-users-api';
 import { UserMultiSelect } from '../components/admin/UserMultiSelect';
 import { Button } from '../components/ui/Button';
 import type { ApiError } from '../lib/api-client';
+import { useToast } from '../lib/toast-context';
 
 const departmentSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
@@ -31,6 +32,7 @@ export function DepartmentFormPage() {
   const queryClient = useQueryClient();
   const isEdit = Boolean(id);
   const [serverError, setServerError] = useState<string | null>(null);
+  const { show } = useToast();
 
   // Phase 14: Department Head/Responder is decoupled from the account
   // Role — any active user is eligible (Finance/HR/Library etc. have no
@@ -82,14 +84,18 @@ export function DepartmentFormPage() {
       if (isEdit) {
         const updated = await updateMutation.mutateAsync(values);
         queryClient.setQueryData(['departments', id], updated);
+        show('Department updated.', 'success');
       } else {
         await createMutation.mutateAsync({ ...values, head: values.head || null });
+        show('Department created.', 'success');
       }
       navigate('/admin/departments');
     } catch (err) {
       const apiError = err as ApiError;
       const fieldError = apiError.fieldErrors?.name?.[0] ?? apiError.fieldErrors?.head?.[0] ?? apiError.fieldErrors?.members?.[0];
-      setServerError(fieldError ?? apiError.detail);
+      const message = fieldError ?? apiError.detail;
+      setServerError(message);
+      show(message ?? 'Could not save this department.', 'error');
     }
   }
 
@@ -97,8 +103,15 @@ export function DepartmentFormPage() {
     if (!window.confirm(`Delete "${department?.name}"? This cannot be undone.`)) {
       return;
     }
-    await deleteMutation.mutateAsync();
-    navigate('/admin/departments');
+    try {
+      await deleteMutation.mutateAsync();
+      show('Department deleted.', 'success');
+      navigate('/admin/departments');
+    } catch (err) {
+      const message = (err as ApiError).detail;
+      setServerError(message);
+      show(message ?? 'Could not delete this department.', 'error');
+    }
   }
 
   if (isEdit && isLoadingDepartment) {

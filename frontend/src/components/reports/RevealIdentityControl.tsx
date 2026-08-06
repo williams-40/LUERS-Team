@@ -4,11 +4,13 @@ import { revealIdentity } from '../../lib/reports-api';
 import type { RevealedIdentity } from '../../types/domain';
 import type { ApiError } from '../../lib/api-client';
 import { Button } from '../ui/Button';
+import { useToast } from '../../lib/toast-context';
 
 export function RevealIdentityControl({ reportId }: { reportId: string }) {
   const [confirming, setConfirming] = useState(false);
   const [revealed, setRevealed] = useState<RevealedIdentity | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { show } = useToast();
 
   const mutation = useMutation({
     mutationFn: () => revealIdentity(reportId),
@@ -20,13 +22,15 @@ export function RevealIdentityControl({ reportId }: { reportId: string }) {
       const identity = await mutation.mutateAsync();
       setRevealed(identity);
       setConfirming(false);
+      show('Identity revealed. This has been recorded in the audit log.', 'success');
     } catch (err) {
       const apiError = err as ApiError;
-      setError(
+      const message =
         apiError.status === 404
           ? 'No identity record exists for this report.'
-          : (apiError.detail ?? 'Could not reveal the reporter identity.'),
-      );
+          : (apiError.detail ?? 'Could not reveal the reporter identity.');
+      setError(message);
+      show(message, 'error');
       setConfirming(false);
     }
   }

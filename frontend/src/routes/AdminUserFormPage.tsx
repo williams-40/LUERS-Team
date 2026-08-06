@@ -8,6 +8,7 @@ import { createUser, fetchUser, updateUser } from '../lib/admin-users-api';
 import { RoleSelect } from '../components/admin/RoleSelect';
 import { Button } from '../components/ui/Button';
 import type { ApiError } from '../lib/api-client';
+import { useToast } from '../lib/toast-context';
 
 const createUserSchema = z.object({
   username: z.string().trim().min(1, 'Username is required'),
@@ -41,6 +42,7 @@ function fieldErrorFor(err: unknown, field: string): string | undefined {
 function CreateUserForm() {
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
+  const { show } = useToast();
 
   const {
     register,
@@ -60,12 +62,15 @@ function CreateUserForm() {
     setServerError(null);
     try {
       await createMutation.mutateAsync(values);
+      show('User created.', 'success');
       navigate('/admin/users');
     } catch (err) {
       const apiError = err as ApiError;
       const fieldError =
         fieldErrorFor(err, 'username') ?? fieldErrorFor(err, 'email') ?? fieldErrorFor(err, 'password');
-      setServerError(fieldError ?? apiError.detail);
+      const message = fieldError ?? apiError.detail;
+      setServerError(message);
+      show(message ?? 'Could not create this user.', 'error');
     }
   }
 
@@ -182,6 +187,7 @@ function EditUserForm({ userId }: { userId: string }) {
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const { show } = useToast();
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['admin', 'users', userId],
@@ -222,9 +228,12 @@ function EditUserForm({ userId }: { userId: string }) {
       const updated = await updateMutation.mutateAsync(values);
       queryClient.setQueryData(['admin', 'users', userId], updated);
       setSaved(true);
+      show('User updated.', 'success');
     } catch (err) {
       const apiError = err as ApiError;
-      setServerError(fieldErrorFor(err, 'email') ?? apiError.detail);
+      const message = fieldErrorFor(err, 'email') ?? apiError.detail;
+      setServerError(message);
+      show(message ?? 'Could not save this user.', 'error');
     }
   }
 

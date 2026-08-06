@@ -45,6 +45,9 @@ const DepartmentFormPage = lazy(() =>
 const AdminDeletedReportsPage = lazy(() =>
   import('./routes/AdminDeletedReportsPage').then((m) => ({ default: m.AdminDeletedReportsPage })),
 );
+const AdminFeedbackPage = lazy(() =>
+  import('./routes/AdminFeedbackPage').then((m) => ({ default: m.AdminFeedbackPage })),
+);
 const RolesPage = lazy(() => import('./routes/RolesPage').then((m) => ({ default: m.RolesPage })));
 const RoleFormPage = lazy(() => import('./routes/RoleFormPage').then((m) => ({ default: m.RoleFormPage })));
 
@@ -163,6 +166,14 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth requirePermission="delete_report">
             <AdminDeletedReportsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/feedback',
+        element: (
+          <RequireAuth requirePermission="view_all_reports">
+            <AdminFeedbackPage />
           </RequireAuth>
         ),
       },

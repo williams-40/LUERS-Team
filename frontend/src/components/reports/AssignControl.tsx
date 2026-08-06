@@ -4,6 +4,7 @@ import { assignReport, fetchAssignableOfficers } from '../../lib/reports-api';
 import type { ReportDetail } from '../../types/domain';
 import type { ApiError } from '../../lib/api-client';
 import { Button } from '../ui/Button';
+import { useToast } from '../../lib/toast-context';
 
 export function AssignControl({
   report,
@@ -15,6 +16,7 @@ export function AssignControl({
   const [selected, setSelected] = useState<string>(report.assigned_to ?? '');
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { show } = useToast();
 
   // Scoped to this report's own department (head + members) — replaces
   // the old campus-wide "every security officer" list now that
@@ -34,13 +36,17 @@ export function AssignControl({
     setConflict(false);
     try {
       await mutation.mutateAsync();
+      show('Report assigned.', 'success');
       await onUpdated();
     } catch (err) {
       const apiError = err as ApiError;
       if (apiError.status === 409) {
         setConflict(true);
+        show('This report changed since you loaded it — refresh and try again.', 'error');
       } else {
-        setError(apiError.detail ?? 'Could not assign this report.');
+        const message = apiError.detail ?? 'Could not assign this report.';
+        setError(message);
+        show(message, 'error');
       }
     }
   }

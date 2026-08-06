@@ -1,46 +1,46 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { transferReportDepartment } from '../../lib/reports-api';
+import { requestAssistance } from '../../lib/reports-api';
 import type { ReportDetail } from '../../types/domain';
 import type { ApiError } from '../../lib/api-client';
 import { Button } from '../ui/Button';
-import { DepartmentPicker } from './DepartmentPicker';
+import { DepartmentMultiSelect } from './DepartmentMultiSelect';
 import { useToast } from '../../lib/toast-context';
 
 /**
- * For routine re-routing corrections ("this actually belongs to ICT, not
- * us") — distinct from EscalateControl, which is for exceptional
- * situations needing System Admin intervention, not routine corrections.
+ * Pulls in one or more other departments to help on a report while the
+ * requester's own department keeps ownership — distinct from
+ * TransferControl (moves ownership) and EscalateControl (flags for System
+ * Admin only, no department picker).
  */
-export function TransferControl({
+export function RequestAssistanceControl({
   report,
   onUpdated,
 }: {
   report: ReportDetail;
   onUpdated: () => void | Promise<unknown>;
 }) {
-  const [departmentId, setDepartmentId] = useState<string | undefined>(undefined);
+  const [departmentIds, setDepartmentIds] = useState<string[]>([]);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const { show } = useToast();
 
   const mutation = useMutation({
-    mutationFn: () =>
-      transferReportDepartment({ reportId: report.id, departmentId: departmentId!, reason: reason.trim() || undefined }),
+    mutationFn: () => requestAssistance({ reportId: report.id, departmentIds, reason: reason.trim() }),
   });
 
   async function handleSubmit() {
-    if (!departmentId) return;
+    if (departmentIds.length === 0 || !reason.trim()) return;
     setError(null);
     try {
       await mutation.mutateAsync();
-      show('Report transferred to the new department.', 'success');
+      show('Assistance requested. The selected department(s) have been notified.', 'success');
       setReason('');
-      setDepartmentId(undefined);
+      setDepartmentIds([]);
       await onUpdated();
     } catch (err) {
       const apiError = err as ApiError;
-      const message = apiError.detail ?? 'Could not transfer this report.';
+      const message = apiError.detail ?? 'Could not request assistance.';
       setError(message);
       show(message, 'error');
     }
@@ -48,9 +48,9 @@ export function TransferControl({
 
   return (
     <div className="mb-5 rounded-xl border border-ink/10 p-4">
-      <h2 className="text-ink-secondary mb-3 text-[12.5px] font-semibold">Transfer department</h2>
+      <h2 className="text-ink-secondary mb-3 text-[12.5px] font-semibold">Request assistance</h2>
       <p className="text-ink-muted mb-3 text-xs">
-        Moves the report to a different department and clears its current assignment.
+        Ask other departments for help on this report — you keep ownership; they gain visibility into it.
       </p>
 
       {error && (
@@ -59,18 +59,23 @@ export function TransferControl({
         </p>
       )}
 
-      <DepartmentPicker value={departmentId} onChange={setDepartmentId} />
+      <DepartmentMultiSelect value={departmentIds} onChange={setDepartmentIds} />
 
       <textarea
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        placeholder="Reason (optional)"
+        placeholder="Reason for requesting assistance (required)"
         rows={2}
         className="focus:outline-brand mt-3 w-full rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm outline-2 outline-offset-1 focus:border-transparent"
       />
 
-      <Button size="sm" className="mt-3" onClick={handleSubmit} disabled={mutation.isPending || !departmentId}>
-        {mutation.isPending ? 'Transferring…' : 'Transfer'}
+      <Button
+        size="sm"
+        className="mt-3"
+        onClick={handleSubmit}
+        disabled={mutation.isPending || departmentIds.length === 0 || !reason.trim()}
+      >
+        {mutation.isPending ? 'Requesting…' : 'Request assistance'}
       </Button>
     </div>
   );

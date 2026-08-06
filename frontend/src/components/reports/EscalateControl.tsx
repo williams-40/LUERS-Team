@@ -4,6 +4,7 @@ import { escalateReport } from '../../lib/reports-api';
 import type { ReportDetail } from '../../types/domain';
 import type { ApiError } from '../../lib/api-client';
 import { Button } from '../ui/Button';
+import { useToast } from '../../lib/toast-context';
 
 /**
  * For genuinely exceptional situations needing System Admin intervention
@@ -14,6 +15,7 @@ export function EscalateControl({ report }: { report: ReportDetail }) {
   const [reason, setReason] = useState('');
   const [escalated, setEscalated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { show } = useToast();
 
   const mutation = useMutation({
     mutationFn: () => escalateReport({ reportId: report.id, reason: reason.trim() || undefined }),
@@ -24,9 +26,12 @@ export function EscalateControl({ report }: { report: ReportDetail }) {
     try {
       await mutation.mutateAsync();
       setEscalated(true);
+      show('Escalated. System Admins have been notified.', 'success');
     } catch (err) {
       const apiError = err as ApiError;
-      setError(apiError.detail ?? 'Could not escalate this report.');
+      const message = apiError.detail ?? 'Could not escalate this report.';
+      setError(message);
+      show(message, 'error');
     }
   }
 

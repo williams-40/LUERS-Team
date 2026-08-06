@@ -8,6 +8,7 @@ import { createRole, deleteRole, fetchPermissions, fetchRole, updateRole } from 
 import { Button } from '../components/ui/Button';
 import type { ApiError } from '../lib/api-client';
 import type { Permission } from '../types/domain';
+import { useToast } from '../lib/toast-context';
 
 const roleSchema = z.object({
   slug: z
@@ -29,6 +30,7 @@ export function RoleFormPage() {
   const queryClient = useQueryClient();
   const isEdit = Boolean(id);
   const [serverError, setServerError] = useState<string | null>(null);
+  const { show } = useToast();
 
   const { data: permissions } = useQuery({
     queryKey: ['permissions'],
@@ -84,14 +86,18 @@ export function RoleFormPage() {
       if (isEdit) {
         const updated = await updateMutation.mutateAsync(values);
         queryClient.setQueryData(['roles', id], updated);
+        show('Role updated.', 'success');
       } else {
         await createMutation.mutateAsync(values);
+        show('Role created.', 'success');
       }
       navigate('/admin/roles');
     } catch (err) {
       const apiError = err as ApiError;
       const fieldError = apiError.fieldErrors?.slug?.[0] ?? apiError.fieldErrors?.label?.[0];
-      setServerError(fieldError ?? apiError.detail);
+      const message = fieldError ?? apiError.detail;
+      setServerError(message);
+      show(message ?? 'Could not save this role.', 'error');
     }
   }
 
@@ -101,9 +107,12 @@ export function RoleFormPage() {
     }
     try {
       await deleteMutation.mutateAsync();
+      show('Role deleted.', 'success');
       navigate('/admin/roles');
     } catch (err) {
-      setServerError((err as ApiError).detail);
+      const message = (err as ApiError).detail;
+      setServerError(message);
+      show(message ?? 'Could not delete this role.', 'error');
     }
   }
 

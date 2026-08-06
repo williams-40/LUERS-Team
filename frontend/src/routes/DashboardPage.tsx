@@ -62,6 +62,11 @@ export function DashboardPage() {
               <Button variant="secondary">Roles</Button>
             </Link>
           )}
+          {has('view_all_reports') && (
+            <Link to="/admin/feedback">
+              <Button variant="secondary">Feedback</Button>
+            </Link>
+          )}
         </div>
       )}
 

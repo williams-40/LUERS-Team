@@ -4,6 +4,7 @@ import { Logo } from './Logo';
 import { PendingReportsIndicator } from './PendingReportsIndicator';
 import { InstallPrompt } from './InstallPrompt';
 import { RouteLoadingFallback } from './RouteLoadingFallback';
+import { FeedbackPrompt } from './FeedbackPrompt';
 
 export function AppLayout() {
   return (
@@ -19,6 +20,7 @@ export function AppLayout() {
           <Outlet />
         </Suspense>
       </main>
+      <FeedbackPrompt />
     </div>
   );
 }

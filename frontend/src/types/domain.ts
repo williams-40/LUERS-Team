@@ -130,9 +130,39 @@ export interface ReportListItem {
   department_head_id: string | null;
 }
 
+export interface AssistanceAcknowledgement {
+  id: string;
+  department: string;
+  department_name: string;
+  acknowledged_by_username: string | null;
+  created_at: string;
+}
+
+export interface AssistanceRequest {
+  id: string;
+  report: string;
+  reason: string;
+  requested_by: string | null;
+  requested_by_username: string | null;
+  departments: { id: string; name: string }[];
+  acknowledgements: AssistanceAcknowledgement[];
+  created_at: string;
+}
+
 export interface ReportDetail extends Omit<ReportListItem, 'evidence_count'> {
   metadata: Record<string, unknown>;
   evidence: Evidence[];
+  assistance_requests: AssistanceRequest[];
+}
+
+export interface ReportFeedback {
+  id: string;
+  report_id: string;
+  department_name: string | null;
+  rating: number;
+  comments: string;
+  submitted_by_username: string | null;
+  created_at: string;
 }
 
 export interface CreateReportInput {
@@ -199,6 +229,7 @@ export interface DashboardAnalytics {
     average_resolution_time_hours: number | null;
   }[];
   top_keywords: { keyword: string; count: number }[];
+  feedback: { average_rating: number | null; feedback_count: number };
 }
 
 export const Action = {
@@ -213,6 +244,11 @@ export const Action = {
   ROUTING_SUGGESTION: 'routing_suggestion',
   DEPARTMENT_TRANSFER: 'department_transfer',
   ESCALATE: 'escalate',
+  REQUEST_ASSISTANCE: 'request_assistance',
+  ACKNOWLEDGE_ASSISTANCE: 'acknowledge_assistance',
+  FEEDBACK_REQUESTED: 'feedback_requested',
+  SUBMIT_FEEDBACK: 'submit_feedback',
+  VIEW_FEEDBACK: 'view_feedback',
 } as const;
 export type Action = (typeof Action)[keyof typeof Action];
 
