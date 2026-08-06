@@ -14,9 +14,13 @@ from apps.core.choices import Action, FileType
 
 
 @pytest.mark.django_db
-def test_soft_delete_requires_account_admin():
+def test_soft_delete_requires_system_admin():
+    """
+    Phase 17: report deletion is now System Admin only — ICT Admin lost
+    delete_report (previously it also had this permission).
+    """
     for role_factory in [lambda: UserFactory(role='student'), lambda: UserFactory(role='staff'),
-                          SecurityFactory, ManagementFactory]:
+                          SecurityFactory, ManagementFactory, ICTAdminFactory]:
         user = role_factory()
         report = ReportFactory()
         client = APIClient()
@@ -26,10 +30,7 @@ def test_soft_delete_requires_account_admin():
 
 
 @pytest.mark.django_db
-def test_soft_delete_succeeds_for_ict_admin_and_system_admin():
-    # System Admin sees every report unconditionally; ICT Admin's
-    # visibility (Phase 14) is department-scoped, so they need to be this
-    # report's department head to reach it at all.
+def test_soft_delete_succeeds_for_system_admin_only():
     system_admin = SystemAdminFactory()
     report_for_system_admin = ReportFactory()
     client = APIClient()
@@ -39,21 +40,21 @@ def test_soft_delete_succeeds_for_ict_admin_and_system_admin():
     report_for_system_admin.refresh_from_db()
     assert report_for_system_admin.deleted_at is not None
 
+    # Even as this report's own department head, ICT Admin still can't
+    # delete it — delete_report is no longer department-scoped, it's just
+    # gone from this role entirely.
     ict_admin = ICTAdminFactory()
     department = DepartmentFactory(head=ict_admin)
     report_for_ict_admin = ReportFactory(department=department)
     client.force_authenticate(user=ict_admin)
     response = client.post(f'/api/v1/reports/{report_for_ict_admin.id}/delete/')
-    assert response.status_code == 200
-    report_for_ict_admin.refresh_from_db()
-    assert report_for_ict_admin.deleted_at is not None
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db
 def test_soft_delete_writes_audit_log():
-    admin = ICTAdminFactory()
-    department = DepartmentFactory(head=admin)
-    report = ReportFactory(department=department)
+    admin = SystemAdminFactory()
+    report = ReportFactory()
     client = APIClient()
     client.force_authenticate(user=admin)
     client.post(f'/api/v1/reports/{report.id}/delete/')
@@ -63,9 +64,8 @@ def test_soft_delete_writes_audit_log():
 
 @pytest.mark.django_db
 def test_soft_deleted_report_excluded_from_accessible_reports_and_queue():
-    admin = ICTAdminFactory()
-    department = DepartmentFactory(head=admin)
-    report = ReportFactory(department=department)
+    admin = SystemAdminFactory()
+    report = ReportFactory()
 
     assert report in get_accessible_reports(admin)
 
@@ -96,9 +96,8 @@ def test_soft_deleted_report_excluded_from_students_own_reports():
 
 @pytest.mark.django_db
 def test_delete_is_idempotent_and_second_delete_404s():
-    admin = ICTAdminFactory()
-    department = DepartmentFactory(head=admin)
-    report = ReportFactory(department=department)
+    admin = SystemAdminFactory()
+    report = ReportFactory()
     client = APIClient()
     client.force_authenticate(user=admin)
 
@@ -111,9 +110,8 @@ def test_delete_is_idempotent_and_second_delete_404s():
 
 @pytest.mark.django_db
 def test_restore_round_trip():
-    admin = ICTAdminFactory()
-    department = DepartmentFactory(head=admin)
-    report = ReportFactory(department=department)
+    admin = SystemAdminFactory()
+    report = ReportFactory()
     client = APIClient()
     client.force_authenticate(user=admin)
 
@@ -157,10 +155,9 @@ def test_restore_404s_on_a_report_that_is_not_deleted():
 
 @pytest.mark.django_db
 def test_deleted_list_view_shows_only_soft_deleted_reports():
-    admin = ICTAdminFactory()
-    department = DepartmentFactory(head=admin)
-    deleted_report = ReportFactory(department=department)
-    active_report = ReportFactory(department=department)
+    admin = SystemAdminFactory()
+    deleted_report = ReportFactory()
+    active_report = ReportFactory()
 
     client = APIClient()
     client.force_authenticate(user=admin)

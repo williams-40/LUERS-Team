@@ -45,6 +45,25 @@ class IdentityService:
         return None
 
     @staticmethod
+    def get_reporter_user(report):
+        """
+        Resolve a report's reporter to a real User, for non-anonymous
+        reports only (see ReportDetailSerializer.get_reporter_name/phone) —
+        deliberately separate from reveal_identity/ReportRevealIdentityView,
+        which is the Management-only escrow path for *anonymous* reports
+        and always logs Action.DEANONYMIZE. A non-anonymous reporter
+        already chose to be identified to responders, so this is a plain
+        read with no audit log of its own.
+        """
+        identity = ReportIdentity.objects.filter(report=report).first()
+        if identity is None:
+            return None
+        user_id = IdentityService.get_reporter(identity)
+        if not user_id:
+            return None
+        return User.objects.filter(id=user_id).first()
+
+    @staticmethod
     def is_owner(identity, user):
         """
         Whether `user` is the reporter behind `identity`, checked via the
@@ -136,6 +155,12 @@ class ReportService:
         idempotency_key = validated_data.pop('idempotency_key', None)
         client_created_at = validated_data.pop('client_created_at', None)
 
+        # Not a Report field — required for non-anonymous reports (enforced
+        # in ReportCreateSerializer.validate()) and persisted onto the
+        # reporter's own profile so responders can contact them, rather than
+        # stored per-report.
+        phone_number = (validated_data.pop('phone_number', '') or '').strip()
+
         # Department is now selected directly by the reporter (Phase 14 —
         # replaces the old fixed-Category-with-hardcoded-routing scheme).
         # "Other" gets a shot at keyword-based auto-routing; everything
@@ -166,6 +191,10 @@ class ReportService:
             client_created_at=client_created_at,
         )
         IdentityService.create_identity(report, user)
+
+        if phone_number and user.phone_number != phone_number:
+            user.phone_number = phone_number
+            user.save(update_fields=['phone_number'])
 
         AuditLog.objects.create(
             report=report,

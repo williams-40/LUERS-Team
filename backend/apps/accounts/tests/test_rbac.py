@@ -52,6 +52,7 @@ def test_rbac_matrix():
         'description': 'Test RBAC',
         'urgency': 'normal',
         'is_anonymous': False,
+        'phone_number': '0700000000',
         'latitude': 2.2333,
         'longitude': 32.8999,
     }

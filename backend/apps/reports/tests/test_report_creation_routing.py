@@ -18,6 +18,7 @@ def test_create_report_with_a_real_department_is_user_selected():
         'description': 'The tap in my hostel room is leaking badly',
         'urgency': 'normal',
         'is_anonymous': False,
+        'phone_number': '0700000000',
     })
 
     assert response.status_code == 201
@@ -43,6 +44,7 @@ def test_create_report_under_other_with_high_confidence_auto_routes():
         'description': 'My laptop wifi and password keep failing on the network',
         'urgency': 'normal',
         'is_anonymous': False,
+        'phone_number': '0700000000',
     })
 
     assert response.status_code == 201
@@ -69,6 +71,7 @@ def test_create_report_under_other_with_medium_confidence_stores_suggestion():
         'description': 'Can I borrow this book, please',
         'urgency': 'normal',
         'is_anonymous': False,
+        'phone_number': '0700000000',
     })
 
     assert response.status_code == 201
@@ -95,6 +98,7 @@ def test_create_report_under_other_with_no_match_stays_unclassified():
         'description': 'Something happened and I am not sure who handles this',
         'urgency': 'normal',
         'is_anonymous': False,
+        'phone_number': '0700000000',
     })
 
     assert response.status_code == 201

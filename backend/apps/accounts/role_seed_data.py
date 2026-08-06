@@ -24,7 +24,7 @@ BUILTIN_ROLES = {
     'staff': ('Staff', ['create_report']),
     'security': ('Security Officer', ['view_admin_dashboard', 'manage_audit_logs']),
     'ict_admin': ('ICT Admin', [
-        'view_admin_dashboard', 'manage_audit_logs', 'manage_users', 'manage_departments', 'delete_report',
+        'view_admin_dashboard', 'manage_audit_logs', 'manage_users', 'manage_departments',
     ]),
     'management': ('Management / Escrow', ['view_admin_dashboard', 'manage_audit_logs', 'reveal_identity']),
     'system_admin': ('System Admin', [

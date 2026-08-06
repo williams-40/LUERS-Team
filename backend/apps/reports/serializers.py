@@ -66,6 +66,8 @@ class ReportDetailSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source='department.name', read_only=True, default=None)
     department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
     assistance_requests = AssistanceRequestSerializer(many=True, read_only=True)
+    reporter_name = serializers.SerializerMethodField()
+    reporter_phone = serializers.SerializerMethodField()
 
     class Meta:
         model = Report
@@ -76,7 +78,27 @@ class ReportDetailSerializer(serializers.ModelSerializer):
             'evidence',
             'department_id', 'department_name', 'department_head_id',
             'assistance_requests',
+            'reporter_name', 'reporter_phone',
         ]
+
+    def _reporter(self, obj):
+        # Anonymous reports never expose reporter identity here — that's
+        # what ReportRevealIdentityView (Management-only escrow) is for.
+        if obj.is_anonymous:
+            return None
+        from apps.reports.services import IdentityService
+        return IdentityService.get_reporter_user(obj)
+
+    def get_reporter_name(self, obj):
+        user = self._reporter(obj)
+        if not user:
+            return None
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        return full_name or user.username
+
+    def get_reporter_phone(self, obj):
+        user = self._reporter(obj)
+        return user.phone_number if user else None
 
 
 class ReportCreateSerializer(serializers.ModelSerializer):
@@ -92,6 +114,11 @@ class ReportCreateSerializer(serializers.ModelSerializer):
 
     department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.filter(is_active=True))
 
+    # Not a Report field — captured here only to require/persist it onto the
+    # reporter's own profile (see ReportService.create_report). Write-only,
+    # never echoed back on a report.
+    phone_number = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=15)
+
     class Meta:
         model = Report
         fields = [
@@ -100,6 +127,7 @@ class ReportCreateSerializer(serializers.ModelSerializer):
             'description',
             'urgency',
             'is_anonymous',
+            'phone_number',
             'latitude',
             'longitude',
             'location_accuracy',
@@ -132,10 +160,16 @@ class ReportCreateSerializer(serializers.ModelSerializer):
             except ValueError as e:
                 raise serializers.ValidationError({'evidence': str(e)})
 
+        if not attrs.get('is_anonymous') and not attrs.get('phone_number', '').strip():
+            raise serializers.ValidationError(
+                {'phone_number': 'Phone number is required for non-anonymous reports.'}
+            )
+
         return attrs
 
     def create(self, validated_data):
         evidence_files = validated_data.pop('evidence', [])
+        validated_data.pop('phone_number', None)
         validated_data.setdefault('urgency', 'normal')
 
         request = self.context.get('request')
