@@ -51,6 +51,11 @@ class Action(models.TextChoices):
     ROUTING_SUGGESTION = 'routing_suggestion', 'Routing Suggestion'
     DEPARTMENT_TRANSFER = 'department_transfer', 'Department Transfer'
     ESCALATE = 'escalate', 'Escalate'
+    REQUEST_ASSISTANCE = 'request_assistance', 'Request Assistance'
+    ACKNOWLEDGE_ASSISTANCE = 'acknowledge_assistance', 'Acknowledge Assistance'
+    FEEDBACK_REQUESTED = 'feedback_requested', 'Feedback Requested'
+    SUBMIT_FEEDBACK = 'submit_feedback', 'Submit Feedback'
+    VIEW_FEEDBACK = 'view_feedback', 'View Feedback'
 
 class SyncOrigin(models.TextChoices):
     LIVE = 'live', 'Live'

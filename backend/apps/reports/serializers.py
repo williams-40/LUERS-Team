@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from apps.reports.models import Report, Evidence, ReportIdentity, Department
 from apps.core.choices import Urgency, Status
 from apps.reports.validators import validate_evidence_file
+from apps.reports.serializers_assistance import AssistanceRequestSerializer
 
 User = get_user_model()
 
@@ -64,6 +65,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
     department_id = serializers.UUIDField(source='department.id', read_only=True, default=None)
     department_name = serializers.CharField(source='department.name', read_only=True, default=None)
     department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
+    assistance_requests = AssistanceRequestSerializer(many=True, read_only=True)
 
     class Meta:
         model = Report
@@ -73,6 +75,7 @@ class ReportDetailSerializer(serializers.ModelSerializer):
             'assigned_to', 'assigned_to_username', 'is_anonymous', 'metadata', 'created_at', 'updated_at',
             'evidence',
             'department_id', 'department_name', 'department_head_id',
+            'assistance_requests',
         ]
 
 

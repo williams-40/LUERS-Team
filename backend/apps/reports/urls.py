@@ -7,6 +7,8 @@ from apps.reports.views import (
     ReportAssignableOfficersView, ReportTransferView, ReportEscalateView,
 )
 from apps.reports.views_bulk import BulkStatusUpdateView, BulkAssignView
+from apps.reports.views_assistance import AssistanceRequestCreateView, AssistanceRequestAcknowledgeView
+from apps.reports.views_feedback import ReportFeedbackView, PendingFeedbackListView, AdminFeedbackListView
 
 urlpatterns = [
     path('', ReportListView.as_view(), name='report_list'),
@@ -16,12 +18,17 @@ urlpatterns = [
     path('export/', ReportExportView.as_view(), name='report_export'),
     path('bulk/status/', BulkStatusUpdateView.as_view(), name='report_bulk_status'),
     path('bulk/assign/', BulkAssignView.as_view(), name='report_bulk_assign'),
+    path('pending-feedback/', PendingFeedbackListView.as_view(), name='report_pending_feedback'),
+    path('feedback/', AdminFeedbackListView.as_view(), name='report_feedback_list'),
+    path('assistance-requests/<uuid:id>/acknowledge/', AssistanceRequestAcknowledgeView.as_view(), name='assistance_request_acknowledge'),
     path('<uuid:id>/', ReportDetailView.as_view(), name='report_detail'),
     path('<uuid:id>/status/', ReportStatusUpdateView.as_view(), name='report_status'),
     path('<uuid:id>/assign/', ReportAssignView.as_view(), name='report_assign'),
     path('<uuid:id>/assignable-officers/', ReportAssignableOfficersView.as_view(), name='report_assignable_officers'),
     path('<uuid:id>/transfer/', ReportTransferView.as_view(), name='report_transfer'),
     path('<uuid:id>/escalate/', ReportEscalateView.as_view(), name='report_escalate'),
+    path('<uuid:id>/request-assistance/', AssistanceRequestCreateView.as_view(), name='report_request_assistance'),
+    path('<uuid:id>/feedback/', ReportFeedbackView.as_view(), name='report_feedback'),
     path('<uuid:id>/evidence/', EvidenceUploadView.as_view(), name='report_evidence'),
     path('<uuid:id>/reveal/', ReportRevealIdentityView.as_view(), name='report_reveal'),
     path('<uuid:id>/delete/', ReportDeleteView.as_view(), name='report_delete'),

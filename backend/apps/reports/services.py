@@ -1,11 +1,14 @@
 ﻿from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from apps.reports.models import Report, Evidence, ReportIdentity, Department
-from apps.core.choices import Action, Channel, SyncOrigin
+from apps.reports.models import (
+    Report, Evidence, ReportIdentity, Department,
+    AssistanceRequest, AssistanceAcknowledgement, ReportFeedback,
+)
+from apps.core.choices import Action, Channel, SyncOrigin, Status
 from apps.audit.models import AuditLog
 from apps.notifications.models import Notification, Message
 from apps.notifications.services import NotificationService
@@ -286,6 +289,19 @@ class ReportService:
             sync_origin=sync_origin,
         )
 
+        if new_status == Status.RESOLVED:
+            # Marks the moment a feedback request is effectively generated
+            # for the reporter — see ReportService.submit_feedback and
+            # get_pending_feedback_reports, which surface it client-side.
+            AuditLog.objects.create(
+                report=report,
+                actor=user,
+                action=Action.FEEDBACK_REQUESTED,
+                ip_address=ip_address,
+                client_timestamp=client_timestamp,
+                sync_origin=sync_origin,
+            )
+
         Notification.objects.create(
             recipient=None,
             report=report,
@@ -386,6 +402,101 @@ class ReportService:
                 sent_at=timezone.now(),
             )
         return report
+
+    @staticmethod
+    @transaction.atomic
+    def request_assistance(report, departments, reason, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
+        """
+        The report's own department keeps ownership; `departments` (other
+        departments) just gain visibility into it — see
+        get_accessible_reports' assistance-based union. Unlike `escalate`,
+        this notifies the involved departments directly (not System Admins)
+        and does broadcast on commit, since it's meant to surface live in
+        an assisting department's queue right away.
+        """
+        assistance_request = AssistanceRequest.objects.create(report=report, requested_by=actor, reason=reason)
+        assistance_request.departments.set(departments)
+
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.REQUEST_ASSISTANCE,
+            after_state={'departments': [d.name for d in departments], 'reason': reason},
+            ip_address=ip_address,
+            sync_origin=sync_origin,
+        )
+
+        for department in departments:
+            ReportService._notify_department(report, department)
+
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
+        return assistance_request
+
+    @staticmethod
+    @transaction.atomic
+    def acknowledge_assistance(assistance_request, department, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
+        """One acknowledgement per department per request — records the first responder from that department to respond."""
+        acknowledgement, created = AssistanceAcknowledgement.objects.get_or_create(
+            assistance_request=assistance_request,
+            department=department,
+            defaults={'acknowledged_by': actor},
+        )
+        if not created:
+            return acknowledgement
+
+        AuditLog.objects.create(
+            report=assistance_request.report,
+            actor=actor,
+            action=Action.ACKNOWLEDGE_ASSISTANCE,
+            after_state={'department': department.name},
+            ip_address=ip_address,
+            sync_origin=sync_origin,
+        )
+
+        if assistance_request.requested_by:
+            Notification.objects.create(
+                recipient=assistance_request.requested_by,
+                report=assistance_request.report,
+                channel=Channel.WEBSOCKET,
+                sent_at=timezone.now(),
+            )
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(assistance_request.report))
+        return acknowledgement
+
+    @staticmethod
+    @transaction.atomic
+    def submit_feedback(report, user, rating, comments='', ip_address=None, sync_origin=SyncOrigin.LIVE):
+        """
+        Only the report's own reporter (via reporter_hash — see
+        IdentityService.is_owner) may submit feedback, only once, and only
+        once the report is Resolved. Auto-closes through the existing
+        update_status path so resolved->closed gets its own STATUS_UPDATE
+        audit entry for free, rather than duplicating that logic here.
+        """
+        if report.status != Status.RESOLVED:
+            raise ValidationError({'error': 'This report is not awaiting feedback.'})
+        if hasattr(report, 'feedback'):
+            raise ValidationError({'error': 'Feedback has already been submitted for this report.'})
+
+        identity = ReportIdentity.objects.filter(report=report).first()
+        if not IdentityService.is_owner(identity, user):
+            raise PermissionDenied("Only this report's reporter can submit feedback.")
+
+        feedback = ReportFeedback.objects.create(
+            report=report, submitted_by=user, rating=rating, comments=comments,
+        )
+
+        AuditLog.objects.create(
+            report=report,
+            actor=user,
+            action=Action.SUBMIT_FEEDBACK,
+            after_state={'rating': rating},
+            ip_address=ip_address,
+            sync_origin=sync_origin,
+        )
+
+        ReportService.update_status(report, Status.CLOSED, user, ip_address=ip_address, sync_origin=sync_origin)
+        return feedback
 
     @staticmethod
     @transaction.atomic
@@ -517,8 +628,14 @@ def get_accessible_reports(user, include_deleted=False):
       report their department owns ("Responders... should only View
       reports assigned to them... not... reports assigned to other
       responders").
-    - Everyone else (students/staff, the actual reporters) sees only
-      their own non-anonymous reports.
+    - Additionally, and regardless of the above (unless already covered by
+      System Admin's blanket access): every user always sees the reports
+      *they personally filed* (own non-anonymous reports, via
+      reporter_hash) — a department head/member is also always a
+      potential reporter and must not lose visibility into their own
+      submitted reports just because they also have a department role.
+    - Also additionally: a department that's been asked for assistance on
+      a report (see AssistanceRequest) gains visibility into it too.
 
     Soft-deleted reports (deleted_at set) are excluded by default for
     everyone, including System Admin — they're only visible via
@@ -537,11 +654,43 @@ def get_accessible_reports(user, include_deleted=False):
             if dept_as_member.exists():
                 queryset = Report.objects.filter(department__in=dept_as_member, assigned_to=user)
             else:
-                # Students/staff: only own non‑anonymous reports
-                reporter_hash = EncryptionService.hash_for_lookup(user.id)
-                identities = ReportIdentity.objects.filter(reporter_hash=reporter_hash)
-                report_ids = identities.values_list('report_id', flat=True)
-                queryset = Report.objects.filter(id__in=report_ids, is_anonymous=False)
+                queryset = Report.objects.none()
+
+        # Own-report access (bug fix, Phase 16): every non-admin user can
+        # always see the reports *they personally filed* (own non-anonymous
+        # reports, via reporter_hash), regardless of which branch above
+        # applied. This used to be reachable only through the branch above's
+        # final `else` — i.e. only for a user with *no* department
+        # affiliation at all — which silently made it dead code for every
+        # seeded account once Phase 15's department-coverage population
+        # made every active user a member of some department: a department
+        # head/member could no longer see their own submitted reports.
+        # Discovered live while verifying the Phase 16 feedback flow.
+        reporter_hash = EncryptionService.hash_for_lookup(user.id)
+        own_ids = set(
+            Report.objects.filter(
+                id__in=ReportIdentity.objects.filter(reporter_hash=reporter_hash).values_list('report_id', flat=True),
+                is_anonymous=False,
+            ).values_list('id', flat=True)
+        )
+
+        # Assistance-based access (Phase 16): a department that's been
+        # asked for help on a report gains visibility into it, regardless
+        # of which branch above applied.
+        user_departments = Department.objects.filter(Q(head=user) | Q(members=user)).distinct()
+        assisted_ids = set(
+            Report.objects.filter(assistance_requests__departments__in=user_departments)
+            .values_list('id', flat=True)
+        ) if user_departments.exists() else set()
+
+        extra_ids = own_ids | assisted_ids
+        if extra_ids:
+            # Materialize both sides into plain id sets rather than combining
+            # querysets with `|` — Django raises "Cannot combine a unique
+            # query with a non-unique query" when one side carries an
+            # implicit DISTINCT from the M2M join and the other doesn't.
+            base_ids = set(queryset.values_list('id', flat=True))
+            queryset = Report.objects.filter(id__in=base_ids | extra_ids)
 
     if include_deleted:
         return queryset
@@ -573,6 +722,20 @@ def get_accessible_audit_logs(user):
     return AuditLog.objects.none()
 
 
+def get_pending_feedback_reports(user):
+    """
+    Reports the caller personally reported (via reporter_hash — deliberately
+    NOT get_accessible_reports, which is role-based and would leak other
+    people's resolved reports into e.g. a department head's own "give
+    feedback" list) that are Resolved and don't have feedback yet.
+    """
+    reporter_hash = EncryptionService.hash_for_lookup(user.id)
+    report_ids = ReportIdentity.objects.filter(reporter_hash=reporter_hash).values_list('report_id', flat=True)
+    return Report.objects.filter(
+        id__in=report_ids, status=Status.RESOLVED, feedback__isnull=True, deleted_at__isnull=True,
+    )
+
+
 def is_department_head_or_system_admin(user, report):
     """
     Who may assign/reassign/transfer a report, or receive its escalation:
@@ -590,3 +753,13 @@ def is_department_member_or_head(user, department):
     if department.head_id == user.id:
         return True
     return department.members.filter(id=user.id).exists()
+
+
+def can_request_assistance(user, report):
+    """
+    Who may request another department's help on a report: its assigned
+    responder, its department head, or System Admin — broader than
+    transfer/escalate (head-only), since it's the responder actually
+    handling the case who's most likely to know help is needed.
+    """
+    return is_department_head_or_system_admin(user, report) or report.assigned_to_id == user.id

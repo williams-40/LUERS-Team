@@ -46,6 +46,36 @@ def test_department_member_sees_only_reports_assigned_to_them():
 
 
 @pytest.mark.django_db
+def test_department_head_and_member_still_see_their_own_filed_reports():
+    """
+    Regression test (Phase 16): a department head/member is also a
+    potential reporter, and must see reports they personally filed even
+    though those reports aren't assigned to them or in a department they
+    head/belong to. Previously this fell through to the function's final
+    `else` branch, which only ever ran for a user with *zero* department
+    affiliation — so it silently broke for every head/member the moment
+    they filed a report unrelated to their own department (found live
+    while verifying the Phase 16 feedback flow, once every seeded user had
+    a department membership from Phase 15's population pass).
+    """
+    from apps.reports.services import IdentityService
+
+    head = SecurityFactory()
+    DepartmentFactory(head=head)  # unrelated department the head heads
+    head_own_report = ReportFactory(department=DepartmentFactory(), is_anonymous=False)
+    IdentityService.create_identity(head_own_report, head)
+
+    department = DepartmentFactory()
+    member = UserFactory(role='staff')
+    department.members.add(member)
+    member_own_report = ReportFactory(department=DepartmentFactory(), is_anonymous=False)
+    IdentityService.create_identity(member_own_report, member)
+
+    assert head_own_report in get_accessible_reports(head)
+    assert member_own_report in get_accessible_reports(member)
+
+
+@pytest.mark.django_db
 def test_user_with_no_department_and_not_system_admin_sees_only_own_reports():
     from apps.reports.services import IdentityService
     reporter = UserFactory(role='student')

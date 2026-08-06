@@ -82,7 +82,7 @@ class ReportListView(generics.ListAPIView):
             except ValueError:
                 pass
 
-        return queryset.order_by('updated_at')
+        return queryset.order_by('-created_at')
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
@@ -473,7 +473,7 @@ class MyReportsView(generics.ListAPIView):
 
     def get_queryset(self):
         from apps.reports.services import get_accessible_reports
-        return get_accessible_reports(self.request.user)
+        return get_accessible_reports(self.request.user).order_by('-created_at')
 
 
 class SyncView(APIView):

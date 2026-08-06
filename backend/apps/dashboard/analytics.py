@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from apps.audit.models import AuditLog
 from apps.core.choices import Action
+from apps.reports.models import ReportFeedback
 from apps.reports.services import get_accessible_reports
 
 # Adjustable defaults, not a hard requirement from any spec — how long a
@@ -143,6 +144,11 @@ def _top_keywords(queryset, limit=10):
     return [{'keyword': word, 'count': count} for word, count in top]
 
 
+def _average_feedback_rating(queryset):
+    result = ReportFeedback.objects.filter(report__in=queryset).aggregate(avg=Avg('rating'), count=Count('id'))
+    return {'average_rating': result['avg'], 'feedback_count': result['count']}
+
+
 def compute_dashboard_analytics(user):
     queryset = get_accessible_reports(user)
     return {
@@ -156,4 +162,5 @@ def compute_dashboard_analytics(user):
         'responder_workload': _responder_workload(queryset),
         'responder_performance': _responder_performance(queryset),
         'top_keywords': _top_keywords(queryset),
+        'feedback': _average_feedback_rating(queryset),
     }
