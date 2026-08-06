@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { submitFeedback } from '../../lib/reports-api';
 import type { ReportListItem } from '../../types/domain';
 import type { ApiError } from '../../lib/api-client';
@@ -14,10 +15,12 @@ export function FeedbackModal({
   report,
   onSubmitted,
   onDismiss,
+  onViewReport,
 }: {
   report: ReportListItem;
   onSubmitted: () => void;
   onDismiss: () => void;
+  onViewReport: () => void;
 }) {
   const [rating, setRating] = useState(0);
   const [comments, setComments] = useState('');
@@ -43,11 +46,21 @@ export function FeedbackModal({
     }
   }
 
+  const shortId = report.id.slice(0, 8).toUpperCase();
+
   return (
     <Modal title="How did we do?" onClose={onDismiss}>
-      <p className="text-ink-muted mb-4 text-sm">
-        Your report has been resolved. Your feedback helps us improve the emergency reporting service.
+      <p className="text-ink mb-1 text-sm font-semibold">Report #{shortId} has been marked as Resolved.</p>
+      <p className="text-ink-muted mb-3 text-sm">
+        Your feedback helps us improve the quality of emergency response services provided by the university.
       </p>
+      <Link
+        to={`/reports/${report.id}`}
+        onClick={onViewReport}
+        className="text-brand mb-4 inline-block text-sm font-semibold hover:underline"
+      >
+        View report
+      </Link>
 
       {error && (
         <p role="alert" className="bg-status-critical/10 text-status-critical mb-3 rounded-lg px-3 py-2 text-sm">

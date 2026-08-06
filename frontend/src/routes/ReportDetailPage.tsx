@@ -10,6 +10,7 @@ import { EscalateControl } from '../components/reports/EscalateControl';
 import { RequestAssistanceControl } from '../components/reports/RequestAssistanceControl';
 import { AssistanceRequestsList } from '../components/reports/AssistanceRequestsList';
 import { FeedbackDisplay } from '../components/reports/FeedbackDisplay';
+import { ReporterInfoSection } from '../components/reports/ReporterInfoSection';
 import { RevealIdentityControl } from '../components/reports/RevealIdentityControl';
 import { ReportChat } from '../components/reports/ReportChat';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
@@ -151,6 +152,8 @@ export function ReportDetailPage() {
       )}
 
       <FeedbackDisplay reportId={report.id} />
+
+      {canUpdateStatus && <ReporterInfoSection report={report} />}
 
       {canUpdateStatus && <StatusUpdateControl report={report} onUpdated={refetch} />}
 

@@ -153,6 +153,8 @@ export interface ReportDetail extends Omit<ReportListItem, 'evidence_count'> {
   metadata: Record<string, unknown>;
   evidence: Evidence[];
   assistance_requests: AssistanceRequest[];
+  reporter_name: string | null;
+  reporter_phone: string | null;
 }
 
 export interface ReportFeedback {
@@ -170,6 +172,7 @@ export interface CreateReportInput {
   description: string;
   urgency: Urgency;
   is_anonymous: boolean;
+  phone_number?: string;
   latitude?: number;
   longitude?: number;
   location_accuracy?: number;
