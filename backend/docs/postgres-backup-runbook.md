@@ -8,10 +8,8 @@ provider's connection details rather than starting over; the underlying
 
 ## Sensitivity note
 
-`ReportIdentity.encrypted_reporter_ref` stays Fernet-ciphertext inside a
-backup file (see [`identity-escrow-key-rotation.md`](identity-escrow-key-rotation.md)),
-but most of the rest of the database — `Report.description`, location
-data, usernames, audit logs — is plaintext. **A backup file needs the same
+The database is plaintext throughout (`Report.description`, `Report.reporter`,
+location data, usernames, audit logs). **A backup file needs the same
 access-control rigor as the live database, not less.** Don't email dumps,
 don't leave them in a world-readable folder, don't commit them (the
 `backend/backups/` directory used below is gitignored).
@@ -86,6 +84,5 @@ not something `backup_db.ps1` sets up on its own:
   months.
 - Delete backups past retention the same way any other stale file would be
   cleaned up — there's no automated purge for `backend/backups/` here,
-  matching how `purge_deleted_reports` (see
-  [`identity-escrow-key-rotation.md`](identity-escrow-key-rotation.md))
-  is also a manually/cron-run command rather than a beat schedule.
+  matching how `purge_deleted_reports` is also a manually/cron-run command
+  rather than a beat schedule.

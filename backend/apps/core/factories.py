@@ -1,6 +1,6 @@
 import factory
 from faker import Faker
-from apps.reports.models import Report, Evidence, ReportIdentity, Department
+from apps.reports.models import Report, Evidence, Department
 from apps.core.choices import Category, Urgency, Status, Role
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -60,10 +60,6 @@ class ReportFactory(factory.django.DjangoModelFactory):
     description = factory.LazyAttribute(lambda _: fake.sentence())
     urgency = Urgency.NORMAL
     status = Status.NEW
-    is_anonymous = False
     latitude = 2.2333
     longitude = 32.8999
     assigned_to = None
-
-class AnonymousReportFactory(ReportFactory):
-    is_anonymous = True

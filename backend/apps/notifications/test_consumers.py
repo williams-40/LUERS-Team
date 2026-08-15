@@ -4,9 +4,8 @@ from channels.testing import WebsocketCommunicator
 from rest_framework_simplejwt.tokens import AccessToken
 from apps.notifications.consumers import ReportConsumer
 from apps.notifications.models import Message
-from apps.core.factories import UserFactory, SecurityFactory, ReportFactory, AnonymousReportFactory, DepartmentFactory
+from apps.core.factories import UserFactory, SecurityFactory, ReportFactory, DepartmentFactory
 from apps.core.choices import Status
-from apps.reports.services import IdentityService
 
 
 def token_for(user):
@@ -99,8 +98,7 @@ async def test_non_admin_without_report_id_does_not_join_general_group():
 @pytest.mark.django_db(transaction=True)
 async def test_reporter_joins_own_report_group_via_report_id():
     student = await _acreate(UserFactory, role='student')
-    report = await _acreate(ReportFactory, is_anonymous=False)
-    await _acreate(IdentityService.create_identity, report, student)
+    report = await _acreate(ReportFactory, reporter=student)
 
     communicator, connected = await connect(f'token={token_for(student)}&report_id={report.id}')
     assert connected is True

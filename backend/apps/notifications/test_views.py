@@ -2,7 +2,6 @@ import pytest
 from rest_framework.test import APIClient
 from apps.core.factories import UserFactory, SecurityFactory, SystemAdminFactory, ReportFactory, DepartmentFactory
 from apps.notifications.models import Message
-from apps.reports.services import IdentityService
 
 
 @pytest.mark.django_db
@@ -83,8 +82,7 @@ def test_unrelated_student_cannot_list_messages():
 @pytest.mark.django_db
 def test_reporter_can_list_their_own_report_messages():
     student = UserFactory(role='student')
-    report = ReportFactory(is_anonymous=False)
-    IdentityService.create_identity(report, student)
+    report = ReportFactory(reporter=student)
 
     client = APIClient()
     client.force_authenticate(user=student)

@@ -15,11 +15,11 @@ from apps.reports.serializers import (
     ReportTransferSerializer, ReportEscalateSerializer,
 )
 from apps.reports.services import (
-    ReportService, IdentityService, MessageService, get_accessible_reports, filter_reports,
+    ReportService, MessageService, get_accessible_reports, filter_reports,
     is_department_head_or_system_admin, is_department_member_or_head, can_upload_evidence,
 )
 from apps.reports.validators import validate_evidence_file
-from apps.accounts.permissions import IsStudentOrStaff, IsManagement, IsAdminTier, CanDeleteReport
+from apps.accounts.permissions import IsStudentOrStaff, IsAdminTier, CanDeleteReport
 from apps.core.export import csv_response, pdf_response
 from apps.core.pagination import StandardPagination
 from apps.reports.serializers import SyncRequestSerializer, SyncResultSerializer
@@ -39,7 +39,7 @@ def get_client_ip(request):
 class ReportCreateView(generics.CreateAPIView):
     """
     POST /api/v1/reports/
-    Submit a report (panic or detailed). Supports is_anonymous flag.
+    Submit a report (panic or detailed).
     Rate-limited to 5 reports per hour per user.
     """
     serializer_class = ReportCreateSerializer
@@ -112,14 +112,14 @@ class ReportExportView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminTier]
 
     HEADER = [
-        'ID', 'Category', 'Status', 'Urgency', 'Anonymous', 'Department',
+        'ID', 'Category', 'Status', 'Urgency', 'Reporter', 'Department',
         'Assigned To', 'Evidence Count', 'Created At', 'Updated At',
     ]
 
     def get(self, request):
         queryset = get_accessible_reports(request.user)
         queryset = filter_reports(queryset, request.query_params)
-        queryset = queryset.select_related('department', 'assigned_to').prefetch_related('evidence').order_by('-created_at')
+        queryset = queryset.select_related('department', 'assigned_to', 'reporter').prefetch_related('evidence').order_by('-created_at')
 
         rows = [
             [
@@ -127,7 +127,7 @@ class ReportExportView(APIView):
                 r.category,
                 r.status,
                 r.urgency,
-                r.is_anonymous,
+                r.reporter.username if r.reporter else '',
                 r.department.name if r.department else '',
                 r.assigned_to.username if r.assigned_to else '',
                 len(r.evidence.all()),
@@ -162,13 +162,6 @@ class ReportDetailView(generics.RetrieveAPIView):
         raise PermissionDenied("You do not have access to this report.")
 
     def retrieve(self, request, *args, **kwargs):
-        # No extra is_anonymous gate needed beyond get_object()'s
-        # get_accessible_reports() check above: that already only returns
-        # a reporter's own *non*-anonymous reports (see
-        # apps.reports.services.get_accessible_reports), so anyone who
-        # reaches this point either legitimately owns the report or is
-        # its department head/assigned responder/System Admin — all of
-        # whom are meant to see anonymous report content too.
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
@@ -370,50 +363,13 @@ class EvidenceUploadView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-class ReportRevealIdentityView(APIView):
-    """
-    POST /api/v1/reports/{id}/reveal/
-    Decrypt and return the reporter's identity. Restricted to Management
-    (the Escrow Authority) since deanonymization is that role's purpose.
-    Logs a 'deanonymize' audit entry regardless of whether an identity
-    is found, capturing who attempted the reveal.
-    """
-    permission_classes = [permissions.IsAuthenticated, IsManagement]
-
-    def post(self, request, id):
-        report = get_object_or_404(Report, id=id)
-        ip = get_client_ip(request)
-
-        reporter = IdentityService.reveal_identity(
-            report,
-            request.user,
-            ip_address=ip,
-            sync_origin=SyncOrigin.LIVE,
-        )
-
-        if reporter is None:
-            return Response(
-                {'error': 'No identity record exists for this report.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        return Response({
-            'reporter_id': str(reporter.id),
-            'username': reporter.username,
-            'email': reporter.email,
-            'university_id': reporter.university_id,
-        })
-
-
 class ReportDeleteView(APIView):
     """
     POST /api/v1/reports/{id}/delete/
     Soft-deletes a report (sets deleted_at) — excludes it from the triage
     queue, dashboards, search, and every reporter's own view, but keeps the
-    row (and its Evidence/ReportIdentity) intact until purge_deleted_reports
-    hard-deletes it after the retention window. Account-admin only (not
-    Management — that's the escrow-reveal governance role, a separate
-    concern from day-to-day account/report administration).
+    row (and its Evidence) intact until purge_deleted_reports hard-deletes
+    it after the retention window. Account-admin only.
     """
     permission_classes = [permissions.IsAuthenticated, CanDeleteReport]
 

@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from apps.reports.serializers import ReportListSerializer
-from apps.reports.services import ReportService, IdentityService
+from apps.reports.services import ReportService
 from apps.core.choices import SyncOrigin
 from apps.reports.models import Report
 from apps.notifications.models import Message

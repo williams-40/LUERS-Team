@@ -2,7 +2,6 @@ import pytest
 from rest_framework.test import APIClient
 from apps.core.factories import SecurityFactory, SystemAdminFactory, ReportFactory, DepartmentFactory
 from apps.core.choices import Status
-from apps.reports.services import IdentityService
 
 # These tests are about the search/filter logic itself, not access
 # scoping — the acting user is System Admin throughout (sees everything
@@ -115,8 +114,7 @@ def test_search_combines_with_status_filter():
 def test_search_does_not_expose_reporter_identity():
     system_admin = SystemAdminFactory()
     reporter = SecurityFactory(username='real_reporter_name')
-    report = ReportFactory(is_anonymous=False, description='some incident')
-    IdentityService.create_identity(report, reporter)
+    report = ReportFactory(reporter=reporter, description='some incident')
 
     client = APIClient()
     client.force_authenticate(user=system_admin)

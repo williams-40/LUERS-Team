@@ -2,7 +2,7 @@
 from apps.reports.views import (
     ReportCreateView, ReportListView, ReportDetailView,
     ReportStatusUpdateView, ReportAssignView, EvidenceUploadView,
-    MyReportsView, SyncView, ReportRevealIdentityView, ReportExportView,
+    MyReportsView, SyncView, ReportExportView,
     ReportDeleteView, ReportRestoreView, ReportDeletedListView,
     ReportAssignableOfficersView, ReportTransferView, ReportEscalateView,
 )
@@ -30,7 +30,6 @@ urlpatterns = [
     path('<uuid:id>/request-assistance/', AssistanceRequestCreateView.as_view(), name='report_request_assistance'),
     path('<uuid:id>/feedback/', ReportFeedbackView.as_view(), name='report_feedback'),
     path('<uuid:id>/evidence/', EvidenceUploadView.as_view(), name='report_evidence'),
-    path('<uuid:id>/reveal/', ReportRevealIdentityView.as_view(), name='report_reveal'),
     path('<uuid:id>/delete/', ReportDeleteView.as_view(), name='report_delete'),
     path('<uuid:id>/restore/', ReportRestoreView.as_view(), name='report_restore'),
     path('sync/', SyncView.as_view(), name='sync'),

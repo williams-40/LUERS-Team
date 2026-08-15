@@ -58,18 +58,14 @@ def test_department_head_and_member_still_see_their_own_filed_reports():
     while verifying the Phase 16 feedback flow, once every seeded user had
     a department membership from Phase 15's population pass).
     """
-    from apps.reports.services import IdentityService
-
     head = SecurityFactory()
     DepartmentFactory(head=head)  # unrelated department the head heads
-    head_own_report = ReportFactory(department=DepartmentFactory(), is_anonymous=False)
-    IdentityService.create_identity(head_own_report, head)
+    head_own_report = ReportFactory(department=DepartmentFactory(), reporter=head)
 
     department = DepartmentFactory()
     member = UserFactory(role='staff')
     department.members.add(member)
-    member_own_report = ReportFactory(department=DepartmentFactory(), is_anonymous=False)
-    IdentityService.create_identity(member_own_report, member)
+    member_own_report = ReportFactory(department=DepartmentFactory(), reporter=member)
 
     assert head_own_report in get_accessible_reports(head)
     assert member_own_report in get_accessible_reports(member)
@@ -77,10 +73,8 @@ def test_department_head_and_member_still_see_their_own_filed_reports():
 
 @pytest.mark.django_db
 def test_user_with_no_department_and_not_system_admin_sees_only_own_reports():
-    from apps.reports.services import IdentityService
     reporter = UserFactory(role='student')
-    own_report = ReportFactory(is_anonymous=False)
-    IdentityService.create_identity(own_report, reporter)
+    own_report = ReportFactory(reporter=reporter)
     other_report = ReportFactory()
 
     accessible = get_accessible_reports(reporter)

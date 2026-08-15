@@ -13,7 +13,6 @@ PERMISSIONS = [
     ('manage_users', 'Manage Users', "Create, view, and edit user accounts.", 'accounts'),
     ('manage_departments', 'Manage Departments', "Create and edit departments, heads, and members.", 'departments'),
     ('delete_report', 'Delete Report', "Soft-delete, restore, and view deleted reports.", 'reports'),
-    ('reveal_identity', 'Reveal Identity', "Decrypt and reveal an anonymous reporter's identity.", 'reports'),
     ('manage_roles', 'Manage Roles', "Create, edit, and delete roles and their permission assignments.", 'accounts'),
     ('view_all_reports', 'View All Reports', "Bypass department scoping to see every report and audit log campus-wide.", 'reports'),
 ]
@@ -26,7 +25,13 @@ BUILTIN_ROLES = {
     'ict_admin': ('ICT Admin', [
         'view_admin_dashboard', 'manage_audit_logs', 'manage_users', 'manage_departments',
     ]),
-    'management': ('Management / Escrow', ['view_admin_dashboard', 'manage_audit_logs', 'reveal_identity']),
+    # Phase 2: 'reveal_identity' removed — anonymous reporting and
+    # identity-reveal were removed entirely, so this role's one
+    # distinguishing capability is gone. The role itself is deliberately
+    # NOT auto-reassigned or deleted here (see the redesign plan's role-
+    # migration report) — that's a manual decision for whoever holds it
+    # today, tracked separately from this permission-catalogue change.
+    'management': ('Management / Escrow', ['view_admin_dashboard', 'manage_audit_logs']),
     'system_admin': ('System Admin', [
         'view_admin_dashboard', 'manage_audit_logs', 'manage_users', 'manage_departments', 'delete_report',
         'manage_roles', 'view_all_reports',

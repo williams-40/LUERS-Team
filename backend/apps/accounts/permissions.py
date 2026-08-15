@@ -57,12 +57,6 @@ class IsICTAdmin(BasePermission):
         )
 
 
-class IsManagement(BasePermission):
-    """Allows access to whichever role(s) carry reveal_identity (Escrow Authority)."""
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.has_permission('reveal_identity')
-
-
 class IsAdminTier(BasePermission):
     """Allows access to the dashboard/trends/analytics/report-export surface."""
     def has_permission(self, request, view):

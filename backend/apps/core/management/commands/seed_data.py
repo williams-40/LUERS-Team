@@ -2,7 +2,7 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from apps.reports.models import Report, ReportIdentity, Evidence, Department
+from apps.reports.models import Report, Evidence, Department
 from apps.core.choices import Category, Urgency, Status, Role
 from apps.accounts.models import Role as RoleModel
 from apps.audit.models import AuditLog
@@ -117,27 +117,21 @@ class Command(BaseCommand):
         description_pool = ["Theft", "Assault", "Medical", "Fire", "Harassment", "Academic"]
 
         for i in range(10):
-            is_anonymous = random.choice([True, False])
             # Choose a random department for the report (for future routing)
             department = random.choice(departments) if departments else None
+            reporter = random.choice([student_user, staff_user])
             report = Report.objects.create(
                 category=random.choice(categories),
                 description=f'Seed report {i+1}: {random.choice(description_pool)}',
                 urgency=random.choice([Urgency.NORMAL, Urgency.PANIC]),
                 status=random.choice(statuses),
-                is_anonymous=is_anonymous,
+                reporter=reporter,
                 latitude=round(random.uniform(2.2, 2.3), 6),
                 longitude=round(random.uniform(32.8, 33.0), 6),
                 assigned_to=security_user if random.choice([True, False]) else None,
                 metadata={'source': 'seed_data'},
                 department=department,
                 custom_department='' if department and department.name != 'Other' else 'Custom Dept',
-            )
-            # Create identity (even for anonymous)
-            reporter = random.choice([student_user, staff_user])
-            ReportIdentity.objects.create(
-                report=report,
-                encrypted_reporter_ref=f"SEED_{reporter.id}_{random.randint(1000,9999)}"
             )
             reports.append(report)
 

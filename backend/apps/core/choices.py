@@ -44,7 +44,6 @@ class Action(models.TextChoices):
     STATUS_UPDATE = 'status_update', 'Status Update'
     ASSIGN = 'assign', 'Assign'
     EVIDENCE_UPLOAD = 'evidence_upload', 'Evidence Upload'
-    DEANONYMIZE = 'deanonymize', 'Deanonymize'   # Phase 2 backlog but include now
     SOFT_DELETE = 'soft_delete', 'Soft Delete'
     RESTORE = 'restore', 'Restore'
     AUTO_ROUTE = 'auto_route', 'Auto Route'

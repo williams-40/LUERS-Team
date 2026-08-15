@@ -7,8 +7,8 @@ from apps.core.factories import (
     UserFactory, SecurityFactory, ICTAdminFactory, ManagementFactory,
     SystemAdminFactory, ReportFactory, DepartmentFactory,
 )
-from apps.reports.models import Report, Evidence, ReportIdentity
-from apps.reports.services import IdentityService, get_accessible_reports
+from apps.reports.models import Report, Evidence
+from apps.reports.services import get_accessible_reports
 from apps.audit.models import AuditLog
 from apps.core.choices import Action, FileType
 
@@ -83,8 +83,7 @@ def test_soft_deleted_report_excluded_from_accessible_reports_and_queue():
 @pytest.mark.django_db
 def test_soft_deleted_report_excluded_from_students_own_reports():
     student = UserFactory(role='student')
-    report = ReportFactory()
-    IdentityService.create_identity(report, student)
+    report = ReportFactory(reporter=student)
 
     system_admin = SystemAdminFactory()
     client = APIClient()
@@ -209,10 +208,9 @@ def test_purge_deleted_reports_respects_retention_window():
 
 
 @pytest.mark.django_db
-def test_purge_deleted_reports_cascades_evidence_and_identity():
+def test_purge_deleted_reports_cascades_evidence():
     student = UserFactory(role='student')
-    report = ReportFactory()
-    identity = IdentityService.create_identity(report, student)
+    report = ReportFactory(reporter=student)
     evidence = Evidence.objects.create(report=report, file='evidence/test.jpg', file_type=FileType.IMAGE)
 
     report.deleted_at = timezone.now() - timedelta(days=200)
@@ -221,8 +219,10 @@ def test_purge_deleted_reports_cascades_evidence_and_identity():
     call_command('purge_deleted_reports', '--days', '90')
 
     assert not Report.objects.filter(id=report.id).exists()
-    assert not ReportIdentity.objects.filter(id=identity.id).exists()
     assert not Evidence.objects.filter(id=evidence.id).exists()
+    # reporter is SET_NULL on the Report FK, not CASCADE — purging a
+    # report must never delete the User account that filed it.
+    student.refresh_from_db()
 
 
 @pytest.mark.django_db

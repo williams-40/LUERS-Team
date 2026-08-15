@@ -49,11 +49,6 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       CELERY_BROKER_URL: redis://localhost:6379/0
       CELERY_RESULT_BACKEND: redis://localhost:6379/0
-      # Throwaway key for this ephemeral CI database only — never used for
-      # anything real, so there's no secret-management concern in checking
-      # it in here.
-      FERNET_KEY: SaNFWoqFjxUkFLS7rkhCyzGL3cMzT9aRj3S_dLRJMnw=
-      IDENTITY_HASH_KEY: ci-test-identity-hash-key-not-for-production
 
     steps:
       - uses: actions/checkout@v4

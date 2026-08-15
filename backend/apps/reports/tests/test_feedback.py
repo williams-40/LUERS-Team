@@ -3,7 +3,7 @@ from rest_framework.test import APIClient
 from apps.core.factories import UserFactory, SecurityFactory, SystemAdminFactory, ReportFactory, DepartmentFactory
 from apps.audit.models import AuditLog
 from apps.core.choices import Action, Status
-from apps.reports.services import IdentityService, ReportService
+from apps.reports.services import ReportService
 from apps.reports.models import ReportFeedback
 
 
@@ -12,8 +12,7 @@ def _resolved_report_with_reporter():
     responder = UserFactory(role='staff')
     department.members.add(responder)
     reporter = UserFactory(role='student')
-    report = ReportFactory(department=department, assigned_to=responder, status=Status.NEW)
-    IdentityService.create_identity(report, reporter)
+    report = ReportFactory(department=department, assigned_to=responder, status=Status.NEW, reporter=reporter)
     ReportService.update_status(report, Status.RESOLVED, responder)
     report.refresh_from_db()
     return report, reporter, responder, department
@@ -60,8 +59,7 @@ def test_non_reporter_cannot_submit_feedback():
 def test_cannot_submit_feedback_before_resolved():
     department = DepartmentFactory()
     reporter = UserFactory(role='student')
-    report = ReportFactory(department=department, status=Status.NEW)
-    IdentityService.create_identity(report, reporter)
+    report = ReportFactory(department=department, status=Status.NEW, reporter=reporter)
 
     client = APIClient()
     client.force_authenticate(user=reporter)

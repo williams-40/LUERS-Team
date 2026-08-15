@@ -5,14 +5,13 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from apps.reports.models import (
-    Report, Evidence, ReportIdentity, Department,
+    Report, Evidence, Department,
     AssistanceRequest, AssistanceAcknowledgement, ReportFeedback,
 )
 from apps.core.choices import Action, Channel, SyncOrigin, Status
 from apps.audit.models import AuditLog
 from apps.notifications.models import Notification, Message
 from apps.notifications.services import NotificationService
-from apps.core.services import EncryptionService
 from apps.reports.routing import DepartmentRoutingService, get_confidence_tier
 from apps.accounts.models import User
 
@@ -22,92 +21,6 @@ class ConflictError(APIException):
     status_code = 409
     default_detail = 'The report has been modified since you last fetched it. Please refresh and try again.'
     default_code = 'conflict'
-
-
-class IdentityService:
-    @staticmethod
-    def create_identity(report, user):
-        encrypted_ref = EncryptionService.generate_placeholder(user.id)
-        return ReportIdentity.objects.create(
-            report=report,
-            encrypted_reporter_ref=encrypted_ref,
-            reporter_hash=EncryptionService.hash_for_lookup(user.id),
-        )
-
-    @staticmethod
-    def get_reporter(identity):
-        decrypted = EncryptionService.decrypt(identity.encrypted_reporter_ref)
-        if decrypted:
-            if decrypted.startswith('REF_'):
-                return decrypted.replace('REF_', '')
-            elif decrypted.startswith('PLACEHOLDER_'):
-                return decrypted.replace('PLACEHOLDER_', '')
-        return None
-
-    @staticmethod
-    def get_reporter_user(report):
-        """
-        Resolve a report's reporter to a real User, for non-anonymous
-        reports only (see ReportDetailSerializer.get_reporter_name/phone) —
-        deliberately separate from reveal_identity/ReportRevealIdentityView,
-        which is the Management-only escrow path for *anonymous* reports
-        and always logs Action.DEANONYMIZE. A non-anonymous reporter
-        already chose to be identified to responders, so this is a plain
-        read with no audit log of its own.
-        """
-        identity = ReportIdentity.objects.filter(report=report).first()
-        if identity is None:
-            return None
-        user_id = IdentityService.get_reporter(identity)
-        if not user_id:
-            return None
-        return User.objects.filter(id=user_id).first()
-
-    @staticmethod
-    def is_owner(identity, user):
-        """
-        Whether `user` is the reporter behind `identity`, checked via the
-        one-way reporter_hash (never decrypts encrypted_reporter_ref).
-        """
-        if identity is None or not identity.reporter_hash:
-            return False
-        return identity.reporter_hash == EncryptionService.hash_for_lookup(user.id)
-
-    @staticmethod
-    def identity_exists(report):
-        return hasattr(report, 'identity')
-
-    @staticmethod
-    def reveal_identity(report, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
-        """
-        Decrypt a report's reporter identity for the Management/Escrow role
-        and record a DEANONYMIZE audit entry. Raises APIException(404-style)
-        via the caller if no identity exists.
-        """
-        identity = ReportIdentity.objects.filter(report=report).first()
-        if identity is None:
-            return None
-
-        user_id = IdentityService.get_reporter(identity)
-        reporter = None
-        if user_id:
-            reporter = User.objects.filter(id=user_id).first()
-
-        after_state = {
-            'revealed_user_id': str(reporter.id) if reporter else user_id,
-            'revealed_username': reporter.username if reporter else None,
-        }
-
-        AuditLog.objects.create(
-            report=report,
-            actor=actor,
-            action=Action.DEANONYMIZE,
-            after_state=after_state,
-            ip_address=ip_address,
-            sync_origin=sync_origin,
-        )
-
-        return reporter
 
 
 class ReportClassifierService:
@@ -155,10 +68,12 @@ class ReportService:
         idempotency_key = validated_data.pop('idempotency_key', None)
         client_created_at = validated_data.pop('client_created_at', None)
 
-        # Not a Report field — required for non-anonymous reports (enforced
-        # in ReportCreateSerializer.validate()) and persisted onto the
-        # reporter's own profile so responders can contact them, rather than
-        # stored per-report.
+        # Not a Report field — always optional (Phase 2: no longer required
+        # for "non-anonymous" reports, since anonymous reporting itself is
+        # gone and reporter identity now comes from the authenticated user
+        # directly, not a per-report flag). Persisted onto the reporter's
+        # own profile so responders can contact them, rather than stored
+        # per-report.
         phone_number = (validated_data.pop('phone_number', '') or '').strip()
 
         # Department is now selected directly by the reporter (Phase 14 —
@@ -187,10 +102,10 @@ class ReportService:
 
         report = Report.objects.create(
             **validated_data,
+            reporter=user,
             idempotency_key=idempotency_key,
             client_created_at=client_created_at,
         )
-        IdentityService.create_identity(report, user)
 
         if phone_number and user.phone_number != phone_number:
             user.phone_number = phone_number
@@ -496,9 +411,8 @@ class ReportService:
     @transaction.atomic
     def submit_feedback(report, user, rating, comments='', ip_address=None, sync_origin=SyncOrigin.LIVE):
         """
-        Only the report's own reporter (via reporter_hash — see
-        IdentityService.is_owner) may submit feedback, only once, and only
-        once the report is Resolved. Auto-closes through the existing
+        Only the report's own reporter may submit feedback, only once, and
+        only once the report is Resolved. Auto-closes through the existing
         update_status path so resolved->closed gets its own STATUS_UPDATE
         audit entry for free, rather than duplicating that logic here.
         """
@@ -507,8 +421,7 @@ class ReportService:
         if hasattr(report, 'feedback'):
             raise ValidationError({'error': 'Feedback has already been submitted for this report.'})
 
-        identity = ReportIdentity.objects.filter(report=report).first()
-        if not IdentityService.is_owner(identity, user):
+        if report.reporter_id != user.id:
             raise PermissionDenied("Only this report's reporter can submit feedback.")
 
         feedback = ReportFeedback.objects.create(
@@ -605,8 +518,7 @@ def filter_reports(queryset, params):
     Shared status/category/urgency/search filtering for the queue list and
     export views. `search` is a plain icontains OR across description,
     custom_department, department name, and assigned officer username —
-    deliberately excludes ReportIdentity (encrypted reporter identity must
-    never be searchable in plaintext) and category/status/urgency (already
+    deliberately excludes reporter identity and category/status/urgency (already
     exact-match filterable above; substring-matching them too would be
     redundant and could mislead officers about what search actually does).
 
@@ -659,10 +571,10 @@ def get_accessible_reports(user, include_deleted=False):
       responders").
     - Additionally, and regardless of the above (unless already covered by
       System Admin's blanket access): every user always sees the reports
-      *they personally filed* (own non-anonymous reports, via
-      reporter_hash) — a department head/member is also always a
-      potential reporter and must not lose visibility into their own
-      submitted reports just because they also have a department role.
+      *they personally filed* (Report.reporter) — a department head/member
+      is also always a potential reporter and must not lose visibility
+      into their own submitted reports just because they also have a
+      department role.
     - Also additionally: a department that's been asked for assistance on
       a report (see AssistanceRequest) gains visibility into it too.
 
@@ -686,22 +598,19 @@ def get_accessible_reports(user, include_deleted=False):
                 queryset = Report.objects.none()
 
         # Own-report access (bug fix, Phase 16): every non-admin user can
-        # always see the reports *they personally filed* (own non-anonymous
-        # reports, via reporter_hash), regardless of which branch above
-        # applied. This used to be reachable only through the branch above's
-        # final `else` — i.e. only for a user with *no* department
-        # affiliation at all — which silently made it dead code for every
-        # seeded account once Phase 15's department-coverage population
-        # made every active user a member of some department: a department
-        # head/member could no longer see their own submitted reports.
-        # Discovered live while verifying the Phase 16 feedback flow.
-        reporter_hash = EncryptionService.hash_for_lookup(user.id)
-        own_ids = set(
-            Report.objects.filter(
-                id__in=ReportIdentity.objects.filter(reporter_hash=reporter_hash).values_list('report_id', flat=True),
-                is_anonymous=False,
-            ).values_list('id', flat=True)
-        )
+        # always see the reports *they personally filed*, regardless of
+        # which branch above applied. This used to be reachable only
+        # through the branch above's final `else` — i.e. only for a user
+        # with *no* department affiliation at all — which silently made it
+        # dead code for every seeded account once Phase 15's
+        # department-coverage population made every active user a member
+        # of some department: a department head/member could no longer see
+        # their own submitted reports. Discovered live while verifying the
+        # Phase 16 feedback flow. Phase 2 simplified this from a
+        # reporter_hash lookup against the (now-removed) encrypted
+        # ReportIdentity table to a plain FK filter, once anonymous
+        # reporting and identity-reveal were removed.
+        own_ids = set(Report.objects.filter(reporter=user).values_list('id', flat=True))
 
         # Assistance-based access (Phase 16): a department that's been
         # asked for help on a report gains visibility into it, regardless
@@ -753,15 +662,13 @@ def get_accessible_audit_logs(user):
 
 def get_pending_feedback_reports(user):
     """
-    Reports the caller personally reported (via reporter_hash — deliberately
-    NOT get_accessible_reports, which is role-based and would leak other
+    Reports the caller personally reported (deliberately NOT
+    get_accessible_reports, which is role-based and would leak other
     people's resolved reports into e.g. a department head's own "give
     feedback" list) that are Resolved and don't have feedback yet.
     """
-    reporter_hash = EncryptionService.hash_for_lookup(user.id)
-    report_ids = ReportIdentity.objects.filter(reporter_hash=reporter_hash).values_list('report_id', flat=True)
     return Report.objects.filter(
-        id__in=report_ids, status=Status.RESOLVED, feedback__isnull=True, deleted_at__isnull=True,
+        reporter=user, status=Status.RESOLVED, feedback__isnull=True, deleted_at__isnull=True,
     )
 
 
@@ -811,21 +718,19 @@ def can_access_report(user, report, include_deleted=False):
 def can_upload_evidence(user, report):
     """
     Who may attach evidence to a report: whoever is actively handling it
-    (its assigned responder, its department head, or System Admin), or
-    the report's own reporter (non-anonymous only — unchanged from
-    before; anonymous-reporter evidence upload stays out of scope here,
-    to be revisited when anonymous reporting itself is removed).
+    (its assigned responder, its department head, or System Admin), or the
+    report's own reporter.
 
     Replaces the old hardcoded `user.role.slug == 'security'` check
     (apps.reports.views.EvidenceUploadView), which predates the
     department-based responder model (Phase 14) and excluded every
     legitimate assigned responder or department head who doesn't happen
-    to hold the 'security' role.
+    to hold the 'security' role. Phase 2 dropped the old is_anonymous
+    guard around the ownership check — now that anonymous reporting is
+    removed, a report always has a real reporter FK to compare against.
     """
-    if report.assigned_to_id == user.id or is_department_head_or_system_admin(user, report):
-        return True
-    if not report.is_anonymous:
-        identity = ReportIdentity.objects.filter(report=report).first()
-        if IdentityService.is_owner(identity, user):
-            return True
-    return False
+    return (
+        report.assigned_to_id == user.id
+        or is_department_head_or_system_admin(user, report)
+        or report.reporter_id == user.id
+    )

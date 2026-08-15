@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.reports.models import Report, Evidence, ReportIdentity, Department
+from apps.reports.models import Report, Evidence, Department
 from apps.core.choices import Urgency, Status
 from apps.reports.validators import validate_evidence_file
 from apps.reports.serializers_assistance import AssistanceRequestSerializer
@@ -48,7 +48,7 @@ class ReportListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'category', 'category_display', 'description', 'urgency', 'urgency_display',
             'status', 'status_display', 'latitude', 'longitude', 'location_accuracy',
-            'assigned_to', 'assigned_to_username', 'is_anonymous', 'created_at', 'updated_at',
+            'assigned_to', 'assigned_to_username', 'created_at', 'updated_at',
             'evidence_count', 'deleted_at',
             'department_id', 'department_name', 'department_head_id',
         ]
@@ -74,31 +74,22 @@ class ReportDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'category', 'category_display', 'description', 'urgency', 'urgency_display',
             'status', 'status_display', 'latitude', 'longitude', 'location_accuracy',
-            'assigned_to', 'assigned_to_username', 'is_anonymous', 'metadata', 'created_at', 'updated_at',
+            'assigned_to', 'assigned_to_username', 'metadata', 'created_at', 'updated_at',
             'evidence',
             'department_id', 'department_name', 'department_head_id',
             'assistance_requests',
             'reporter_name', 'reporter_phone',
         ]
 
-    def _reporter(self, obj):
-        # Anonymous reports never expose reporter identity here — that's
-        # what ReportRevealIdentityView (Management-only escrow) is for.
-        if obj.is_anonymous:
-            return None
-        from apps.reports.services import IdentityService
-        return IdentityService.get_reporter_user(obj)
-
     def get_reporter_name(self, obj):
-        user = self._reporter(obj)
+        user = obj.reporter
         if not user:
             return None
         full_name = f"{user.first_name} {user.last_name}".strip()
         return full_name or user.username
 
     def get_reporter_phone(self, obj):
-        user = self._reporter(obj)
-        return user.phone_number if user else None
+        return obj.reporter.phone_number if obj.reporter else None
 
 
 class ReportCreateSerializer(serializers.ModelSerializer):
@@ -114,9 +105,10 @@ class ReportCreateSerializer(serializers.ModelSerializer):
 
     department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.filter(is_active=True))
 
-    # Not a Report field — captured here only to require/persist it onto the
-    # reporter's own profile (see ReportService.create_report). Write-only,
-    # never echoed back on a report.
+    # Not a Report field — captured here only to optionally persist it onto
+    # the reporter's own profile (see ReportService.create_report). Always
+    # optional (Phase 2: no longer required for "non-anonymous" reports —
+    # anonymous reporting itself is gone). Write-only, never echoed back.
     phone_number = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=15)
 
     class Meta:
@@ -126,7 +118,6 @@ class ReportCreateSerializer(serializers.ModelSerializer):
             'department',
             'description',
             'urgency',
-            'is_anonymous',
             'phone_number',
             'latitude',
             'longitude',
@@ -160,14 +151,17 @@ class ReportCreateSerializer(serializers.ModelSerializer):
             except ValueError as e:
                 raise serializers.ValidationError({'evidence': str(e)})
 
-        if not attrs.get('is_anonymous') and not attrs.get('phone_number', '').strip():
-            raise serializers.ValidationError(
-                {'phone_number': 'Phone number is required for non-anonymous reports.'}
-            )
-
         return attrs
 
     def create(self, validated_data):
+        # Note: the live create-report endpoint and the offline sync path
+        # both bypass this method entirely — they call
+        # apps.reports.services.ReportService.create_report directly from
+        # validated_data (see ReportCreateView.perform_create / SyncView),
+        # which is where reporter/phone-number handling actually lives.
+        # Kept correct and self-consistent here anyway rather than left
+        # referencing the removed identity system, since a serializer
+        # conventionally needs a working create().
         evidence_files = validated_data.pop('evidence', [])
         validated_data.pop('phone_number', None)
         validated_data.setdefault('urgency', 'normal')
@@ -175,11 +169,7 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         user = request.user if request else None
 
-        report = Report.objects.create(**validated_data)
-
-        if user:
-            from apps.reports.services import IdentityService
-            IdentityService.create_identity(report, user)
+        report = Report.objects.create(**validated_data, reporter=user)
 
         for file in evidence_files:
             # Already validated in validate() above; re-running here just to

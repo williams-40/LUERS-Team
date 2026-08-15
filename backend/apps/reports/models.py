@@ -11,7 +11,18 @@ class Report(BaseModel):
     description = models.TextField()   # stored raw for future NLP
     urgency = models.CharField(max_length=10, choices=Urgency.choices, default=Urgency.NORMAL)
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.NEW)
-    is_anonymous = models.BooleanField(default=False)
+    # The authenticated user who filed this report — replaces the old
+    # encrypted ReportIdentity table now that anonymous reporting has been
+    # removed. SET_NULL (not PROTECT) so deleting a user account doesn't
+    # block deleting/keeping their historical reports, matching assigned_to
+    # and department's existing on_delete behavior on this model.
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reported_reports',
+    )
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     location_accuracy = models.FloatField(null=True, blank=True)
@@ -52,26 +63,10 @@ class Report(BaseModel):
             models.Index(fields=['assigned_to']),
             models.Index(fields=['idempotency_key']),
             models.Index(fields=['department']),  # for performance
+            models.Index(fields=['reporter']),
         ]
     def __str__(self):
         return f"Report {self.id} - {self.status}"
-
-class ReportIdentity(BaseModel):
-    report = models.OneToOneField(Report, on_delete=models.CASCADE, related_name='identity')
-    encrypted_reporter_ref = models.TextField()   # encrypted token linking to real user
-    # Key held only by escrow role; not accessible in normal serializers
-    reporter_hash = models.CharField(max_length=64, blank=True, null=True)
-    # One-way HMAC of the reporter's user id (EncryptionService.hash_for_lookup),
-    # used only to answer "is this my report" without decrypting encrypted_reporter_ref.
-
-    class Meta:
-        db_table = 'report_identities'
-        indexes = [
-            models.Index(fields=['reporter_hash']),
-        ]
-
-    def __str__(self):
-        return f"Identity for Report {self.report_id}"
 
 class Evidence(BaseModel):
     report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='evidence')
