@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
-from apps.reports.models import Report, Evidence, ReportIdentity, Department
+from apps.reports.models import Report, Evidence, Department
 from apps.reports.serializers import (
     ReportListSerializer, ReportDetailSerializer, ReportCreateSerializer,
     ReportUpdateStatusSerializer, ReportAssignSerializer, EvidenceSerializer,
@@ -16,10 +16,10 @@ from apps.reports.serializers import (
 )
 from apps.reports.services import (
     ReportService, IdentityService, MessageService, get_accessible_reports, filter_reports,
-    is_department_head_or_system_admin, is_department_member_or_head,
+    is_department_head_or_system_admin, is_department_member_or_head, can_upload_evidence,
 )
 from apps.reports.validators import validate_evidence_file
-from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsStudentOrStaff, IsManagement, IsAdminTier, CanDeleteReport
+from apps.accounts.permissions import IsStudentOrStaff, IsManagement, IsAdminTier, CanDeleteReport
 from apps.core.export import csv_response, pdf_response
 from apps.core.pagination import StandardPagination
 from apps.reports.serializers import SyncRequestSerializer, SyncResultSerializer
@@ -345,13 +345,7 @@ class EvidenceUploadView(APIView):
     def post(self, request, id):
         report = get_object_or_404(Report, id=id)
         user = request.user
-        is_security = user.role.slug == 'security'
-        is_owner = False
-        if not report.is_anonymous:
-            identity = ReportIdentity.objects.filter(report=report).first()
-            is_owner = IdentityService.is_owner(identity, user)
-
-        if not (is_security or is_owner):
+        if not can_upload_evidence(user, report):
             raise PermissionDenied("You do not have permission to upload evidence for this report.")
 
         file = request.FILES.get('file')

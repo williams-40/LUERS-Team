@@ -5,35 +5,29 @@ from django.shortcuts import get_object_or_404
 from apps.reports.models import Report
 from apps.notifications.models import Message
 from apps.notifications.serializers import MessageSerializer, MessageCreateSerializer
-from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsManagement
-from apps.reports.services import IdentityService
+from apps.reports.services import can_access_report
 
 
 class CanAccessReportMixin:
-    """Mixin to check if the current user can access the report."""
+    """
+    Mixin to check if the current user can access the report.
+
+    Delegates entirely to apps.reports.services.can_access_report (which
+    wraps get_accessible_reports) — the same function REST detail/list and
+    the WebSocket consumer already use. Previously this mixin had its own,
+    independently-written check that had drifted from that one: it treated
+    view_admin_dashboard as blanket access (get_accessible_reports uses
+    view_all_reports for that) and never considered department headship at
+    all. include_deleted=True matches this mixin's pre-existing behavior —
+    it never filtered on deleted_at either, since it looked reports up by
+    raw id — so this consolidation doesn't newly restrict access to a
+    soft-deleted report's messages.
+    """
     def get_report_and_check_access(self, report_id):
         report = get_object_or_404(Report, id=report_id)
         user = self.request.user
 
-        # Admin-tier roles have full access — matches the same
-        # view_admin_dashboard permission used by apps.notifications.consumers
-        # and apps.reports.services.get_accessible_reports.
-        if user.has_permission('view_admin_dashboard'):
-            return report
-
-        # Check if user is the reporter (non‑anonymous only)
-        if not report.is_anonymous:
-            from apps.reports.models import ReportIdentity
-            try:
-                identity = ReportIdentity.objects.get(report=report)
-                reporter_id = IdentityService.get_reporter(identity)
-                if reporter_id and str(user.id) == reporter_id:
-                    return report
-            except ReportIdentity.DoesNotExist:
-                pass
-
-        # Check if user is the assigned officer
-        if report.assigned_to and report.assigned_to.id == user.id:
+        if can_access_report(user, report, include_deleted=True):
             return report
 
         self.permission_denied(self.request, message="You do not have access to this report.")

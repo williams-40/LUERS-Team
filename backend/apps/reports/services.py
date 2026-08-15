@@ -792,3 +792,40 @@ def can_request_assistance(user, report):
     handling the case who's most likely to know help is needed.
     """
     return is_department_head_or_system_admin(user, report) or report.assigned_to_id == user.id
+
+
+def can_access_report(user, report, include_deleted=False):
+    """
+    Single authoritative object-level check for "can this user access this
+    report" — delegates to get_accessible_reports() so REST (detail/list/
+    messages), the WebSocket consumer, and any future caller share one
+    definition instead of re-deriving it. Introduced to retire
+    apps.notifications.views.CanAccessReportMixin's independent
+    reimplementation, which had drifted from get_accessible_reports (it
+    granted blanket access on view_admin_dashboard rather than
+    view_all_reports, and never considered department headship at all).
+    """
+    return get_accessible_reports(user, include_deleted=include_deleted).filter(id=report.id).exists()
+
+
+def can_upload_evidence(user, report):
+    """
+    Who may attach evidence to a report: whoever is actively handling it
+    (its assigned responder, its department head, or System Admin), or
+    the report's own reporter (non-anonymous only — unchanged from
+    before; anonymous-reporter evidence upload stays out of scope here,
+    to be revisited when anonymous reporting itself is removed).
+
+    Replaces the old hardcoded `user.role.slug == 'security'` check
+    (apps.reports.views.EvidenceUploadView), which predates the
+    department-based responder model (Phase 14) and excluded every
+    legitimate assigned responder or department head who doesn't happen
+    to hold the 'security' role.
+    """
+    if report.assigned_to_id == user.id or is_department_head_or_system_admin(user, report):
+        return True
+    if not report.is_anonymous:
+        identity = ReportIdentity.objects.filter(report=report).first()
+        if IdentityService.is_owner(identity, user):
+            return True
+    return False
