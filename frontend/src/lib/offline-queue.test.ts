@@ -8,7 +8,6 @@ const payload: CreateReportInput = {
   department: 'dept-1',
   description: 'Bike stolen outside library',
   urgency: Urgency.NORMAL,
-  is_anonymous: false,
 };
 
 let enqueueReport: typeof import('./offline-queue').enqueueReport;

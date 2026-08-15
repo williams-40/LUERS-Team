@@ -3,15 +3,14 @@ import type { ReportDetail } from '../../types/domain';
 import { Button } from '../ui/Button';
 
 /**
- * Only rendered for non-anonymous reports, to a responder actually
- * handling the report (see ReportDetailPage's canUpdateStatus gate) —
- * anonymous reports never get this section at all, preserving the
- * existing escrow-only reveal workflow untouched.
+ * Rendered to a responder actually handling the report (see
+ * ReportDetailPage's canUpdateStatus gate) — anonymous reporting was
+ * removed, so reporter identity is always known once a report exists.
  */
 export function ReporterInfoSection({ report }: { report: ReportDetail }) {
   const [expanded, setExpanded] = useState(false);
 
-  if (report.is_anonymous || !report.reporter_name) return null;
+  if (!report.reporter_name) return null;
 
   return (
     <div className="mb-5 rounded-xl border border-ink/10 p-4">

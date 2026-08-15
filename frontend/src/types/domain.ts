@@ -119,7 +119,6 @@ export interface ReportListItem {
   location_accuracy: number | null;
   assigned_to: string | null;
   assigned_to_username: string | null;
-  is_anonymous: boolean;
   created_at: string;
   updated_at: string;
   evidence_count: number;
@@ -171,7 +170,6 @@ export interface CreateReportInput {
   department: string;
   description: string;
   urgency: Urgency;
-  is_anonymous: boolean;
   phone_number?: string;
   latitude?: number;
   longitude?: number;
@@ -240,7 +238,6 @@ export const Action = {
   STATUS_UPDATE: 'status_update',
   ASSIGN: 'assign',
   EVIDENCE_UPLOAD: 'evidence_upload',
-  DEANONYMIZE: 'deanonymize',
   SOFT_DELETE: 'soft_delete',
   RESTORE: 'restore',
   AUTO_ROUTE: 'auto_route',
@@ -270,11 +267,4 @@ export interface AuditLogEntry {
   sync_origin: 'live' | 'sync';
   sync_origin_display: string;
   created_at: string;
-}
-
-export interface RevealedIdentity {
-  reporter_id: string;
-  username: string;
-  email: string;
-  university_id: string | null;
 }

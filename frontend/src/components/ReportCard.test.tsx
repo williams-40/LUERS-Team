@@ -20,7 +20,6 @@ function baseReport(overrides: Partial<ReportListItem> = {}): ReportListItem {
     location_accuracy: null,
     assigned_to: null,
     assigned_to_username: null,
-    is_anonymous: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     evidence_count: 0,
@@ -52,16 +51,6 @@ describe('ReportCard', () => {
     expect(screen.getByText('Theft')).toBeInTheDocument();
     expect(screen.getByText('Someone took my bike from the rack.')).toBeInTheDocument();
     expect(screen.getByText('New')).toBeInTheDocument();
-  });
-
-  it('flags an anonymous reporter', () => {
-    renderCard(baseReport({ is_anonymous: true }));
-    expect(screen.getByText(/Anonymous reporter/)).toBeInTheDocument();
-  });
-
-  it('does not flag a non-anonymous reporter', () => {
-    renderCard(baseReport({ is_anonymous: false }));
-    expect(screen.queryByText(/Anonymous reporter/)).not.toBeInTheDocument();
   });
 
   it('shows the evidence count only when there is evidence', () => {

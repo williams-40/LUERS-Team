@@ -11,7 +11,6 @@ import { RequestAssistanceControl } from '../components/reports/RequestAssistanc
 import { AssistanceRequestsList } from '../components/reports/AssistanceRequestsList';
 import { FeedbackDisplay } from '../components/reports/FeedbackDisplay';
 import { ReporterInfoSection } from '../components/reports/ReporterInfoSection';
-import { RevealIdentityControl } from '../components/reports/RevealIdentityControl';
 import { ReportChat } from '../components/reports/ReportChat';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { Button } from '../components/ui/Button';
@@ -112,7 +111,7 @@ export function ReportDetailPage() {
     <div className="mx-auto max-w-xl px-5 py-8">
       {justCreated && (
         <div className="bg-status-good/10 text-status-good-ink mb-5 rounded-xl px-4 py-3 text-sm font-semibold">
-          Report submitted{report.is_anonymous ? ' anonymously' : ''}. You'll see status updates here.
+          Report submitted. You'll see status updates here.
         </div>
       )}
 
@@ -166,8 +165,6 @@ export function ReportDetailPage() {
       {canUpdateStatus && <RequestAssistanceControl report={report} onUpdated={refetch} />}
 
       <AssistanceRequestsList assistanceRequests={report.assistance_requests} onUpdated={refetch} />
-
-      {user?.permissions.includes('reveal_identity') && <RevealIdentityControl reportId={report.id} />}
 
       {user?.permissions.includes('delete_report') && (
         <div className="mb-5">

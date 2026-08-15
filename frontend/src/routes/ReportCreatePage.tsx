@@ -18,26 +18,15 @@ import { useToast } from '../lib/toast-context';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 
-const reportSchema = z
-  .object({
-    department: z.string().min(1, 'Please select a department'),
-    description: z
-      .string()
-      .trim()
-      .min(10, 'Please add a few more details (at least 10 characters)')
-      .max(2000),
-    is_anonymous: z.boolean(),
-    phone_number: z.string().trim().max(15).optional().or(z.literal('')),
-  })
-  .superRefine((data, ctx) => {
-    if (!data.is_anonymous && !data.phone_number?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Phone number is required so responders can reach you',
-        path: ['phone_number'],
-      });
-    }
-  });
+const reportSchema = z.object({
+  department: z.string().min(1, 'Please select a department'),
+  description: z
+    .string()
+    .trim()
+    .min(10, 'Please add a few more details (at least 10 characters)')
+    .max(2000),
+  phone_number: z.string().trim().max(15).optional().or(z.literal('')),
+});
 
 type ReportFormValues = z.infer<typeof reportSchema>;
 
@@ -63,11 +52,10 @@ export function ReportCreatePage() {
     formState: { errors, isSubmitting },
   } = useForm<ReportFormValues>({
     resolver: zodResolver(reportSchema),
-    defaultValues: { is_anonymous: false, phone_number: user?.phone_number ?? '' },
+    defaultValues: { phone_number: user?.phone_number ?? '' },
   });
 
   const department = watch('department');
-  const isAnonymous = watch('is_anonymous');
 
   const createMutation = useMutation({ mutationFn: createReport });
   const evidenceMutation = useMutation({
@@ -89,8 +77,7 @@ export function ReportCreatePage() {
       department: values.department,
       description: values.description,
       urgency: mode === 'panic' ? Urgency.PANIC : Urgency.NORMAL,
-      is_anonymous: values.is_anonymous,
-      ...(values.is_anonymous ? {} : { phone_number: values.phone_number?.trim() }),
+      ...(values.phone_number?.trim() ? { phone_number: values.phone_number.trim() } : {}),
       ...(location ?? {}),
     };
 
@@ -221,31 +208,20 @@ export function ReportCreatePage() {
           {errors.description && <p className="text-status-critical text-xs">{errors.description.message}</p>}
         </div>
 
-        <label className="flex cursor-pointer items-center gap-2.5">
-          <input type="checkbox" className="accent-brand h-4 w-4" {...register('is_anonymous')} />
-          <span className="text-sm">Submit anonymously</span>
-        </label>
-        <p className="text-ink-muted -mt-3 text-xs">
-          Your name will not be shown to responders. Only the escrow authority can ever unmask an anonymous
-          report, and only through a formal process.
-        </p>
-
-        {!isAnonymous && (
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="phone_number" className="text-ink-secondary text-[12.5px] font-semibold">
-              Phone number
-            </label>
-            <input
-              id="phone_number"
-              type="tel"
-              className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-              aria-invalid={Boolean(errors.phone_number)}
-              {...register('phone_number')}
-            />
-            <p className="text-ink-muted text-xs">So a responder can reach you if they need more information.</p>
-            {errors.phone_number && <p className="text-status-critical text-xs">{errors.phone_number.message}</p>}
-          </div>
-        )}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="phone_number" className="text-ink-secondary text-[12.5px] font-semibold">
+            Phone number (optional)
+          </label>
+          <input
+            id="phone_number"
+            type="tel"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            aria-invalid={Boolean(errors.phone_number)}
+            {...register('phone_number')}
+          />
+          <p className="text-ink-muted text-xs">So a responder can reach you if they need more information.</p>
+          {errors.phone_number && <p className="text-status-critical text-xs">{errors.phone_number.message}</p>}
+        </div>
 
         {mode === 'detailed' && (
           <div className="flex flex-col gap-1.5">

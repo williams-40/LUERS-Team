@@ -18,7 +18,7 @@ const { flushQueue } = await import('./offline-sync');
 function queuedItem(overrides: Partial<QueuedReport> = {}): QueuedReport {
   return {
     id: 'q1',
-    payload: { department: 'dept-1', description: 'x', urgency: Urgency.NORMAL, is_anonymous: false },
+    payload: { department: 'dept-1', description: 'x', urgency: Urgency.NORMAL },
     hadDroppedEvidence: false,
     createdAt: new Date().toISOString(),
     retryCount: 0,

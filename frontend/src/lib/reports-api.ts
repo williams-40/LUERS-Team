@@ -10,7 +10,6 @@ import type {
   ReportDetail,
   ReportFeedback,
   ReportListItem,
-  RevealedIdentity,
   Status,
   Urgency,
 } from '../types/domain';
@@ -113,11 +112,6 @@ export async function escalateReport(args: { reportId: string; reason?: string }
   const { data } = await apiClient.post<{ id: string; escalated: true }>(`/reports/${args.reportId}/escalate/`, {
     reason: args.reason,
   });
-  return data;
-}
-
-export async function revealIdentity(reportId: string): Promise<RevealedIdentity> {
-  const { data } = await apiClient.post<RevealedIdentity>(`/reports/${reportId}/reveal/`);
   return data;
 }
 

@@ -34,10 +34,7 @@ export function MyReportsPage() {
       )}
 
       {data && data.results.length === 0 && (
-        <p className="text-ink-secondary text-sm">
-          You haven't submitted any reports yet. Anonymous reports won't appear here — there's nothing tying
-          them back to your account.
-        </p>
+        <p className="text-ink-secondary text-sm">You haven't submitted any reports yet.</p>
       )}
 
       {data && data.results.length > 0 && (
