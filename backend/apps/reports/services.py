@@ -4,16 +4,12 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from apps.reports.models import (
-    Report, Evidence, Department,
-    AssistanceRequest, AssistanceAcknowledgement, ReportFeedback,
-)
+from apps.reports.models import Report, Evidence, Department, ReportFeedback
 from apps.core.choices import Action, Channel, SyncOrigin, Status
 from apps.audit.models import AuditLog
 from apps.notifications.models import Notification, Message
 from apps.notifications.services import NotificationService
 from apps.reports.routing import DepartmentRoutingService, get_confidence_tier
-from apps.accounts.models import User
 
 
 class ConflictError(APIException):
@@ -290,125 +286,6 @@ class ReportService:
 
     @staticmethod
     @transaction.atomic
-    def transfer_department(report, new_department, actor, reason=None, ip_address=None, sync_origin=SyncOrigin.LIVE):
-        """
-        Routine re-routing correction by the report's current department
-        head (or System Admin) — distinct from `escalate`, which is for
-        exceptional situations rather than "this actually belongs to ICT."
-        Clears any existing responder assignment since it doesn't carry
-        across departments.
-        """
-        old_department = report.department
-        old_assigned = report.assigned_to
-        report.department = new_department
-        report.assigned_to = None
-        report.save(update_fields=['department', 'assigned_to', 'updated_at'])
-
-        AuditLog.objects.create(
-            report=report,
-            actor=actor,
-            action=Action.DEPARTMENT_TRANSFER,
-            before_state={
-                'department': old_department.name if old_department else None,
-                'assigned_to': str(old_assigned.id) if old_assigned else None,
-            },
-            after_state={'department': new_department.name, 'reason': reason},
-            ip_address=ip_address,
-            sync_origin=sync_origin,
-        )
-
-        ReportService._notify_department(report, new_department)
-        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
-        return report
-
-    @staticmethod
-    @transaction.atomic
-    def escalate(report, actor, reason=None, ip_address=None, sync_origin=SyncOrigin.LIVE):
-        """
-        For genuinely exceptional situations needing admin intervention —
-        NOT for routine department-routing corrections, which use
-        `transfer_department` instead. Notifies every System Admin.
-        """
-        AuditLog.objects.create(
-            report=report,
-            actor=actor,
-            action=Action.ESCALATE,
-            after_state={'reason': reason},
-            ip_address=ip_address,
-            sync_origin=sync_origin,
-        )
-
-        for admin in User.objects.filter(role__permissions__slug='view_all_reports', is_active=True).distinct():
-            Notification.objects.create(
-                recipient=admin,
-                report=report,
-                channel=Channel.WEBSOCKET,
-                sent_at=timezone.now(),
-            )
-        return report
-
-    @staticmethod
-    @transaction.atomic
-    def request_assistance(report, departments, reason, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
-        """
-        The report's own department keeps ownership; `departments` (other
-        departments) just gain visibility into it — see
-        get_accessible_reports' assistance-based union. Unlike `escalate`,
-        this notifies the involved departments directly (not System Admins)
-        and does broadcast on commit, since it's meant to surface live in
-        an assisting department's queue right away.
-        """
-        assistance_request = AssistanceRequest.objects.create(report=report, requested_by=actor, reason=reason)
-        assistance_request.departments.set(departments)
-
-        AuditLog.objects.create(
-            report=report,
-            actor=actor,
-            action=Action.REQUEST_ASSISTANCE,
-            after_state={'departments': [d.name for d in departments], 'reason': reason},
-            ip_address=ip_address,
-            sync_origin=sync_origin,
-        )
-
-        for department in departments:
-            ReportService._notify_department(report, department)
-
-        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
-        return assistance_request
-
-    @staticmethod
-    @transaction.atomic
-    def acknowledge_assistance(assistance_request, department, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
-        """One acknowledgement per department per request — records the first responder from that department to respond."""
-        acknowledgement, created = AssistanceAcknowledgement.objects.get_or_create(
-            assistance_request=assistance_request,
-            department=department,
-            defaults={'acknowledged_by': actor},
-        )
-        if not created:
-            return acknowledgement
-
-        AuditLog.objects.create(
-            report=assistance_request.report,
-            actor=actor,
-            action=Action.ACKNOWLEDGE_ASSISTANCE,
-            after_state={'department': department.name},
-            ip_address=ip_address,
-            sync_origin=sync_origin,
-        )
-
-        if assistance_request.requested_by:
-            Notification.objects.create(
-                recipient=assistance_request.requested_by,
-                report=assistance_request.report,
-                channel=Channel.WEBSOCKET,
-                sent_at=timezone.now(),
-            )
-        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(assistance_request.report))
-        return acknowledgement
-
-    @staticmethod
-    @transaction.atomic
     def submit_feedback(report, user, rating, comments='', ip_address=None, sync_origin=SyncOrigin.LIVE):
         """
         Only the report's own reporter may submit feedback, only once, and
@@ -575,8 +452,6 @@ def get_accessible_reports(user, include_deleted=False):
       is also always a potential reporter and must not lose visibility
       into their own submitted reports just because they also have a
       department role.
-    - Also additionally: a department that's been asked for assistance on
-      a report (see AssistanceRequest) gains visibility into it too.
 
     Soft-deleted reports (deleted_at set) are excluded by default for
     everyone, including System Admin — they're only visible via
@@ -612,23 +487,17 @@ def get_accessible_reports(user, include_deleted=False):
         # reporting and identity-reveal were removed.
         own_ids = set(Report.objects.filter(reporter=user).values_list('id', flat=True))
 
-        # Assistance-based access (Phase 16): a department that's been
-        # asked for help on a report gains visibility into it, regardless
-        # of which branch above applied.
-        user_departments = Department.objects.filter(Q(head=user) | Q(members=user)).distinct()
-        assisted_ids = set(
-            Report.objects.filter(assistance_requests__departments__in=user_departments)
-            .values_list('id', flat=True)
-        ) if user_departments.exists() else set()
-
-        extra_ids = own_ids | assisted_ids
-        if extra_ids:
+        if own_ids:
             # Materialize both sides into plain id sets rather than combining
             # querysets with `|` — Django raises "Cannot combine a unique
             # query with a non-unique query" when one side carries an
-            # implicit DISTINCT from the M2M join and the other doesn't.
+            # implicit DISTINCT from a join and the other doesn't (a
+            # constraint discovered when this also had to merge in a second,
+            # M2M-backed union — no longer relevant now that own-report
+            # access is the only addition here, but the safe pattern is kept
+            # rather than reintroducing the exact bug it was written to avoid).
             base_ids = set(queryset.values_list('id', flat=True))
-            queryset = Report.objects.filter(id__in=base_ids | extra_ids)
+            queryset = Report.objects.filter(id__in=base_ids | own_ids)
 
     if include_deleted:
         return queryset
@@ -674,8 +543,8 @@ def get_pending_feedback_reports(user):
 
 def is_department_head_or_system_admin(user, report):
     """
-    Who may assign/reassign/transfer a report, or receive its escalation:
-    the report's own department head, or System Admin (any department).
+    Who may assign/reassign a report: the report's own department head,
+    or System Admin (any department).
     """
     if user.has_permission('view_all_reports'):
         return True
@@ -689,16 +558,6 @@ def is_department_member_or_head(user, department):
     if department.head_id == user.id:
         return True
     return department.members.filter(id=user.id).exists()
-
-
-def can_request_assistance(user, report):
-    """
-    Who may request another department's help on a report: its assigned
-    responder, its department head, or System Admin — broader than
-    transfer/escalate (head-only), since it's the responder actually
-    handling the case who's most likely to know help is needed.
-    """
-    return is_department_head_or_system_admin(user, report) or report.assigned_to_id == user.id
 
 
 def can_access_report(user, report, include_deleted=False):

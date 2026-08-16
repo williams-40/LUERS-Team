@@ -108,41 +108,6 @@ class Department(BaseModel):
         return self.name
 
 
-class AssistanceRequest(BaseModel):
-    """
-    A responder (or department head/System Admin) asking one or more other
-    departments to help on a report they're still the owner of — the
-    requesting department keeps the report, assisting departments just gain
-    visibility into it (see apps.reports.services.get_accessible_reports).
-    """
-    report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='assistance_requests')
-    requested_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='assistance_requests_made'
-    )
-    reason = models.TextField()
-    departments = models.ManyToManyField(Department, related_name='assistance_requests')
-
-    class Meta:
-        db_table = 'assistance_requests'
-
-    def __str__(self):
-        return f"Assistance request for Report {self.report_id}"
-
-
-class AssistanceAcknowledgement(BaseModel):
-    """One acknowledgement per department per request — records the first responder from that department to respond."""
-    assistance_request = models.ForeignKey(AssistanceRequest, on_delete=models.CASCADE, related_name='acknowledgements')
-    department = models.ForeignKey(Department, on_delete=models.CASCADE)
-    acknowledged_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-
-    class Meta:
-        db_table = 'assistance_acknowledgements'
-        unique_together = ('assistance_request', 'department')
-
-    def __str__(self):
-        return f"Ack for {self.assistance_request_id} by {self.department_id}"
-
-
 class ReportFeedback(BaseModel):
     """Reporter feedback captured after a report is Resolved — see ReportService.submit_feedback."""
     report = models.OneToOneField(Report, on_delete=models.CASCADE, related_name='feedback')

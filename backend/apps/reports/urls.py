@@ -1,13 +1,12 @@
-﻿from django.urls import path
+from django.urls import path
 from apps.reports.views import (
     ReportCreateView, ReportListView, ReportDetailView,
     ReportStatusUpdateView, ReportAssignView, EvidenceUploadView,
     MyReportsView, SyncView, ReportExportView,
     ReportDeleteView, ReportRestoreView, ReportDeletedListView,
-    ReportAssignableOfficersView, ReportTransferView, ReportEscalateView,
+    ReportAssignableOfficersView,
 )
 from apps.reports.views_bulk import BulkStatusUpdateView, BulkAssignView
-from apps.reports.views_assistance import AssistanceRequestCreateView, AssistanceRequestAcknowledgeView
 from apps.reports.views_feedback import ReportFeedbackView, PendingFeedbackListView, AdminFeedbackListView
 
 urlpatterns = [
@@ -20,14 +19,10 @@ urlpatterns = [
     path('bulk/assign/', BulkAssignView.as_view(), name='report_bulk_assign'),
     path('pending-feedback/', PendingFeedbackListView.as_view(), name='report_pending_feedback'),
     path('feedback/', AdminFeedbackListView.as_view(), name='report_feedback_list'),
-    path('assistance-requests/<uuid:id>/acknowledge/', AssistanceRequestAcknowledgeView.as_view(), name='assistance_request_acknowledge'),
     path('<uuid:id>/', ReportDetailView.as_view(), name='report_detail'),
     path('<uuid:id>/status/', ReportStatusUpdateView.as_view(), name='report_status'),
     path('<uuid:id>/assign/', ReportAssignView.as_view(), name='report_assign'),
     path('<uuid:id>/assignable-officers/', ReportAssignableOfficersView.as_view(), name='report_assignable_officers'),
-    path('<uuid:id>/transfer/', ReportTransferView.as_view(), name='report_transfer'),
-    path('<uuid:id>/escalate/', ReportEscalateView.as_view(), name='report_escalate'),
-    path('<uuid:id>/request-assistance/', AssistanceRequestCreateView.as_view(), name='report_request_assistance'),
     path('<uuid:id>/feedback/', ReportFeedbackView.as_view(), name='report_feedback'),
     path('<uuid:id>/evidence/', EvidenceUploadView.as_view(), name='report_evidence'),
     path('<uuid:id>/delete/', ReportDeleteView.as_view(), name='report_delete'),

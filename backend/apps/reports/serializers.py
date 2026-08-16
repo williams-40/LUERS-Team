@@ -3,7 +3,6 @@ from django.contrib.auth import get_user_model
 from apps.reports.models import Report, Evidence, Department
 from apps.core.choices import Urgency, Status
 from apps.reports.validators import validate_evidence_file
-from apps.reports.serializers_assistance import AssistanceRequestSerializer
 
 User = get_user_model()
 
@@ -39,8 +38,7 @@ class ReportListSerializer(serializers.ModelSerializer):
     department_id = serializers.UUIDField(source='department.id', read_only=True, default=None)
     department_name = serializers.CharField(source='department.name', read_only=True, default=None)
     # Lets the frontend decide whether the *viewer* is this report's
-    # department head (assign/transfer/escalate authority) without a
-    # separate lookup.
+    # department head (assign authority) without a separate lookup.
     department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
 
     class Meta:
@@ -65,7 +63,6 @@ class ReportDetailSerializer(serializers.ModelSerializer):
     department_id = serializers.UUIDField(source='department.id', read_only=True, default=None)
     department_name = serializers.CharField(source='department.name', read_only=True, default=None)
     department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
-    assistance_requests = AssistanceRequestSerializer(many=True, read_only=True)
     reporter_name = serializers.SerializerMethodField()
     reporter_phone = serializers.SerializerMethodField()
 
@@ -77,7 +74,6 @@ class ReportDetailSerializer(serializers.ModelSerializer):
             'assigned_to', 'assigned_to_username', 'metadata', 'created_at', 'updated_at',
             'evidence',
             'department_id', 'department_name', 'department_head_id',
-            'assistance_requests',
             'reporter_name', 'reporter_phone',
         ]
 
@@ -185,19 +181,6 @@ class ReportUpdateStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Status.choices)
     expected_updated_at = serializers.DateTimeField(required=False, allow_null=True)
     client_timestamp = serializers.DateTimeField(required=False, allow_null=True)
-
-
-class ReportTransferSerializer(serializers.Serializer):
-    """Used by a report's department head (or System Admin) to move it to a different department."""
-    department_id = serializers.PrimaryKeyRelatedField(
-        queryset=Department.objects.filter(is_active=True), source='department'
-    )
-    reason = serializers.CharField(required=False, allow_blank=True, max_length=500)
-
-
-class ReportEscalateSerializer(serializers.Serializer):
-    """Used by a report's department head to flag it for System Admin attention."""
-    reason = serializers.CharField(required=False, allow_blank=True, max_length=500)
 
 
 class ReportAssignSerializer(serializers.Serializer):

@@ -12,7 +12,6 @@ from apps.reports.models import Report, Evidence, Department
 from apps.reports.serializers import (
     ReportListSerializer, ReportDetailSerializer, ReportCreateSerializer,
     ReportUpdateStatusSerializer, ReportAssignSerializer, EvidenceSerializer,
-    ReportTransferSerializer, ReportEscalateSerializer,
 )
 from apps.reports.services import (
     ReportService, MessageService, get_accessible_reports, filter_reports,
@@ -270,62 +269,6 @@ class ReportAssignableOfficersView(APIView):
         return Response([{'id': str(u.id), 'username': u.username} for u in candidates])
 
 
-class ReportTransferView(APIView):
-    """
-    POST /api/v1/reports/{id}/transfer/
-    Routine re-routing correction — moves the report to a different
-    department, clearing any existing assignment (it doesn't carry over).
-    Only the report's *current* department head, or System Admin, may
-    transfer it. This is also how a Medium-confidence routing suggestion
-    (see apps.reports.routing) gets acted on — System Admin reviews it on
-    the report detail page and transfers if they agree.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = ReportTransferSerializer
-
-    def post(self, request, id):
-        report = get_object_or_404(get_accessible_reports(request.user), id=id)
-        if not is_department_head_or_system_admin(request.user, report):
-            raise PermissionDenied("Only this report's department head or a System Admin can transfer it.")
-
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        new_department = serializer.validated_data['department']
-        reason = serializer.validated_data.get('reason') or None
-
-        ip = get_client_ip(request)
-        ReportService.transfer_department(
-            report, new_department, request.user, reason=reason, ip_address=ip, sync_origin=SyncOrigin.LIVE
-        )
-        return Response({'id': str(report.id), 'department_id': str(new_department.id), 'department_name': new_department.name})
-
-
-class ReportEscalateView(APIView):
-    """
-    POST /api/v1/reports/{id}/escalate/
-    For genuinely exceptional situations needing System Admin
-    intervention — NOT for routine department-routing corrections, which
-    use ReportTransferView instead. Only the report's own department head
-    may escalate it (System Admin escalating to themselves is meaningless).
-    """
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = ReportEscalateSerializer
-
-    def post(self, request, id):
-        report = get_object_or_404(get_accessible_reports(request.user), id=id)
-        is_own_head = bool(report.department_id and report.department.head_id == request.user.id)
-        if not is_own_head:
-            raise PermissionDenied("Only this report's department head can escalate it.")
-
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        reason = serializer.validated_data.get('reason') or None
-
-        ip = get_client_ip(request)
-        ReportService.escalate(report, request.user, reason=reason, ip_address=ip, sync_origin=SyncOrigin.LIVE)
-        return Response({'id': str(report.id), 'escalated': True})
-
-
 class EvidenceUploadView(APIView):
     """
     POST /api/v1/reports/{id}/evidence/
@@ -522,9 +465,8 @@ class SyncView(APIView):
 
                     user = request.user
                     # get_accessible_reports already covers every legitimate
-                    # case here: the reporter (own non-anonymous report),
-                    # the assigned responder, the department head, or
-                    # System Admin.
+                    # case here: the reporter, the assigned responder, the
+                    # department head, or System Admin.
                     has_access = get_accessible_reports(user).filter(id=report.id).exists()
 
                     if not has_access:
