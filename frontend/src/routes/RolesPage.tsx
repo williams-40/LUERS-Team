@@ -62,8 +62,8 @@ export function RolesPage() {
       </div>
 
       <p className="text-ink-secondary mb-6 text-sm">
-        Built-in roles (Student, Staff, Security Officer, ICT Admin, Management / Escrow, System Admin) are
-        locked — create a custom role instead of editing one of these.
+        Built-in roles (Student, Staff, Responder, Security Officer, ICT Admin, Management / Escrow, System
+        Admin) are locked — create a custom role instead of editing one of these.
       </p>
 
       <div className="mb-6 flex flex-wrap gap-3">

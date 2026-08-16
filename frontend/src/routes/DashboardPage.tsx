@@ -32,11 +32,12 @@ export function DashboardPage() {
           <Link to="/admin">
             <Button variant="primary">Report queue</Button>
           </Link>
-          {has('manage_audit_logs') && (
-            <Link to="/admin/audit">
-              <Button variant="secondary">Audit log</Button>
-            </Link>
-          )}
+          {/* Phase 4: manage_audit_logs removed — audit access is now
+              purely object/query-level server-side, so this link just
+              follows the same admin-tier gate as the queue itself. */}
+          <Link to="/admin/audit">
+            <Button variant="secondary">Audit log</Button>
+          </Link>
         </div>
       )}
 

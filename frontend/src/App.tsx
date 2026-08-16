@@ -74,9 +74,16 @@ const router = createBrowserRouter([
         ),
       },
       {
+        // Phase 4: manage_audit_logs was removed as a standalone
+        // permission — the backend now scopes /api/v1/audit/ purely by
+        // department/actor (get_accessible_audit_logs), no permission
+        // gate at all. Reusing view_admin_dashboard here just keeps this
+        // route reachable by the same admin-tier population that can
+        // already see the triage queue; the real scoping happens
+        // server-side regardless of this check.
         path: 'admin/audit',
         element: (
-          <RequireAuth requirePermission="manage_audit_logs">
+          <RequireAuth requirePermission="view_admin_dashboard">
             <AuditLogPage />
           </RequireAuth>
         ),
