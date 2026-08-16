@@ -44,7 +44,11 @@ ROLE_MATRIX = {
         '/api/v1/reports/': 200,
         '/api/v1/reports/mine/': 403,
         '/api/v1/reports/create/': 403,
-        '/api/v1/dashboard/summary/': 403,
+        # Phase 4: responder carries view_admin_dashboard as a
+        # transitional grant (see role_seed_data.py's comment on
+        # BUILTIN_ROLES['responder']) — every migrated user is an
+        # existing department head who already had it.
+        '/api/v1/dashboard/summary/': 200,
     },
 }
 
