@@ -53,6 +53,10 @@ class Action(models.TextChoices):
     SUBMIT_FEEDBACK = 'submit_feedback', 'Submit Feedback'
     VIEW_FEEDBACK = 'view_feedback', 'View Feedback'
     RESPONDER_CREATED = 'responder_created', 'Responder Created'
+    ACCOUNT_CREATED = 'account_created', 'Account Created'
+    ROLE_CHANGED = 'role_changed', 'Role Changed'
+    ACCOUNT_ACTIVATED = 'account_activated', 'Account Activated'
+    ACCOUNT_DEACTIVATED = 'account_deactivated', 'Account Deactivated'
 
 class SyncOrigin(models.TextChoices):
     LIVE = 'live', 'Live'

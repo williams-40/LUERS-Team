@@ -195,3 +195,20 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
 
     def validate_role(self, value):
         return _validate_role_assignment(self, value)
+
+    def validate_is_active(self, value):
+        """
+        Phase 8: unconditional guard mirroring `_validate_role_assignment`'s
+        self-role-edit rule — no user may deactivate their own account
+        through this endpoint, regardless of what permission they hold.
+        Without it, a manage_users holder (most severely, the only
+        system_admin) could PATCH their own account inactive and
+        immediately lock themselves out (SimpleJWT rechecks `is_active` on
+        every request, so this takes effect the moment it's saved).
+        """
+        request = self.context.get('request')
+        actor = getattr(request, 'user', None)
+        target = self.instance
+        if value is False and actor is not None and target is not None and target.id == actor.id:
+            raise serializers.ValidationError("You cannot deactivate your own account.")
+        return value

@@ -2,6 +2,8 @@ import pytest
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+from apps.audit.models import AuditLog
+from apps.core.choices import Action
 from apps.core.factories import (
     UserFactory, SecurityFactory, ICTAdminFactory, ManagementFactory,
     StaffFactory, SystemAdminFactory,
@@ -206,3 +208,105 @@ def test_filter_users_by_is_active():
 
     assert response.status_code == 200
     assert all(u['is_active'] is False for u in response.data['results'])
+
+
+@pytest.mark.django_db
+def test_creating_a_user_creates_an_audit_log_entry():
+    """
+    Phase 8: closes a real blind spot — Phase 4's self-promotion guard
+    exists to *prevent* privilege escalation, but until now a legitimate
+    (or bypassed) account-admin action left zero audit trail.
+    """
+    admin = ICTAdminFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.post('/api/v1/auth/users/', {
+        'username': 'audited_new_user', 'email': 'audited_new_user@example.com',
+        'role': 'responder', 'password': 'a-much-better-password-9!',
+    })
+
+    assert response.status_code == 201
+    entry = AuditLog.objects.get(actor=admin, action=Action.ACCOUNT_CREATED)
+    assert entry.after_state['username'] == 'audited_new_user'
+    assert entry.after_state['role'] == 'responder'
+    assert entry.report is None
+
+
+@pytest.mark.django_db
+def test_changing_a_users_role_creates_an_audit_log_entry():
+    admin = ICTAdminFactory()
+    target = StaffFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'responder'})
+
+    assert response.status_code == 200
+    entry = AuditLog.objects.get(actor=admin, action=Action.ROLE_CHANGED)
+    assert entry.before_state['role'] == 'staff'
+    assert entry.after_state['role'] == 'responder'
+    assert entry.after_state['user_id'] == str(target.id)
+
+
+@pytest.mark.django_db
+def test_deactivating_a_user_creates_an_audit_log_entry():
+    admin = ICTAdminFactory()
+    target = StaffFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'is_active': False})
+
+    assert response.status_code == 200
+    entry = AuditLog.objects.get(actor=admin, action=Action.ACCOUNT_DEACTIVATED)
+    assert entry.after_state['user_id'] == str(target.id)
+    assert not AuditLog.objects.filter(actor=admin, action=Action.ACCOUNT_ACTIVATED).exists()
+
+
+@pytest.mark.django_db
+def test_reactivating_a_user_creates_an_audit_log_entry():
+    admin = ICTAdminFactory()
+    target = StaffFactory(is_active=False)
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'is_active': True})
+
+    assert response.status_code == 200
+    entry = AuditLog.objects.get(actor=admin, action=Action.ACCOUNT_ACTIVATED)
+    assert entry.after_state['user_id'] == str(target.id)
+    assert not AuditLog.objects.filter(actor=admin, action=Action.ACCOUNT_DEACTIVATED).exists()
+
+
+@pytest.mark.django_db
+def test_unrelated_field_update_creates_no_audit_entries():
+    """A plain profile-field PATCH (no role/is_active change) shouldn't log anything — only real state changes are audit-worthy."""
+    admin = ICTAdminFactory()
+    target = StaffFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'first_name': 'Renamed'})
+
+    assert response.status_code == 200
+    assert not AuditLog.objects.filter(actor=admin).exists()
+
+
+@pytest.mark.django_db
+def test_admin_cannot_deactivate_their_own_account():
+    """
+    Phase 8: unconditional guard mirroring the self-role-edit rule —
+    without it, a system_admin could PATCH their own account inactive
+    and immediately lock themselves out (SimpleJWT rechecks is_active on
+    every request).
+    """
+    admin = SystemAdminFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.patch(f'/api/v1/auth/users/{admin.id}/', {'is_active': False})
+
+    assert response.status_code == 400
+    admin.refresh_from_db()
+    assert admin.is_active is True

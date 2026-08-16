@@ -1,6 +1,7 @@
 import pytest
 from django.core import mail
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from rest_framework.test import APIClient
 from apps.core.factories import UserFactory, SecurityFactory, SystemAdminFactory, DepartmentFactory
 
@@ -145,3 +146,34 @@ def test_duplicate_email_rejected():
 
     assert response.status_code == 400
     assert 'email' in response.data
+
+
+@override_settings(RATELIMIT_ENABLE=True)
+@pytest.mark.django_db
+def test_responder_creation_is_rate_limited():
+    """
+    Phase 8: this is a real account-creation surface reachable by any
+    department head — flagged as a gap in the Phase 6 design doc (D.9)
+    but not closed until now. Rate limiting is deliberately disabled
+    under DEBUG (this codebase's dev-server convention, see
+    settings/base.py), so it's verified here via override_settings
+    rather than a live dev-server request.
+    """
+    head = SecurityFactory()
+    department = DepartmentFactory(head=head)
+    client = APIClient()
+    client.force_authenticate(user=head)
+
+    responses = [
+        client.post(f'/api/v1/departments/{department.id}/responders/', {
+            'username': f'ratelimit_test_{i}', 'email': f'ratelimit_test_{i}@example.com',
+        })
+        for i in range(11)
+    ]
+
+    assert [r.status_code for r in responses[:10]] == [201] * 10
+    # django_ratelimit's Ratelimited exception subclasses Django's
+    # PermissionDenied, which DRF's default exception handler maps to
+    # 403 — not 429 — confirmed here since this codebase has no prior
+    # rate-limit test establishing that mapping.
+    assert responses[10].status_code == 403

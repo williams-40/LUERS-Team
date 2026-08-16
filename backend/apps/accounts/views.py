@@ -21,6 +21,8 @@ from apps.accounts.serializers import (
 from django.db.models import Q
 from apps.accounts.services import PasswordResetService, blacklist_all_tokens_for, filter_users
 from apps.accounts.permissions import CanManageUsers, IsAdminTier
+from apps.audit.models import AuditLog
+from apps.core.choices import Action
 from apps.core.pagination import StandardPagination
 
 User = get_user_model()
@@ -212,8 +214,18 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
+        user = serializer.instance
+        # Phase 8: this and the role/activation-change logging below close
+        # a real blind spot — Phase 4's self-promotion guard exists to
+        # *prevent* privilege escalation, but until now a legitimate (or
+        # bypassed) privilege change left zero audit trail. report=None,
+        # same report-independent pattern as Phase 6's RESPONDER_CREATED.
+        AuditLog.objects.create(
+            actor=request.user, action=Action.ACCOUNT_CREATED,
+            after_state={'user_id': str(user.id), 'username': user.username, 'role': user.role.slug},
+        )
         headers = self.get_success_headers(serializer.data)
-        return Response(UserSerializer(serializer.instance).data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class AdminUserDetailView(generics.RetrieveUpdateAPIView):
@@ -233,9 +245,27 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
 
     def perform_update(self, serializer):
         was_active = serializer.instance.is_active
+        was_role_slug = serializer.instance.role.slug
         user = serializer.save()
+
         if was_active and not user.is_active:
             blacklist_all_tokens_for(user)
+            AuditLog.objects.create(
+                actor=self.request.user, action=Action.ACCOUNT_DEACTIVATED,
+                before_state={'is_active': True}, after_state={'is_active': False, 'user_id': str(user.id), 'username': user.username},
+            )
+        elif not was_active and user.is_active:
+            AuditLog.objects.create(
+                actor=self.request.user, action=Action.ACCOUNT_ACTIVATED,
+                before_state={'is_active': False}, after_state={'is_active': True, 'user_id': str(user.id), 'username': user.username},
+            )
+
+        if was_role_slug != user.role.slug:
+            AuditLog.objects.create(
+                actor=self.request.user, action=Action.ROLE_CHANGED,
+                before_state={'role': was_role_slug},
+                after_state={'role': user.role.slug, 'user_id': str(user.id), 'username': user.username},
+            )
 
     def update(self, request, *args, **kwargs):
         # Same reshaping as AdminUserListCreateView.create() above — the

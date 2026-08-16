@@ -1,4 +1,6 @@
 from django.shortcuts import get_object_or_404
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import GenericAPIView
@@ -61,6 +63,7 @@ class DepartmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         return DepartmentSerializer if self.request.method == 'GET' else DepartmentWriteSerializer
 
 
+@method_decorator(ratelimit(key='user', rate='10/h', method='POST', block=True), name='post')
 class DepartmentResponderCreateView(GenericAPIView):
     """
     POST /api/v1/departments/<id>/responders/
@@ -76,6 +79,12 @@ class DepartmentResponderCreateView(GenericAPIView):
     `is_department_head_or_system_admin`-style precedent of gating
     department-head actions on the relationship itself, not a role or
     permission flag.
+
+    Phase 8: rate-limited per-user (matching ReportCreateView's own
+    authenticated-endpoint precedent, rather than the per-IP key used by
+    the AllowAny auth endpoints) — this is a real account-creation
+    surface reachable by any department head, flagged as a gap in the
+    Phase 6 design doc (D.9) but not closed until now.
     """
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ResponderCreateSerializer
