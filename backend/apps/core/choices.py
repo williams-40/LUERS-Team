@@ -3,6 +3,7 @@
 class Role(models.TextChoices):
     STUDENT = 'student', 'Student'
     STAFF = 'staff', 'Staff'
+    RESPONDER = 'responder', 'Responder'
     SECURITY = 'security', 'Security Officer'
     ICT_ADMIN = 'ict_admin', 'ICT Admin'
     MANAGEMENT = 'management', 'Management / Escrow'

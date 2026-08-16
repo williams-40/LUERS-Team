@@ -18,8 +18,9 @@ from apps.accounts.serializers import (
     OfficerSerializer,
     UserSerializer,
 )
+from django.db.models import Q
 from apps.accounts.services import PasswordResetService, blacklist_all_tokens_for, filter_users
-from apps.accounts.permissions import CanManageUsers, IsSecurity, IsICTAdmin
+from apps.accounts.permissions import CanManageUsers, IsAdminTier
 from apps.core.pagination import StandardPagination
 
 User = get_user_model()
@@ -250,11 +251,29 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
 class SecurityOfficersView(generics.ListAPIView):
     """
     GET /api/v1/auth/officers/
-    Lists security officers for assignment pickers. Same role gate as
-    ReportAssignView (IsSecurity|IsICTAdmin) since that's the only place
-    this list is used.
+    Campus-wide, unscoped candidate list for the triage queue's bulk-assign
+    toolbar (BulkActionToolbar) — the real per-item authorization is
+    enforced separately and correctly in BulkAssignView
+    (is_department_head_or_system_admin / is_department_member_or_head),
+    so this is only a convenience picker, not a security boundary of its
+    own. Superseded for single-report assignment by the department-scoped
+    ReportAssignableOfficersView; kept here specifically because bulk
+    actions can span multiple departments at once, so there's no single
+    department to scope this list to (flagged as a real gap worth a
+    dedicated bulk-assign redesign later, not fixed here).
+
+    Phase 4: replaced the old role__slug='security' queryset and
+    IsSecurity|IsICTAdmin permission gate (both hardcoded-role checks —
+    'security'/'ict_admin' are being retired as meaningful account roles)
+    with a department-membership-based queryset and the same
+    view_admin_dashboard-gated admin tier this endpoint's only caller
+    (the triage queue) already requires to be reached at all.
     """
     serializer_class = OfficerSerializer
-    permission_classes = [IsAuthenticated, IsSecurity | IsICTAdmin]
+    permission_classes = [IsAuthenticated, IsAdminTier]
     pagination_class = None
-    queryset = User.objects.filter(role__slug='security').order_by('username')
+    queryset = (
+        User.objects.filter(Q(departments_headed__isnull=False) | Q(department_members__isnull=False), is_active=True)
+        .distinct()
+        .order_by('username')
+    )

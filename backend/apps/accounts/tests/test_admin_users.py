@@ -10,6 +10,7 @@ from apps.core.factories import (
 ROLE_MATRIX = {
     'student': 403,
     'staff': 403,
+    'responder': 403,
     'security': 403,
     'management': 403,
     'ict_admin': 200,
@@ -54,7 +55,7 @@ def test_admin_can_create_user():
     response = client.post('/api/v1/auth/users/', {
         'username': 'new_officer',
         'email': 'new_officer@example.com',
-        'role': 'security',
+        'role': 'responder',
         'password': 'a-much-better-password-9!',
     })
 
@@ -92,11 +93,11 @@ def test_admin_can_update_role_and_active_state():
     client = APIClient()
     client.force_authenticate(user=admin)
 
-    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'security'})
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'responder'})
 
     assert response.status_code == 200
     target.refresh_from_db()
-    assert target.role.slug == 'security'
+    assert target.role.slug == 'responder'
 
 
 @pytest.mark.django_db

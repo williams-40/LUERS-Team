@@ -6,12 +6,19 @@ from apps.core.choices import Status, Action
 
 
 @pytest.mark.django_db
-def test_audit_list_requires_admin_tier():
+def test_audit_list_returns_empty_for_user_with_no_department_affiliation():
+    """
+    Phase 4: no standalone manage_audit_logs permission gate anymore —
+    /api/v1/audit/ is IsAuthenticated only, scoped entirely by
+    get_accessible_audit_logs. A student with no department affiliation
+    at all gets 200 with an empty list, not a 403.
+    """
     student = UserFactory(role='student')
     client = APIClient()
     client.force_authenticate(user=student)
     response = client.get('/api/v1/audit/')
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.data['results'] == []
 
 
 @pytest.mark.django_db

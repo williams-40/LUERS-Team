@@ -33,30 +33,6 @@ class IsStudentOrStaff(BasePermission):
         return request.user.is_authenticated and request.user.has_permission('create_report')
 
 
-class IsSecurity(BasePermission):
-    """
-    Allows access only to the built-in Security role specifically — not a
-    capability, an identity check. Only gates the deliberately-unused-but-kept
-    SecurityOfficersView (combined with IsICTAdmin below).
-    """
-    def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated
-            and request.user.role_id is not None
-            and request.user.role.slug == 'security'
-        )
-
-
-class IsICTAdmin(BasePermission):
-    """Allows access only to the built-in ICT Admin role specifically — see IsSecurity."""
-    def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated
-            and request.user.role_id is not None
-            and request.user.role.slug == 'ict_admin'
-        )
-
-
 class IsAdminTier(BasePermission):
     """Allows access to the dashboard/trends/analytics/report-export surface."""
     def has_permission(self, request, view):
@@ -66,7 +42,6 @@ class IsAdminTier(BasePermission):
 # Split out of what used to be one monolithic IsAdminTier/IsAccountAdmin per
 # capability, so a future custom role can be granted one without the others —
 # see Phase 15 plan. Each of these is a distinct Permission row.
-HasAuditAccess = require_permission('manage_audit_logs')
 CanManageUsers = require_permission('manage_users')
 CanManageDepartments = require_permission('manage_departments')
 CanDeleteReport = require_permission('delete_report')

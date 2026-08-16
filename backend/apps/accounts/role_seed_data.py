@@ -9,7 +9,6 @@ PERMISSIONS = [
     # slug, label, description, category
     ('create_report', 'Create Report', "Submit new incident reports.", 'reports'),
     ('view_admin_dashboard', 'View Admin Dashboard', "Access the admin dashboard, trends, analytics, and report queue export.", 'dashboard'),
-    ('manage_audit_logs', 'Manage Audit Logs', "View and export the full audit log.", 'audit'),
     ('manage_users', 'Manage Users', "Create, view, and edit user accounts.", 'accounts'),
     ('manage_departments', 'Manage Departments', "Create and edit departments, heads, and members.", 'departments'),
     ('delete_report', 'Delete Report', "Soft-delete, restore, and view deleted reports.", 'reports'),
@@ -21,19 +20,37 @@ PERMISSIONS = [
 BUILTIN_ROLES = {
     'student': ('Student', ['create_report']),
     'staff': ('Staff', ['create_report']),
-    'security': ('Security Officer', ['view_admin_dashboard', 'manage_audit_logs']),
-    'ict_admin': ('ICT Admin', [
-        'view_admin_dashboard', 'manage_audit_logs', 'manage_users', 'manage_departments',
-    ]),
-    # Phase 2: 'reveal_identity' removed — anonymous reporting and
-    # identity-reveal were removed entirely, so this role's one
-    # distinguishing capability is gone. The role itself is deliberately
-    # NOT auto-reassigned or deleted here (see the redesign plan's role-
-    # migration report) — that's a manual decision for whoever holds it
-    # today, tracked separately from this permission-catalogue change.
-    'management': ('Management / Escrow', ['view_admin_dashboard', 'manage_audit_logs']),
+    # Phase 4: the target role model. Responder capabilities (view/update
+    # assigned reports, upload evidence, department-head authority) are
+    # all object-level — see apps.reports.services — department
+    # headship/membership is what actually differentiates one responder
+    # from another, not the Role. view_admin_dashboard is included here
+    # (not left empty) as a deliberate transitional decision: every user
+    # migrated into this role by the Phase 4 role-collapse data migration
+    # is an existing department head who already held view_admin_dashboard
+    # under their old role, and the dedicated department-head/responder
+    # dashboard that would let it be removed here doesn't exist yet (that's
+    # a later phase). Revisit once that dashboard ships — backend query
+    # scoping (get_accessible_reports/get_accessible_audit_logs) is
+    # already correct regardless of who holds this permission, so this is
+    # a UI-reachability decision, not a data-exposure one.
+    'responder': ('Responder', ['view_admin_dashboard']),
+    # Phase 4: 'manage_audit_logs' removed — audit-log access became
+    # fully object/query-level (get_accessible_audit_logs) rather than a
+    # standalone permission. 'security'/'ict_admin'/'management' are
+    # retired as active account roles (collapsed into 'responder' or left
+    # for manual reassignment — see the redesign plan's role-migration
+    # report) but kept seeded, inactive, and unmodified here so existing
+    # historical references and this codebase's test factories
+    # (SecurityFactory/ICTAdminFactory/ManagementFactory) keep resolving
+    # correctly; is_active=False (set directly in migration
+    # accounts/0010, not through this seed data) blocks any *new*
+    # assignment of them.
+    'security': ('Security Officer', ['view_admin_dashboard']),
+    'ict_admin': ('ICT Admin', ['view_admin_dashboard', 'manage_users', 'manage_departments']),
+    'management': ('Management / Escrow', ['view_admin_dashboard']),
     'system_admin': ('System Admin', [
-        'view_admin_dashboard', 'manage_audit_logs', 'manage_users', 'manage_departments', 'delete_report',
+        'view_admin_dashboard', 'manage_users', 'manage_departments', 'delete_report',
         'manage_roles', 'view_all_reports',
     ]),
 }

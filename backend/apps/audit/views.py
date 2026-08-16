@@ -4,7 +4,6 @@ from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from apps.audit.models import AuditLog
 from apps.audit.serializers import AuditLogSerializer
-from apps.accounts.permissions import HasAuditAccess
 from apps.core.pagination import StandardPagination
 from apps.core.export import csv_response, pdf_response
 from apps.reports.services import get_accessible_audit_logs
@@ -46,13 +45,16 @@ def filter_audit_logs(queryset, params):
 class AuditLogListView(generics.ListAPIView):
     """
     GET /api/v1/audit/
-    Filterable, paginated audit log, scoped via get_accessible_audit_logs:
-    System Admin sees everything; a department head sees every entry for
-    their department's reports; a responder (member) sees only their own
-    actions.
+    Filterable, paginated audit log. Phase 4: no standalone permission
+    gate — access is entirely object/query-level via
+    get_accessible_audit_logs: System Admin sees everything, a
+    department head sees every entry for their department's reports, a
+    plain responder sees only their own actions, and a reporter (no
+    department affiliation at all) sees nothing. A user with nothing to
+    see just gets an empty paginated list, not a 403.
     """
     serializer_class = AuditLogSerializer
-    permission_classes = [permissions.IsAuthenticated, HasAuditAccess]
+    permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardPagination
 
     def get_queryset(self):
@@ -68,7 +70,7 @@ class AuditLogExportView(APIView):
     Uses 'export_format' rather than DRF's reserved 'format' query param —
     see ReportExportView's docstring for why.
     """
-    permission_classes = [permissions.IsAuthenticated, HasAuditAccess]
+    permission_classes = [permissions.IsAuthenticated]
 
     HEADER = [
         'Timestamp', 'Action', 'Report ID', 'Report Category', 'Actor',

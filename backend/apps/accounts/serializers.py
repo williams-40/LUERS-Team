@@ -42,6 +42,46 @@ def _validate_email_unique(instance, value):
     return value
 
 
+def _is_privileged_role(role):
+    """
+    A role that can itself grant system-administrator-level access: the
+    system_admin role, or any role — built-in or custom — that carries
+    manage_roles. Assigning a user into one of these is treated as
+    equivalent to granting manage_roles directly.
+    """
+    return role.slug == 'system_admin' or role.permissions.filter(slug='manage_roles').exists()
+
+
+def _validate_role_assignment(serializer, value):
+    """
+    Shared self-promotion guard for AdminUserCreateSerializer/
+    AdminUserUpdateSerializer (Phase 4):
+      - No user may ever change their own role field, through this or any
+        other endpoint, regardless of what permission they hold — an
+        unconditional rule, not a permission-gated exception, so a
+        system_admin can't "confirm" a self-downgrade/upgrade either.
+      - Assigning a user into system_admin, or any role carrying
+        manage_roles, itself requires the acting user to hold
+        manage_roles — manage_users alone is not enough. Without this, a
+        manage_users holder (e.g. a future non-system_admin role granted
+        it) could promote any account, including their own, to
+        system_admin despite never having been granted manage_roles.
+    """
+    request = serializer.context.get('request')
+    actor = getattr(request, 'user', None)
+
+    target = serializer.instance
+    if actor is not None and target is not None and target.id == actor.id:
+        raise serializers.ValidationError("You cannot change your own role.")
+
+    if _is_privileged_role(value) and not (actor and actor.has_permission('manage_roles')):
+        raise serializers.ValidationError(
+            "Only a user with manage_roles can assign this role."
+        )
+
+    return value
+
+
 class MeUpdateSerializer(serializers.ModelSerializer):
     """
     Self-service profile update. `role`/`university_id`/`username` are
@@ -102,6 +142,9 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(e.messages)
         return value
 
+    def validate_role(self, value):
+        return _validate_role_assignment(self, value)
+
     def create(self, validated_data):
         password = validated_data.pop('password')
         user = User.objects.create_user(password=password, **validated_data)
@@ -120,3 +163,6 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         return _validate_email_unique(self.instance, value)
+
+    def validate_role(self, value):
+        return _validate_role_assignment(self, value)

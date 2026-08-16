@@ -40,6 +40,12 @@ ROLE_MATRIX = {
         # not a deliberate exclusion).
         '/api/v1/dashboard/summary/': 200,
     },
+    'responder': {
+        '/api/v1/reports/': 200,
+        '/api/v1/reports/mine/': 403,
+        '/api/v1/reports/create/': 403,
+        '/api/v1/dashboard/summary/': 403,
+    },
 }
 
 @pytest.mark.django_db
