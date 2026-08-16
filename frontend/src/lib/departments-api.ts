@@ -15,6 +15,15 @@ export interface DepartmentFilters {
   page?: number;
 }
 
+/**
+ * Shared react-query key for "the active departments list, used to work
+ * out whether the current user heads any of them" — DashboardSummaryPanel,
+ * MyDepartmentResponders, and DashboardPage all derive head-detection off
+ * the exact same fetch, so they share one cache entry instead of issuing
+ * three duplicate requests.
+ */
+export const HEAD_DETECTION_DEPARTMENTS_QUERY_KEY = ['departments', { is_active: true, filter: true }] as const;
+
 export async function fetchDepartments(filters: DepartmentFilters = {}): Promise<Paginated<Department>> {
   const { data } = await apiClient.get<Paginated<Department>>('/departments/', { params: filters });
   return data;

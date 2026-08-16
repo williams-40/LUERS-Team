@@ -3,13 +3,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createDepartmentResponder, fetchDepartments } from '../../lib/departments-api';
+import { createDepartmentResponder, fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../../lib/departments-api';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../ui/Button';
 import { useToast } from '../../lib/toast-context';
 import type { ApiError } from '../../lib/api-client';
-
-const DEPARTMENTS_QUERY_KEY = ['departments', { is_active: true, filter: true }];
 
 const responderSchema = z.object({
   username: z.string().trim().min(1, 'Username is required'),
@@ -152,7 +150,7 @@ export function MyDepartmentResponders() {
   const [openFormFor, setOpenFormFor] = useState<string | null>(null);
 
   const { data: departments } = useQuery({
-    queryKey: DEPARTMENTS_QUERY_KEY,
+    queryKey: HEAD_DETECTION_DEPARTMENTS_QUERY_KEY,
     queryFn: () => fetchDepartments({ is_active: true }),
   });
 
@@ -161,7 +159,7 @@ export function MyDepartmentResponders() {
 
   function handleCreated(email: string) {
     setOpenFormFor(null);
-    void queryClient.invalidateQueries({ queryKey: DEPARTMENTS_QUERY_KEY });
+    void queryClient.invalidateQueries({ queryKey: HEAD_DETECTION_DEPARTMENTS_QUERY_KEY });
     show(`Invite sent to ${email}`, 'success');
   }
 

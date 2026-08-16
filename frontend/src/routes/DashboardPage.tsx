@@ -1,16 +1,33 @@
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
 import { DashboardSummaryPanel } from '../components/dashboard/DashboardSummaryPanel';
 import { DashboardTrendsPanel } from '../components/dashboard/DashboardTrendsPanel';
 import { DashboardAnalyticsPanel } from '../components/dashboard/DashboardAnalyticsPanel';
 import { MyDepartmentResponders } from '../components/dashboard/MyDepartmentResponders';
+import { MyAssignedReportsPanel } from '../components/dashboard/MyAssignedReportsPanel';
+import { fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../lib/departments-api';
 
 export function DashboardPage() {
   const { user, logout } = useAuth();
   const has = (permission: string) => Boolean(user?.permissions.includes(permission));
   const isReporter = has('create_report');
   const canSeeSummary = has('view_admin_dashboard');
+  const isSystemAdmin = has('view_all_reports');
+
+  // Phase 7: which of the manager-oriented panels (Trends/Analytics) make
+  // sense depends on whether this dashboard-capable user actually manages
+  // anything — a plain responder gets a focused "my assigned reports"
+  // view instead (see MyAssignedReportsPanel for why). Shares its fetch
+  // with DashboardSummaryPanel/MyDepartmentResponders via the same query key.
+  const { data: departments } = useQuery({
+    queryKey: HEAD_DETECTION_DEPARTMENTS_QUERY_KEY,
+    queryFn: () => fetchDepartments({ is_active: true }),
+    enabled: canSeeSummary && !isSystemAdmin,
+  });
+  const isDepartmentHead = Boolean(user && departments?.results.some((d) => d.head === user.id));
+  const isManagerTier = isSystemAdmin || isDepartmentHead;
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
@@ -73,9 +90,10 @@ export function DashboardPage() {
       )}
 
       {canSeeSummary && <DashboardSummaryPanel />}
-      {canSeeSummary && <MyDepartmentResponders />}
-      {canSeeSummary && <DashboardTrendsPanel />}
-      {canSeeSummary && <DashboardAnalyticsPanel />}
+      {canSeeSummary && isDepartmentHead && <MyDepartmentResponders />}
+      {canSeeSummary && !isManagerTier && <MyAssignedReportsPanel />}
+      {canSeeSummary && isManagerTier && <DashboardTrendsPanel />}
+      {canSeeSummary && isManagerTier && <DashboardAnalyticsPanel />}
 
       <div className="mb-4 flex flex-wrap gap-3">
         <Link to="/profile">

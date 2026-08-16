@@ -1,7 +1,7 @@
 ﻿import { useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchDashboardSummary } from '../../lib/dashboard-api';
-import { fetchDepartments } from '../../lib/departments-api';
+import { fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../../lib/departments-api';
 import { useReportSocket } from '../../hooks/useReportSocket';
 import { LiveIndicator } from '../ui/LiveIndicator';
 import { useAuth } from '../../hooks/useAuth';
@@ -23,7 +23,7 @@ export function DashboardSummaryPanel() {
   // Heading is a label only — the actual scoping comes from the backend
   // (get_accessible_reports), this just names what the numbers represent.
   const { data: departments } = useQuery({
-    queryKey: ['departments', { is_active: true, filter: true }],
+    queryKey: HEAD_DETECTION_DEPARTMENTS_QUERY_KEY,
     queryFn: () => fetchDepartments({ is_active: true }),
     enabled: !isSystemAdmin,
   });
