@@ -476,10 +476,16 @@ def get_accessible_audit_logs(user):
     Audit-log analog of `get_accessible_reports`, same Department Head /
     Responder axis: System Admin sees every entry; a Department Head sees
     every entry for reports in the department(s) they head (full
-    oversight, not just their own actions); a Responder (member, non-head)
-    sees only entries where *they* are the actor; everyone else sees
-    nothing (the audit log endpoints are IsAdminTier-ish gated anyway, but
-    this stays safe if ever called for a plain reporter).
+    oversight, not just their own actions) *plus* every entry where
+    they're personally the actor, regardless of report linkage (Phase 6:
+    department-head actions like responder creation aren't tied to any
+    report at all — report=None — so without this a head couldn't see
+    their own such entries, the same class of gap Phase 2's "always see
+    reports you personally filed" fix addressed for get_accessible_reports);
+    a Responder (member, non-head) sees only entries where *they* are the
+    actor; everyone else sees nothing (the audit log endpoints are
+    IsAdminTier-ish gated anyway, but this stays safe if ever called for a
+    plain reporter).
     """
     if user.has_permission('view_all_reports'):
         return AuditLog.objects.all()
@@ -487,7 +493,7 @@ def get_accessible_audit_logs(user):
     dept_as_head = Department.objects.filter(head=user)
     if dept_as_head.exists():
         accessible_reports = Report.objects.filter(department__in=dept_as_head)
-        return AuditLog.objects.filter(report__in=accessible_reports)
+        return AuditLog.objects.filter(Q(report__in=accessible_reports) | Q(actor=user))
 
     dept_as_member = user.department_members.all()
     if dept_as_member.exists():

@@ -163,3 +163,22 @@ def test_get_accessible_audit_logs_unaffiliated_user_sees_nothing():
     report = ReportFactory()
     AuditLog.objects.create(report=report, actor=user, action=Action.CREATE, after_state={})
     assert get_accessible_audit_logs(user).count() == 0
+
+
+@pytest.mark.django_db
+def test_get_accessible_audit_logs_head_sees_own_report_independent_actions():
+    """
+    Phase 6: a department head's report-independent actions (e.g.
+    creating a responder account) produce an AuditLog entry with
+    report=None. The head branch used to filter purely by
+    report__in=<their department's reports>, which would silently hide
+    their own such entries from themselves — fixed by also including
+    Q(actor=user) unconditionally for heads, mirroring the member
+    branch's existing "always see your own actions" rule.
+    """
+    head = SecurityFactory()
+    DepartmentFactory(head=head)
+    entry = AuditLog.objects.create(
+        report=None, actor=head, action=Action.RESPONDER_CREATED, after_state={},
+    )
+    assert entry in get_accessible_audit_logs(head)

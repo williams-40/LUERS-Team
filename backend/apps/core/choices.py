@@ -52,6 +52,7 @@ class Action(models.TextChoices):
     FEEDBACK_REQUESTED = 'feedback_requested', 'Feedback Requested'
     SUBMIT_FEEDBACK = 'submit_feedback', 'Submit Feedback'
     VIEW_FEEDBACK = 'view_feedback', 'View Feedback'
+    RESPONDER_CREATED = 'responder_created', 'Responder Created'
 
 class SyncOrigin(models.TextChoices):
     LIVE = 'live', 'Live'

@@ -151,6 +151,35 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
         return user
 
 
+class ResponderCreateSerializer(serializers.ModelSerializer):
+    """
+    Phase 6: department-scoped responder account creation
+    (DepartmentResponderCreateView). No `role`, `department`, or
+    `password` field is even listed here — role is hardcoded to
+    `responder` server-side in the view, department comes from the URL
+    only, and the account gets an unusable password + a password-reset
+    email rather than ever having a credential transit this endpoint at
+    all. Mirrors MeUpdateSerializer's established field-omission
+    pattern for blocking privilege escalation (absent, not just
+    read-only). Duplicate username/email are already caught by the
+    model's own unique=True constraints via DRF's automatic
+    UniqueValidator, matching AdminUserCreateSerializer's behavior.
+    """
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone_number', 'university_id']
+
+    def create(self, validated_data):
+        # Plain ModelSerializer.create() would call the default manager's
+        # create() (a bare `User(**kwargs); obj.save()`), leaving
+        # `password` as an empty string rather than a genuinely unusable
+        # one — must go through create_user(password=None), which calls
+        # set_unusable_password() internally. `role` isn't a serializer
+        # field at all, so it's set here too, not via a default.
+        responder_role = Role.objects.get(slug='responder', is_active=True)
+        return User.objects.create_user(password=None, role=responder_role, **validated_data)
+
+
 class AdminUserUpdateSerializer(serializers.ModelSerializer):
     """Admin-tier account management: role/active-state changes, no
     username/password here — see AdminUserCreateSerializer for creation and

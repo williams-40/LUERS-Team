@@ -1,7 +1,15 @@
-from rest_framework import generics, permissions
+from django.shortcuts import get_object_or_404
+from rest_framework import generics, permissions, status
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.generics import GenericAPIView
+from rest_framework.response import Response
 from apps.reports.models import Department
 from apps.reports.serializers_department import DepartmentSerializer, DepartmentWriteSerializer
 from apps.accounts.permissions import CanManageDepartments
+from apps.accounts.serializers import ResponderCreateSerializer, UserSerializer
+from apps.accounts.services import PasswordResetService
+from apps.audit.models import AuditLog
+from apps.core.choices import Action
 from apps.core.pagination import StandardPagination
 
 
@@ -51,3 +59,48 @@ class DepartmentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_serializer_class(self):
         return DepartmentSerializer if self.request.method == 'GET' else DepartmentWriteSerializer
+
+
+class DepartmentResponderCreateView(GenericAPIView):
+    """
+    POST /api/v1/departments/<id>/responders/
+    Phase 6: lets a department's own head create a responder account
+    scoped to that department, with no role/department/password ever
+    supplied by the client (see ResponderCreateSerializer). Deliberately
+    department-head-only, not extended to system_admin — system_admin
+    already has a fully general provisioning path via
+    AdminUserListCreateView + this same DepartmentDetailView's member
+    PATCH, so keeping this endpoint's authorization to a single
+    object-level headship check keeps it minimal and auditable. No
+    dedicated permission slug is used — matches this codebase's existing
+    `is_department_head_or_system_admin`-style precedent of gating
+    department-head actions on the relationship itself, not a role or
+    permission flag.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ResponderCreateSerializer
+
+    def post(self, request, id):
+        department = get_object_or_404(Department, id=id, is_active=True)
+        if department.head_id != request.user.id:
+            raise PermissionDenied("Only this department's head may create a responder account here.")
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        department.members.add(user)
+
+        PasswordResetService.request_reset(user.email)
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action=Action.RESPONDER_CREATED,
+            after_state={
+                'user_id': str(user.id),
+                'username': user.username,
+                'department_id': str(department.id),
+                'department_name': department.name,
+            },
+        )
+
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
