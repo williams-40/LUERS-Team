@@ -5,10 +5,6 @@ import { deleteReport, fetchReportDetail } from '../lib/reports-api';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { StatusUpdateControl } from '../components/reports/StatusUpdateControl';
 import { AssignControl } from '../components/reports/AssignControl';
-import { TransferControl } from '../components/reports/TransferControl';
-import { EscalateControl } from '../components/reports/EscalateControl';
-import { RequestAssistanceControl } from '../components/reports/RequestAssistanceControl';
-import { AssistanceRequestsList } from '../components/reports/AssistanceRequestsList';
 import { FeedbackDisplay } from '../components/reports/FeedbackDisplay';
 import { ReporterInfoSection } from '../components/reports/ReporterInfoSection';
 import { ReportChat } from '../components/reports/ReportChat';
@@ -96,10 +92,9 @@ export function ReportDetailPage() {
 
   if (!report) return null;
 
-  // Phase 14: assign/transfer authority is "this report's department
-  // head, or System Admin" — not a fixed Role list, since responders are
-  // department members now, regardless of account role. Escalation is
-  // head-only (System Admin escalating to themselves is meaningless).
+  // Phase 14: assign authority is "this report's department head, or
+  // System Admin" — not a fixed Role list, since responders are
+  // department members now, regardless of account role.
   const isDepartmentHead = Boolean(user && report.department_head_id === user.id);
   const isSystemAdmin = Boolean(user?.permissions.includes('view_all_reports'));
   const canManageDepartment = isDepartmentHead || isSystemAdmin;
@@ -157,14 +152,6 @@ export function ReportDetailPage() {
       {canUpdateStatus && <StatusUpdateControl report={report} onUpdated={refetch} />}
 
       {canManageDepartment && <AssignControl report={report} onUpdated={refetch} />}
-
-      {canManageDepartment && <TransferControl report={report} onUpdated={refetch} />}
-
-      {isDepartmentHead && <EscalateControl report={report} />}
-
-      {canUpdateStatus && <RequestAssistanceControl report={report} onUpdated={refetch} />}
-
-      <AssistanceRequestsList assistanceRequests={report.assistance_requests} onUpdated={refetch} />
 
       {user?.permissions.includes('delete_report') && (
         <div className="mb-5">

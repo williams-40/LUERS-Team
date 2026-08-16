@@ -125,33 +125,13 @@ export interface ReportListItem {
   deleted_at: string | null;
   department_id: string | null;
   department_name: string | null;
-  /** Lets the frontend decide if the viewer has assign/transfer/escalate authority without a separate lookup. */
+  /** Lets the frontend decide if the viewer has assign authority without a separate lookup. */
   department_head_id: string | null;
-}
-
-export interface AssistanceAcknowledgement {
-  id: string;
-  department: string;
-  department_name: string;
-  acknowledged_by_username: string | null;
-  created_at: string;
-}
-
-export interface AssistanceRequest {
-  id: string;
-  report: string;
-  reason: string;
-  requested_by: string | null;
-  requested_by_username: string | null;
-  departments: { id: string; name: string }[];
-  acknowledgements: AssistanceAcknowledgement[];
-  created_at: string;
 }
 
 export interface ReportDetail extends Omit<ReportListItem, 'evidence_count'> {
   metadata: Record<string, unknown>;
   evidence: Evidence[];
-  assistance_requests: AssistanceRequest[];
   reporter_name: string | null;
   reporter_phone: string | null;
 }
@@ -242,10 +222,6 @@ export const Action = {
   RESTORE: 'restore',
   AUTO_ROUTE: 'auto_route',
   ROUTING_SUGGESTION: 'routing_suggestion',
-  DEPARTMENT_TRANSFER: 'department_transfer',
-  ESCALATE: 'escalate',
-  REQUEST_ASSISTANCE: 'request_assistance',
-  ACKNOWLEDGE_ASSISTANCE: 'acknowledge_assistance',
   FEEDBACK_REQUESTED: 'feedback_requested',
   SUBMIT_FEEDBACK: 'submit_feedback',
   VIEW_FEEDBACK: 'view_feedback',

@@ -2,10 +2,10 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
- * First true modal primitive in this codebase — every prior mutating flow
- * (Transfer, Escalate, delete confirmation via window.confirm, etc.) stays
- * inline-on-page. Built for FeedbackModal, which the spec explicitly asks
- * to appear as "a popup/modal."
+ * First true modal primitive in this codebase — every other mutating flow
+ * (delete confirmation via window.confirm, etc.) stays inline-on-page.
+ * Built for FeedbackModal, which the spec explicitly asks to appear as
+ * "a popup/modal."
  */
 export function Modal({
   title,

@@ -1,7 +1,6 @@
 import { apiClient } from './api-client';
 import { downloadBlob } from './utils';
 import type {
-  AssistanceRequest,
   Category,
   CreateReportInput,
   Evidence,
@@ -96,25 +95,6 @@ export async function fetchAssignableOfficers(reportId: string): Promise<Officer
   return data;
 }
 
-export async function transferReportDepartment(args: {
-  reportId: string;
-  departmentId: string;
-  reason?: string;
-}): Promise<{ id: string; department_id: string; department_name: string }> {
-  const { data } = await apiClient.post<{ id: string; department_id: string; department_name: string }>(
-    `/reports/${args.reportId}/transfer/`,
-    { department_id: args.departmentId, reason: args.reason },
-  );
-  return data;
-}
-
-export async function escalateReport(args: { reportId: string; reason?: string }): Promise<{ id: string; escalated: true }> {
-  const { data } = await apiClient.post<{ id: string; escalated: true }>(`/reports/${args.reportId}/escalate/`, {
-    reason: args.reason,
-  });
-  return data;
-}
-
 export async function downloadReportsExport(
   filters: Pick<ReportQueueFilters, 'status' | 'category' | 'urgency' | 'search'>,
   exportFormat: 'csv' | 'pdf',
@@ -166,29 +146,6 @@ export async function fetchDeletedReports(
   filters: Pick<ReportQueueFilters, 'page' | 'search'> = {},
 ): Promise<Paginated<ReportListItem>> {
   const { data } = await apiClient.get<Paginated<ReportListItem>>('/reports/deleted/', { params: filters });
-  return data;
-}
-
-export async function requestAssistance(args: {
-  reportId: string;
-  departmentIds: string[];
-  reason: string;
-}): Promise<AssistanceRequest> {
-  const { data } = await apiClient.post<AssistanceRequest>(`/reports/${args.reportId}/request-assistance/`, {
-    departments: args.departmentIds,
-    reason: args.reason,
-  });
-  return data;
-}
-
-export async function acknowledgeAssistance(args: {
-  assistanceRequestId: string;
-  departmentId: string;
-}): Promise<AssistanceRequest> {
-  const { data } = await apiClient.post<AssistanceRequest>(
-    `/reports/assistance-requests/${args.assistanceRequestId}/acknowledge/`,
-    { department_id: args.departmentId },
-  );
   return data;
 }
 
