@@ -225,6 +225,7 @@ export const Action = {
   FEEDBACK_REQUESTED: 'feedback_requested',
   SUBMIT_FEEDBACK: 'submit_feedback',
   VIEW_FEEDBACK: 'view_feedback',
+  RESPONDER_CREATED: 'responder_created',
 } as const;
 export type Action = (typeof Action)[keyof typeof Action];
 

@@ -19,7 +19,8 @@
     "routing_suggestion": "Routing Suggestion",
     "feedback_requested": "Feedback Requested",
     "submit_feedback": "Submit Feedback",
-    "view_feedback": "View Feedback"
+    "view_feedback": "View Feedback",
+    "responder_created": "Responder Created"
   },
   "theme": {
     "label": "Theme",

@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { DashboardSummaryPanel } from '../components/dashboard/DashboardSummaryPanel';
 import { DashboardTrendsPanel } from '../components/dashboard/DashboardTrendsPanel';
 import { DashboardAnalyticsPanel } from '../components/dashboard/DashboardAnalyticsPanel';
+import { MyDepartmentResponders } from '../components/dashboard/MyDepartmentResponders';
 
 export function DashboardPage() {
   const { user, logout } = useAuth();
@@ -72,6 +73,7 @@ export function DashboardPage() {
       )}
 
       {canSeeSummary && <DashboardSummaryPanel />}
+      {canSeeSummary && <MyDepartmentResponders />}
       {canSeeSummary && <DashboardTrendsPanel />}
       {canSeeSummary && <DashboardAnalyticsPanel />}
 
