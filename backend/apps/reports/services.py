@@ -431,27 +431,27 @@ def get_accessible_reports(user, include_deleted=False):
     """
     Return a QuerySet of reports the user is allowed to see.
 
-    As of Phase 14, visibility is Department-based rather than tied to a
-    fixed account Role — "Department Head" and "Department Responder"
-    (member) are their own axis (any user can be either, see
-    `apps.reports.serializers_department`), and a report's classification
-    IS its department (the old fixed Category enum is retired for new
-    reports — see `apps.reports.routing`):
-    - System Admin sees everything, unconditionally.
-    - A Department Head sees every report in the department(s) they head
-      ("Department Heads... View every report assigned to their
-      department").
-    - A Department Responder (member, non-head) sees only reports
-      *assigned to them* — even within their own department — not every
-      report their department owns ("Responders... should only View
-      reports assigned to them... not... reports assigned to other
-      responders").
-    - Additionally, and regardless of the above (unless already covered by
-      System Admin's blanket access): every user always sees the reports
-      *they personally filed* (Report.reporter) — a department head/member
-      is also always a potential reporter and must not lose visibility
-      into their own submitted reports just because they also have a
-      department role.
+    Phase 5: the redesign's target four-rule model, exactly —
+    - System Admin (view_all_reports): every report, unconditionally.
+    - Reporter: any report they personally filed (Report.reporter).
+    - Responder: any report assigned to them (Report.assigned_to),
+      independent of current department membership — assignment itself
+      is already gated to a department member/head at the time it
+      happens (see ReportAssignView/is_department_member_or_head), so
+      re-checking membership here would only ever remove access, never
+      grant it, and would do so retroactively if someone is later
+      removed from a department after already being assigned a report.
+    - Department Head: every report in the department(s) they head
+      (Department.head), not just ones assigned to them personally.
+
+    These four are independent — a user can qualify through more than
+    one at once (e.g. a department head who is also the reporter on an
+    unrelated report), so this is a single OR across all of them rather
+    than a priority chain. Simplified from an earlier branching
+    implementation that also had to merge in an M2M-backed
+    "assistance-linked" union (removed entirely — see the redesign's
+    Phase 3) and a hand-rolled id-set materialization to work around it;
+    with only FK-based conditions left, a plain Q() OR needs neither.
 
     Soft-deleted reports (deleted_at set) are excluded by default for
     everyone, including System Admin — they're only visible via
@@ -462,42 +462,9 @@ def get_accessible_reports(user, include_deleted=False):
     if user.has_permission('view_all_reports'):
         queryset = Report.objects.all()
     else:
-        dept_as_head = Department.objects.filter(head=user)
-        if dept_as_head.exists():
-            queryset = Report.objects.filter(department__in=dept_as_head)
-        else:
-            dept_as_member = user.department_members.all()
-            if dept_as_member.exists():
-                queryset = Report.objects.filter(department__in=dept_as_member, assigned_to=user)
-            else:
-                queryset = Report.objects.none()
-
-        # Own-report access (bug fix, Phase 16): every non-admin user can
-        # always see the reports *they personally filed*, regardless of
-        # which branch above applied. This used to be reachable only
-        # through the branch above's final `else` — i.e. only for a user
-        # with *no* department affiliation at all — which silently made it
-        # dead code for every seeded account once Phase 15's
-        # department-coverage population made every active user a member
-        # of some department: a department head/member could no longer see
-        # their own submitted reports. Discovered live while verifying the
-        # Phase 16 feedback flow. Phase 2 simplified this from a
-        # reporter_hash lookup against the (now-removed) encrypted
-        # ReportIdentity table to a plain FK filter, once anonymous
-        # reporting and identity-reveal were removed.
-        own_ids = set(Report.objects.filter(reporter=user).values_list('id', flat=True))
-
-        if own_ids:
-            # Materialize both sides into plain id sets rather than combining
-            # querysets with `|` — Django raises "Cannot combine a unique
-            # query with a non-unique query" when one side carries an
-            # implicit DISTINCT from a join and the other doesn't (a
-            # constraint discovered when this also had to merge in a second,
-            # M2M-backed union — no longer relevant now that own-report
-            # access is the only addition here, but the safe pattern is kept
-            # rather than reintroducing the exact bug it was written to avoid).
-            base_ids = set(queryset.values_list('id', flat=True))
-            queryset = Report.objects.filter(id__in=base_ids | own_ids)
+        queryset = Report.objects.filter(
+            Q(reporter=user) | Q(assigned_to=user) | Q(department__head=user)
+        )
 
     if include_deleted:
         return queryset
@@ -576,20 +543,15 @@ def can_access_report(user, report, include_deleted=False):
 
 def can_upload_evidence(user, report):
     """
-    Who may attach evidence to a report: whoever is actively handling it
-    (its assigned responder, its department head, or System Admin), or the
-    report's own reporter.
-
-    Replaces the old hardcoded `user.role.slug == 'security'` check
-    (apps.reports.views.EvidenceUploadView), which predates the
-    department-based responder model (Phase 14) and excluded every
-    legitimate assigned responder or department head who doesn't happen
-    to hold the 'security' role. Phase 2 dropped the old is_anonymous
-    guard around the ownership check — now that anonymous reporting is
-    removed, a report always has a real reporter FK to compare against.
+    Who may attach evidence to a report: exactly the same population as
+    can view it — reporter, assigned responder, department head, or
+    System Admin (see can_access_report/get_accessible_reports, the
+    single authoritative definition). Originally a hand-rolled
+    duplicate of that same rule (replacing an even older hardcoded
+    `user.role.slug == 'security'` check that predated the
+    department-based responder model); Phase 5 collapsed it into a
+    thin alias once the two definitions turned out to be identical, per
+    the redesign's "one authoritative function, reused everywhere"
+    requirement.
     """
-    return (
-        report.assigned_to_id == user.id
-        or is_department_head_or_system_admin(user, report)
-        or report.reporter_id == user.id
-    )
+    return can_access_report(user, report)

@@ -29,6 +29,24 @@ def test_bulk_status_update_rejects_inaccessible_reports_per_item():
 
 
 @pytest.mark.django_db
+def test_bulk_status_update_rejects_own_report_for_reporter():
+    """Phase 5: mirrors the single-report ReportStatusUpdateView fix — the report's own reporter can see it (get_accessible_reports) but must not be able to update its status themselves."""
+    reporter = UserFactory(role='student')
+    report = ReportFactory(reporter=reporter, status=Status.NEW)
+
+    client = APIClient()
+    client.force_authenticate(user=reporter)
+    response = client.post('/api/v1/reports/bulk/status/', {
+        'report_ids': [str(report.id)], 'status': Status.ACKNOWLEDGED,
+    }, format='json')
+
+    assert response.status_code == 200
+    assert response.data['results'][0]['status'] == 'error'
+    report.refresh_from_db()
+    assert report.status == Status.NEW
+
+
+@pytest.mark.django_db
 def test_bulk_status_update_all_succeed():
     security = SecurityFactory()
     department = DepartmentFactory()

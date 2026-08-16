@@ -169,11 +169,15 @@ class ReportDetailView(generics.RetrieveAPIView):
 class ReportStatusUpdateView(APIView):
     """
     PATCH /api/v1/reports/{id}/status/
-    Update report status — any user who can see the report (its
-    department head, or the responder it's assigned to, or System Admin;
-    see get_accessible_reports) may update it. No longer tied to the
-    fixed 'security' Role — responders are department members now,
-    regardless of account role.
+    Update report status — its department head, the responder it's
+    assigned to, or System Admin (is_department_head_or_system_admin,
+    or the report's own assigned_to). Deliberately narrower than "can
+    view" (get_accessible_reports): the report's own reporter can see
+    it, but must not be able to mark their own report resolved/closed
+    themselves — the frontend already only ever shows this control to
+    an assigned responder or department head/admin
+    (ReportDetailPage.tsx's canUpdateStatus); Phase 5 closed the
+    matching backend gap so that restriction isn't frontend-only.
     Supports conflict detection via expected_updated_at.
     """
     permission_classes = [permissions.IsAuthenticated]
@@ -181,6 +185,8 @@ class ReportStatusUpdateView(APIView):
 
     def patch(self, request, id):
         report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        if not (is_department_head_or_system_admin(request.user, report) or report.assigned_to_id == request.user.id):
+            raise PermissionDenied("Only this report's assigned responder, department head, or a System Admin can update its status.")
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_status = serializer.validated_data['status']

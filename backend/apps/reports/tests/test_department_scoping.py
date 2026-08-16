@@ -46,6 +46,29 @@ def test_department_member_sees_only_reports_assigned_to_them():
 
 
 @pytest.mark.django_db
+def test_responder_sees_assigned_report_even_without_current_department_membership():
+    """
+    Phase 5: get_accessible_reports simplified to the redesign's exact
+    four-rule model (reporter OR assigned_to OR department head OR
+    System Admin) — assigned_to alone is now sufficient, with no
+    separate "and is currently a department member" check. In real
+    usage assignment is already gated to a department member/head at
+    assignment time (ReportAssignView/is_department_member_or_head), so
+    this never grants anything the old stricter rule wouldn't also have
+    granted at assignment time — it only stops *retroactively* removing
+    access if someone is later taken off the department after already
+    being assigned a report.
+    """
+    department = DepartmentFactory()
+    responder = UserFactory(role='staff')
+    report = ReportFactory(department=department, assigned_to=responder)
+    # Deliberately not added to department.members — proves assigned_to
+    # alone is now sufficient.
+
+    assert report in get_accessible_reports(responder)
+
+
+@pytest.mark.django_db
 def test_department_head_and_member_still_see_their_own_filed_reports():
     """
     Regression test (Phase 16): a department head/member is also a

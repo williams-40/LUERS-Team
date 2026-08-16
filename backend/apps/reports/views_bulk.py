@@ -19,9 +19,10 @@ class BulkStatusUpdateView(APIView):
     """
     POST /api/v1/reports/bulk/status/
     Bulk status update from the triage queue's multi-select toolbar.
-    Any user who can see the report (its department head, assigned
-    responder, or System Admin — see get_accessible_reports) may update
-    its status, mirroring ReportStatusUpdateView. Deliberately omits
+    Its department head, assigned responder, or System Admin may update
+    a report's status — mirroring ReportStatusUpdateView's object-level
+    check exactly (deliberately narrower than "can see it", which would
+    also include the report's own reporter). Deliberately omits
     expected_updated_at — there's no clean bulk UX for capturing "the
     updated_at I last saw" per selected row, so this applies against
     current server state ("do this to whatever's selected right now")
@@ -46,6 +47,12 @@ class BulkStatusUpdateView(APIView):
                 results.append({
                     'report_id': str(report_id), 'status': 'error',
                     'error': 'Report not found or not accessible.',
+                })
+                continue
+            if not (is_department_head_or_system_admin(request.user, report) or report.assigned_to_id == request.user.id):
+                results.append({
+                    'report_id': str(report_id), 'status': 'error',
+                    'error': "Only this report's assigned responder, department head, or a System Admin can update its status.",
                 })
                 continue
             try:
