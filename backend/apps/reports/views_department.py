@@ -70,15 +70,19 @@ class DepartmentResponderCreateView(GenericAPIView):
     Phase 6: lets a department's own head create a responder account
     scoped to that department, with no role/department/password ever
     supplied by the client (see ResponderCreateSerializer). Deliberately
-    department-head-only, not extended to system_admin — system_admin
-    already has a fully general provisioning path via
-    AdminUserListCreateView + this same DepartmentDetailView's member
-    PATCH, so keeping this endpoint's authorization to a single
-    object-level headship check keeps it minimal and auditable. No
-    dedicated permission slug is used — matches this codebase's existing
-    `is_department_head_or_system_admin`-style precedent of gating
-    department-head actions on the relationship itself, not a role or
-    permission flag.
+    department-head-only. No dedicated permission slug is used — matches
+    this codebase's existing `is_department_head_or_system_admin`-style
+    precedent of gating department-head actions on the relationship
+    itself, not a role or permission flag.
+
+    Post-Phase-9 cleanup: this is now the *only* way a responder account
+    can come into existence — AdminUserCreateSerializer/
+    AdminUserUpdateSerializer (system_admin's general user-management
+    path) explicitly reject assigning anyone into `responder`
+    (`_validate_role_assignment` in apps/accounts/serializers.py), so
+    every responder is guaranteed to be scoped to a real department
+    headship rather than handed out ad hoc by anyone holding
+    manage_users.
 
     Phase 8: rate-limited per-user (matching ReportCreateView's own
     authenticated-endpoint precedent, rather than the per-IP key used by

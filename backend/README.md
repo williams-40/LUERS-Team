@@ -28,7 +28,7 @@ Django REST Framework backend for **LUERS** (Lira University Emergency Reporting
    python manage.py migrate
    python manage.py seed_data
    ```
-   `seed_data` creates one user per role slug it knows about (`student_user`, `staff_user`, `responder_user`, `security_user`, `ict_admin_user`, `management_user`, `system_admin_user` — the last three are the legacy, `is_active=False` roles, kept only for historical test coverage; see [Roles & permissions](#roles--permissions)), all with password `password123`, plus a full department set.
+   `seed_data` creates one user per live role slug (`student_user`, `staff_user`, `responder_user`, `system_admin_user`), all with password `password123`, plus a full department set. See [Roles & permissions](#roles--permissions).
 5. **Run the dev server:**
    ```bash
    python manage.py runserver 8000
@@ -55,7 +55,9 @@ Authorization is **Role → Permission**, both database-backed (`apps.accounts.m
 
 **Department headship is a relationship, not a role.** Any active user can head or belong to a `Department` (`Department.head`, `Department.members`); this is what actually differentiates one responder from another — a department head can create new responder accounts scoped to their own department (`POST /api/v1/departments/{id}/responders/`) and sees their department's full report/audit history, while a plain responder sees only what's assigned to them.
 
-Three legacy roles (`security`, `ict_admin`, `management`) are seeded but `is_active=False` — kept only so historical data and existing test factories keep resolving correctly. No new account should ever be assigned one.
+**Responder is the only role you can't hand out through general user management.** `AdminUserCreateSerializer`/`AdminUserUpdateSerializer` (`system_admin`'s "Manage users" UI) reject assigning anyone into `responder`, whether creating a new account or reassigning an existing one — the department-head endpoint above is the sole path. An account that's already a responder can still be edited (email, active state) without being forced off the role.
+
+The three legacy roles (`security`, `ict_admin`, `management`) that used to exist alongside these four were deleted outright (migration `accounts/0013_delete_legacy_roles`), not just deactivated — there's no historical-only role data left to account for.
 
 ### Report visibility — one function, four rules
 

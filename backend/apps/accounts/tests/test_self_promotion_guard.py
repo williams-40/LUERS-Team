@@ -72,17 +72,17 @@ def test_manage_roles_holder_cannot_assign_system_admin_to_themselves():
 
 @pytest.mark.django_db
 def test_ict_admin_can_still_assign_non_privileged_roles():
-    """manage_users alone remains sufficient for ordinary role assignment — the guard is specifically about privilege escalation, not all role changes."""
+    """manage_users alone remains sufficient for ordinary role assignment — the guard is specifically about privilege escalation, not all role changes. (Not 'responder' here — that's blocked for everyone, privileged or not; see test_admin_users.py.)"""
     admin = ICTAdminFactory()
     target = StaffFactory()
     client = APIClient()
     client.force_authenticate(user=admin)
 
-    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'responder'})
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'student'})
 
     assert response.status_code == 200
     target.refresh_from_db()
-    assert target.role.slug == 'responder'
+    assert target.role.slug == 'student'
 
 
 @pytest.mark.django_db

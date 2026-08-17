@@ -66,6 +66,14 @@ def _validate_role_assignment(serializer, value):
         manage_users holder (e.g. a future non-system_admin role granted
         it) could promote any account, including their own, to
         system_admin despite never having been granted manage_roles.
+      - Post-Phase-9 cleanup: nobody may newly assign a user into
+        `responder` through this general path anymore — creating a
+        responder account is exclusively DepartmentResponderCreateView's
+        job now, so it's tied to a real department headship rather than
+        handed out by anyone holding manage_users. The one exception is a
+        no-op save on an account that's already a responder (editing its
+        email/active-state etc. without touching role), which must keep
+        working.
     """
     request = serializer.context.get('request')
     actor = getattr(request, 'user', None)
@@ -77,6 +85,11 @@ def _validate_role_assignment(serializer, value):
     if _is_privileged_role(value) and not (actor and actor.has_permission('manage_roles')):
         raise serializers.ValidationError(
             "Only a user with manage_roles can assign this role."
+        )
+
+    if value.slug == 'responder' and not (target is not None and target.role_id == value.id):
+        raise serializers.ValidationError(
+            "Responder accounts can only be created through a department head's own responder-creation endpoint."
         )
 
     return value

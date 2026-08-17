@@ -69,7 +69,7 @@ def test_admin_can_create_user():
     response = client.post('/api/v1/auth/users/', {
         'username': 'new_officer',
         'email': 'new_officer@example.com',
-        'role': 'responder',
+        'role': 'staff',
         'password': 'a-much-better-password-9!',
     })
 
@@ -107,11 +107,70 @@ def test_admin_can_update_role_and_active_state():
     client = APIClient()
     client.force_authenticate(user=admin)
 
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'student'})
+
+    assert response.status_code == 200
+    target.refresh_from_db()
+    assert target.role.slug == 'student'
+
+
+@pytest.mark.django_db
+def test_create_user_rejects_responder_role():
+    """
+    Post-Phase-9 cleanup: responder accounts may only be created through
+    DepartmentResponderCreateView, tying every one to a real department
+    headship — the general admin create-user path must reject it outright.
+    """
+    admin = ICTAdminFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.post('/api/v1/auth/users/', {
+        'username': 'shouldnt_exist',
+        'email': 'shouldnt_exist@example.com',
+        'role': 'responder',
+        'password': 'a-much-better-password-9!',
+    })
+
+    assert response.status_code == 400
+    assert 'role' in response.data
+
+
+@pytest.mark.django_db
+def test_update_user_rejects_reassigning_role_to_responder():
+    admin = ICTAdminFactory()
+    target = StaffFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
     response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'responder'})
+
+    assert response.status_code == 400
+    assert 'role' in response.data
+    target.refresh_from_db()
+    assert target.role.slug == 'staff'
+
+
+@pytest.mark.django_db
+def test_editing_an_existing_responder_without_changing_role_still_works():
+    """
+    The reassignment guard must not lock admins out of managing a
+    responder's other fields (email, active state) just because the
+    unchanged `role` field is still 'responder' on every PATCH.
+    """
+    admin = ICTAdminFactory()
+    target = ResponderFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {
+        'role': 'responder', 'is_active': False,
+    })
 
     assert response.status_code == 200
     target.refresh_from_db()
     assert target.role.slug == 'responder'
+    assert target.is_active is False
 
 
 @pytest.mark.django_db
@@ -235,13 +294,13 @@ def test_creating_a_user_creates_an_audit_log_entry():
 
     response = client.post('/api/v1/auth/users/', {
         'username': 'audited_new_user', 'email': 'audited_new_user@example.com',
-        'role': 'responder', 'password': 'a-much-better-password-9!',
+        'role': 'staff', 'password': 'a-much-better-password-9!',
     })
 
     assert response.status_code == 201
     entry = AuditLog.objects.get(actor=admin, action=Action.ACCOUNT_CREATED)
     assert entry.after_state['username'] == 'audited_new_user'
-    assert entry.after_state['role'] == 'responder'
+    assert entry.after_state['role'] == 'staff'
     assert entry.report is None
 
 
@@ -252,12 +311,12 @@ def test_changing_a_users_role_creates_an_audit_log_entry():
     client = APIClient()
     client.force_authenticate(user=admin)
 
-    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'responder'})
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'student'})
 
     assert response.status_code == 200
     entry = AuditLog.objects.get(actor=admin, action=Action.ROLE_CHANGED)
     assert entry.before_state['role'] == 'staff'
-    assert entry.after_state['role'] == 'responder'
+    assert entry.after_state['role'] == 'student'
     assert entry.after_state['user_id'] == str(target.id)
 
 
