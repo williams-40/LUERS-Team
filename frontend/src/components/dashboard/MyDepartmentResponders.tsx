@@ -185,7 +185,7 @@ export function MyDepartmentResponders() {
       {headedDepartments.map((department) => (
         <div key={department.id} className="rounded-xl border border-ink/10 p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-ink-secondary text-[12.5px] font-semibold">{department.name} — Responders</h2>
+            <h2 className="text-ink-secondary text-[12.5px] font-semibold">{department.name} Responders</h2>
             <Button
               type="button"
               variant="ghost"
@@ -206,7 +206,7 @@ export function MyDepartmentResponders() {
                   <li key={username} className="flex items-center justify-between">
                     <span>{username}</span>
                     <span className={openCount > 0 ? 'text-status-warning-ink' : 'text-status-good-ink'}>
-                      {openCount > 0 ? `Busy — ${openCount} open` : 'Free'}
+                      {openCount > 0 ? `Busy (${openCount} open)` : 'Free'}
                     </span>
                   </li>
                 );

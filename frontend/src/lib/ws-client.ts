@@ -4,6 +4,7 @@ export interface ChatMessagePayload {
   id: string;
   sender: string;
   content: string;
+  attachment_url: string | null;
   created_at: string;
 }
 

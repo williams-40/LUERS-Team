@@ -146,7 +146,7 @@ export function ReportDetailPage() {
       {routingSuggestion && canViewOperationalDetails && (
         <p className="bg-status-warning/10 mb-5 rounded-lg px-3 py-2 text-sm">
           <span className="font-semibold">Suggested department:</span> {routingSuggestion.suggested_department} (
-          {Math.round(routingSuggestion.confidence * 100)}% confidence) — matched:{' '}
+          {Math.round(routingSuggestion.confidence * 100)}% confidence), matched:{' '}
           {routingSuggestion.matched_keywords.join(', ')}
         </p>
       )}

@@ -152,7 +152,7 @@ function CreateUserForm() {
         <label htmlFor="role" className="text-ink-secondary text-[12.5px] font-semibold">
           Role
         </label>
-        <RoleSelect id="role" value={role} onChange={(r) => setValue('role', r)} excludeResponder />
+        <RoleSelect id="role" value={role} onChange={(r) => setValue('role', r)} excludeResponder excludeDepartmentHead />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -315,6 +315,7 @@ function EditUserForm({ userId }: { userId: string }) {
           value={role}
           onChange={(r) => setValue('role', r)}
           excludeResponder={user.role.slug !== 'responder'}
+          excludeDepartmentHead={user.role.slug !== 'department_head'}
         />
       </div>
 

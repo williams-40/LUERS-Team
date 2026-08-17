@@ -103,7 +103,7 @@ export function StyleGuidePage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-base">Report cards — severity rail</h2>
+        <h2 className="text-base">Report cards: severity rail</h2>
         <div className="flex flex-col gap-2.5">
           {DEMO_REPORTS.map((report) => (
             <ReportCard key={report.id} report={report} />

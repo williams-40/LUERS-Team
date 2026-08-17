@@ -36,7 +36,7 @@ export function FeedbackModal({
     setError(null);
     try {
       await mutation.mutateAsync();
-      show('Thanks for your feedback — the report has been closed.', 'success');
+      show('Thanks for your feedback. The report has been closed.', 'success');
       onSubmitted();
     } catch (err) {
       const apiError = err as ApiError;

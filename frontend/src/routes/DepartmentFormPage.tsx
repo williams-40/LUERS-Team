@@ -274,14 +274,15 @@ export function DepartmentFormPage() {
             className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">No head assigned</option>
-            {/* Only responder-role users — headship is layered on top of that
-                role (see DepartmentHeadCreateView), so this is a UI-only
-                cleanup to stop an admin fat-fingering a student/staff/
-                system_admin account into headship via this big dropdown;
-                the backend itself stays permissive per its own Phase 14
-                decision to decouple headship from Role entirely. */}
+            {/* responder (plain members, reassignable to head elsewhere) and
+                department_head (existing heads, reassignable to a different
+                department) — this is a UI-only cleanup to stop an admin
+                fat-fingering a student/staff/system_admin account into
+                headship via this big dropdown; the backend itself stays
+                permissive per its own Phase 14 decision to decouple
+                headship from Role entirely. */}
             {(eligibleUsers?.results ?? [])
-              .filter((user) => user.role.slug === 'responder')
+              .filter((user) => user.role.slug === 'responder' || user.role.slug === 'department_head')
               .map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.username}

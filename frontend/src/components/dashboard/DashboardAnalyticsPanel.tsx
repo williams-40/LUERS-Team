@@ -40,11 +40,11 @@ export function DashboardAnalyticsPanel() {
       <div className="mb-4 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
         <p>
           <span className="font-semibold">Avg. assignment time:</span>{' '}
-          {data.average_assignment_time_hours !== null ? `${data.average_assignment_time_hours.toFixed(1)} hrs` : '—'}
+          {data.average_assignment_time_hours !== null ? `${data.average_assignment_time_hours.toFixed(1)} hrs` : 'N/A'}
         </p>
         <p>
           <span className="font-semibold">Avg. resolution time:</span>{' '}
-          {data.average_resolution_time_hours !== null ? `${data.average_resolution_time_hours.toFixed(1)} hrs` : '—'}
+          {data.average_resolution_time_hours !== null ? `${data.average_resolution_time_hours.toFixed(1)} hrs` : 'N/A'}
         </p>
         <p className={data.overdue > 0 ? 'text-status-critical font-semibold' : ''}>
           <span className="font-semibold">Overdue:</span> {data.overdue}

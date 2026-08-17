@@ -55,7 +55,16 @@ npm test             # vitest run
 
 `system_admin` creates a department's head inline on `DepartmentFormPage.tsx` ("Create a new head", `AddHeadForm`, `POST /departments/{id}/heads/`); a head creates their own department's responders from the dashboard (`MyDepartmentResponders.tsx`'s `AddResponderForm`, unchanged). Both flows create the account with a real temp password emailed to them — no password ever transits the browser. The account is force-redirected (`RequireAuth`, gated on `user.must_change_password`) to `ChangePasswordRequiredPage` on first login, which reuses the same `ChangePasswordForm` component as the profile page's self-service change; completing it clears the flag and releases the redirect.
 
-Both `AddHeadForm` and `AddResponderForm` render their own `<form>` — keep them (and any similar future create-inline-account form) rendered as siblings of the enclosing page's own `<form>`, never nested inside it. A `<form>` inside a `<form>` is invalid HTML; the browser silently de-nests it, which breaks `.requestSubmit()`/submit-button semantics for one of the two forms without raising any error you'd notice outside the console (`DepartmentFormPage.tsx`'s head-creation form is deliberately positioned after the page's main `</form>` for this reason).
+Both `AddHeadForm` and `AddResponderForm` render their own `<form>` — keep them (and any similar future create-inline-account form) rendered as siblings of the enclosing page's own `<form>`, never nested inside it. A `<form>` inside a `<form>` is invalid HTML; the browser silently de-nests it, which breaks `.requestSubmit()`/submit-button semantics for one of the two forms without raising any error you'd notice outside the console (`DepartmentFormPage.tsx`'s head-creation form is deliberately positioned after the page's main `</form>` for this reason). Heads created since the `department_head` role was added (see backend README) hold that role rather than `responder` — `DepartmentFormPage.tsx`'s head-reassignment dropdown and `RoleSelect.tsx`'s `excludeResponder`/`excludeDepartmentHead` props both account for either.
+
+### Voice/video recording
+
+`MediaRecorderControl.tsx` wraps `navigator.mediaDevices.getUserMedia` + `MediaRecorder` and is shared by two features:
+
+- **Report description** (`ReportCreatePage.tsx`) — a Text/Voice/Video toggle above the description field; recording in voice or video mode attaches the result as `Evidence` (same upload path as the existing file picker) and auto-fills `description` with a short placeholder, since the backend still requires that field.
+- **Chat voice notes** (`ReportChat.tsx`) — a "Voice note" button next to the text input records audio and sends it via `sendVoiceMessage` (`lib/notifications-api.ts`), a REST multipart call (not the WebSocket text-chat path) — the server broadcasts the resulting message itself, so it appears live without a refetch.
+
+Chrome/Firefox's `MediaRecorder` only outputs WebM containers for both audio and video capture, with identical magic bytes for either — the recorder tags audio-only recordings with a `.weba` extension and video with `.webm` so the backend can tell them apart by claimed extension (see backend README's file-validation note); `evidence-constraints.ts`'s `ALLOWED_EVIDENCE_EXTENSIONS` includes both.
 
 ## Verifying live
 

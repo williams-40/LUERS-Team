@@ -42,7 +42,7 @@ export function AssignControl({
       const apiError = err as ApiError;
       if (apiError.status === 409) {
         setConflict(true);
-        show('This report changed since you loaded it — refresh and try again.', 'error');
+        show('This report changed since you loaded it. Refresh and try again.', 'error');
       } else {
         const message = apiError.detail ?? 'Could not assign this report.';
         setError(message);
@@ -93,8 +93,8 @@ export function AssignControl({
             <option key={officer.id} value={officer.id}>
               {officer.username}
               {officer.open_report_count > 0
-                ? ` — busy, ${officer.open_report_count} open`
-                : ' — free'}
+                ? ` (busy, ${officer.open_report_count} open)`
+                : ' (free)'}
             </option>
           ))}
         </select>

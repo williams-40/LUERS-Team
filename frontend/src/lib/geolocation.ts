@@ -14,8 +14,12 @@ export function getCurrentLocation(timeoutMs = 8000): Promise<Coordinates | null
     navigator.geolocation.getCurrentPosition(
       (position) => {
         resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+          // Rounded to 6 decimal places (~11cm precision) to match the
+          // backend's DecimalField(max_digits=9, decimal_places=6) — raw
+          // GPS coordinates commonly carry more significant digits than
+          // that and get rejected outright otherwise.
+          latitude: Number(position.coords.latitude.toFixed(6)),
+          longitude: Number(position.coords.longitude.toFixed(6)),
           location_accuracy: position.coords.accuracy,
         });
       },

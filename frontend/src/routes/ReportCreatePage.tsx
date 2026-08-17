@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,23 +14,34 @@ import { Button } from '../components/ui/Button';
 import { PanicButton } from '../components/ui/PanicButton';
 import { DepartmentPicker } from '../components/reports/DepartmentPicker';
 import { EvidencePicker } from '../components/reports/EvidencePicker';
+import { MediaRecorderControl } from '../components/reports/MediaRecorderControl';
 import { useToast } from '../lib/toast-context';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 
-const reportSchema = z.object({
-  department: z.string().min(1, 'Please select a department'),
-  description: z
-    .string()
-    .trim()
-    .min(10, 'Please add a few more details (at least 10 characters)')
-    .max(2000),
-  phone_number: z.string().trim().max(15).optional().or(z.literal('')),
-});
+function buildReportSchema(phoneRequired: boolean) {
+  return z.object({
+    department: z.string().min(1, 'Please select a department'),
+    description: z
+      .string()
+      .trim()
+      .min(10, 'Please add a few more details (at least 10 characters)')
+      .max(2000),
+    phone_number: phoneRequired
+      ? z.string().trim().min(1, 'A phone number is required so a responder can reach you').max(15)
+      : z.string().trim().max(15).optional().or(z.literal('')),
+  });
+}
 
-type ReportFormValues = z.infer<typeof reportSchema>;
+type ReportFormValues = z.infer<ReturnType<typeof buildReportSchema>>;
 
 type Mode = 'panic' | 'detailed';
+type DescriptionMode = 'text' | 'voice' | 'video';
+
+const RECORDING_PLACEHOLDER: Record<'voice' | 'video', string> = {
+  voice: 'Voice note attached.',
+  video: 'Video note attached.',
+};
 
 export function ReportCreatePage() {
   const navigate = useNavigate();
@@ -43,15 +54,24 @@ export function ReportCreatePage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const [queuedOffline, setQueuedOffline] = useState<{ hadEvidence: boolean } | null>(null);
+  const [descriptionMode, setDescriptionMode] = useState<DescriptionMode>('text');
+  const [recordingFile, setRecordingFile] = useState<File | null>(null);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const previousDescriptionRef = useRef('');
+
+  // Only required when the profile has none on file yet — once a number is
+  // saved to the profile, the report form's copy of it stays optional/editable.
+  const phoneRequired = !user?.phone_number;
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<ReportFormValues>({
-    resolver: zodResolver(reportSchema),
+    resolver: zodResolver(buildReportSchema(phoneRequired)),
     defaultValues: { phone_number: user?.phone_number ?? '' },
   });
 
@@ -67,11 +87,41 @@ export function ReportCreatePage() {
     setSubmitError(null);
   }
 
+  function selectDescriptionMode(next: DescriptionMode) {
+    if (next === descriptionMode) return;
+    if (next === 'text') {
+      setValue('description', previousDescriptionRef.current, { shouldValidate: true });
+    } else {
+      // Only snapshot when actually leaving text mode — switching directly
+      // between voice and video must not clobber the saved original text
+      // with whichever recording placeholder happened to be in the field.
+      if (descriptionMode === 'text') {
+        previousDescriptionRef.current = getValues('description') ?? '';
+      }
+      setValue('description', RECORDING_PLACEHOLDER[next], { shouldValidate: true });
+      setRecordingFile(null);
+    }
+    setDescriptionMode(next);
+    setRecordingError(null);
+  }
+
   async function onSubmit(values: ReportFormValues) {
     setSubmitError(null);
+
+    if (mode === 'detailed' && descriptionMode !== 'text' && !recordingFile) {
+      setRecordingError(
+        descriptionMode === 'voice'
+          ? 'Record a voice note before submitting, or switch to text.'
+          : 'Record a video before submitting, or switch to text.',
+      );
+      return;
+    }
+
     setLocating(true);
     const location = await getCurrentLocation();
     setLocating(false);
+
+    const attachments = recordingFile ? [recordingFile, ...evidenceFiles] : evidenceFiles;
 
     const payload: CreateReportInput = {
       department: values.department,
@@ -90,9 +140,9 @@ export function ReportCreatePage() {
         // No response at all — genuinely offline, not a rejection. Queue it
         // rather than losing it; useOfflineQueue drains this automatically
         // once connectivity returns.
-        await enqueueReport(payload, evidenceFiles.length > 0);
+        await enqueueReport(payload, attachments.length > 0);
         await queryClient.invalidateQueries({ queryKey: OFFLINE_QUEUE_KEY });
-        setQueuedOffline({ hadEvidence: evidenceFiles.length > 0 });
+        setQueuedOffline({ hadEvidence: attachments.length > 0 });
         return;
       }
       if (apiError.fieldErrors) {
@@ -109,8 +159,8 @@ export function ReportCreatePage() {
 
     show('Report submitted.', 'success');
 
-    if (mode === 'detailed' && evidenceFiles.length > 0) {
-      for (const file of evidenceFiles) {
+    if (mode === 'detailed' && attachments.length > 0) {
+      for (const file of attachments) {
         try {
           // Sequential, not parallel — keeps evidence order predictable and
           // avoids hammering the same endpoint with a burst of large uploads.
@@ -119,7 +169,7 @@ export function ReportCreatePage() {
         } catch {
           // The report itself already exists — don't block navigation on a
           // failed attachment; it can be added again from the detail page.
-          show('Report submitted, but evidence could not be uploaded — add it from the report page.', 'error');
+          show('Report submitted, but evidence could not be uploaded. Add it from the report page.', 'error');
           break;
         }
       }
@@ -138,7 +188,7 @@ export function ReportCreatePage() {
         </p>
         {queuedOffline.hadEvidence && (
           <p className="text-status-warning mb-4 text-sm font-semibold">
-            The evidence you attached wasn't included — add it from the report once it's sent.
+            The evidence you attached wasn't included. Add it from the report once it's sent.
           </p>
         )}
         <div className="mt-4 flex flex-col items-center gap-3">
@@ -157,7 +207,7 @@ export function ReportCreatePage() {
     <div className="mx-auto max-w-xl px-5 py-8">
       <h1 className="mb-1 text-2xl">Report an incident</h1>
       <p className="text-ink-secondary mb-6 text-sm">
-        In immediate danger? Use the panic report below — it's faster and skips the extra questions.
+        In immediate danger? Use the panic report below, it's faster and skips the extra questions.
       </p>
 
       {mode === 'detailed' && (
@@ -171,7 +221,7 @@ export function ReportCreatePage() {
           role="alert"
           className="bg-status-critical/10 border-status-critical/30 mb-6 flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
         >
-          <span className="text-status-critical text-sm font-semibold">Panic report — sent as urgent</span>
+          <span className="text-status-critical text-sm font-semibold">Panic report (sent as urgent)</span>
           <button
             type="button"
             onClick={() => selectMode('detailed')}
@@ -190,36 +240,74 @@ export function ReportCreatePage() {
             onChange={(d) => setValue('department', d, { shouldValidate: true })}
           />
           <p className="text-ink-muted text-xs">
-            Not sure? Pick "Other" — we'll try to route it automatically based on your description.
+            Not sure? Pick "Other", we'll try to route it automatically based on your description.
           </p>
           {errors.department && <p className="text-status-critical text-xs">{errors.department.message}</p>}
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="description" className="text-ink-secondary text-[12.5px] font-semibold">
-            What's happening?
-          </label>
-          <textarea
-            id="description"
-            rows={mode === 'panic' ? 2 : 4}
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            {...register('description')}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="description" className="text-ink-secondary text-[12.5px] font-semibold">
+              What's happening?
+            </label>
+            {mode === 'detailed' && (
+              <div role="radiogroup" aria-label="How to describe what's happening" className="inline-flex gap-1">
+                {(['text', 'voice', 'video'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    role="radio"
+                    aria-checked={descriptionMode === option}
+                    onClick={() => selectDescriptionMode(option)}
+                    className={cn(
+                      'rounded-full px-2.5 py-1 text-xs font-semibold transition',
+                      descriptionMode === option ? 'bg-brand text-white' : 'text-ink-secondary hover:bg-ink/6',
+                    )}
+                  >
+                    {option === 'text' ? 'Text' : option === 'voice' ? 'Voice' : 'Video'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {descriptionMode === 'text' ? (
+            <textarea
+              id="description"
+              rows={mode === 'panic' ? 2 : 4}
+              className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+              {...register('description')}
+            />
+          ) : (
+            <MediaRecorderControl
+              mode={descriptionMode === 'voice' ? 'audio' : 'video'}
+              onRecordingChange={(file) => {
+                setRecordingFile(file);
+                setRecordingError(null);
+              }}
+            />
+          )}
           {errors.description && <p className="text-status-critical text-xs">{errors.description.message}</p>}
+          {recordingError && <p className="text-status-critical text-xs">{recordingError}</p>}
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="phone_number" className="text-ink-secondary text-[12.5px] font-semibold">
-            Phone number (optional)
+            Phone number {phoneRequired ? '(required)' : '(optional)'}
           </label>
           <input
             id="phone_number"
             type="tel"
             className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
             aria-invalid={Boolean(errors.phone_number)}
+            aria-required={phoneRequired}
             {...register('phone_number')}
           />
-          <p className="text-ink-muted text-xs">So a responder can reach you if they need more information.</p>
+          <p className="text-ink-muted text-xs">
+            {phoneRequired
+              ? "We don't have a phone number on file for you yet. Add one so a responder can reach you."
+              : 'So a responder can reach you if they need more information.'}
+          </p>
           {errors.phone_number && <p className="text-status-critical text-xs">{errors.phone_number.message}</p>}
         </div>
 

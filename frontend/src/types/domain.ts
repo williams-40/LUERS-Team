@@ -182,6 +182,7 @@ export interface Message {
   sender_id: string;
   sender_username: string;
   content: string;
+  attachment_url: string | null;
   created_at: string;
 }
 

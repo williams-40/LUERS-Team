@@ -37,7 +37,7 @@ export function StatusUpdateControl({
       const apiError = err as ApiError;
       if (apiError.status === 409) {
         setConflict(true);
-        show('This report changed since you loaded it — refresh and try again.', 'error');
+        show('This report changed since you loaded it. Refresh and try again.', 'error');
       } else {
         const message = apiError.detail ?? 'Could not update status.';
         setError(message);

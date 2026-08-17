@@ -6,6 +6,7 @@ export function RoleSelect({
   value,
   onChange,
   excludeResponder = false,
+  excludeDepartmentHead = false,
 }: {
   id?: string;
   value: string;
@@ -18,12 +19,18 @@ export function RoleSelect({
    * role still appears and a no-op save keeps working.
    */
   excludeResponder?: boolean;
+  /** Same reasoning as excludeResponder, for department_head accounts — those can only be created via DepartmentHeadCreateView. */
+  excludeDepartmentHead?: boolean;
 }) {
   const { data: roles, isLoading } = useQuery({
     queryKey: ['roles', { is_active: true, picker: true }],
     queryFn: () => fetchRoles({ is_active: true }),
   });
-  const options = (roles ?? []).filter((role) => !excludeResponder || role.slug !== 'responder');
+  const options = (roles ?? []).filter(
+    (role) =>
+      (!excludeResponder || role.slug !== 'responder') &&
+      (!excludeDepartmentHead || role.slug !== 'department_head'),
+  );
 
   return (
     <select

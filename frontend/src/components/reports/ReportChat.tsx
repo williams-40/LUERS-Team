@@ -1,9 +1,10 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { fetchMessages } from '../../lib/notifications-api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchMessages, sendVoiceMessage } from '../../lib/notifications-api';
 import type { ChatMessagePayload } from '../../lib/ws-client';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../ui/Button';
+import { MediaRecorderControl } from './MediaRecorderControl';
 import { cn } from '../../lib/utils';
 
 function timeLabel(iso: string): string {
@@ -22,7 +23,10 @@ export function ReportChat({
   canSend: boolean;
 }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
+  const [recordingVoice, setRecordingVoice] = useState(false);
+  const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery({
@@ -30,11 +34,21 @@ export function ReportChat({
     queryFn: () => fetchMessages(reportId),
   });
 
+  const voiceMutation = useMutation({
+    mutationFn: (file: File) => sendVoiceMessage(reportId, file),
+    onSuccess: () => {
+      setRecordingVoice(false);
+      setVoiceFile(null);
+      void queryClient.invalidateQueries({ queryKey: ['reports', reportId, 'messages'] });
+    },
+  });
+
   const messages = useMemo(() => {
     const history: ChatMessagePayload[] = (data?.results ?? []).map((m) => ({
       id: m.id,
       sender: m.sender_username,
       content: m.content,
+      attachment_url: m.attachment_url,
       created_at: m.created_at,
     }));
     const merged = [...history];
@@ -77,7 +91,12 @@ export function ReportChat({
               )}
             >
               {!isMine && <p className="text-ink-muted mb-0.5 text-[11px] font-semibold">{m.sender}</p>}
-              <p className="whitespace-pre-wrap">{m.content}</p>
+              {m.attachment_url ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <audio src={m.attachment_url} controls className="h-8 max-w-full" />
+              ) : (
+                <p className="whitespace-pre-wrap">{m.content}</p>
+              )}
               <p className="text-ink-muted mt-0.5 text-right text-[10px]">{timeLabel(m.created_at)}</p>
             </div>
           );
@@ -85,19 +104,47 @@ export function ReportChat({
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex gap-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder={canSend ? 'Write a message…' : 'Connecting…'}
-          disabled={!canSend}
-          className="flex-1 rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm disabled:opacity-50"
-        />
-        <Button size="sm" onClick={handleSend} disabled={!canSend || !draft.trim()}>
-          Send
-        </Button>
-      </div>
+      {recordingVoice ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-ink/10 p-2.5">
+          <MediaRecorderControl mode="audio" onRecordingChange={setVoiceFile} />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => voiceFile && voiceMutation.mutate(voiceFile)}
+              disabled={!voiceFile || voiceMutation.isPending}
+            >
+              {voiceMutation.isPending ? 'Sending…' : 'Send voice note'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setRecordingVoice(false);
+                setVoiceFile(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder={canSend ? 'Write a message…' : 'Connecting…'}
+            disabled={!canSend}
+            className="flex-1 rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm disabled:opacity-50"
+          />
+          <Button size="sm" variant="secondary" onClick={() => setRecordingVoice(true)} disabled={!canSend}>
+            Voice note
+          </Button>
+          <Button size="sm" onClick={handleSend} disabled={!canSend || !draft.trim()}>
+            Send
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

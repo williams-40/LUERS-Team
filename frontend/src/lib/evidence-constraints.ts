@@ -1,6 +1,10 @@
-// Mirrors ALLOWED_EXTENSIONS / MAX_FILE_SIZE in backend/apps/reports/views.py exactly,
+// Mirrors ALLOWED_EXTENSIONS / MAX_FILE_SIZE in backend/apps/reports/validators.py exactly,
 // so users get instant feedback instead of a round trip to the server.
-export const ALLOWED_EVIDENCE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mp3', '.wav', '.pdf'];
+// .webm/.weba are MediaRecorder's own output formats for in-browser video/
+// voice recording (see MediaRecorderControl.tsx) — not user-picked files.
+export const ALLOWED_EVIDENCE_EXTENSIONS = [
+  '.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mp3', '.wav', '.pdf', '.webm', '.weba',
+];
 export const MAX_EVIDENCE_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 export function validateEvidenceFile(file: File): string | null {
