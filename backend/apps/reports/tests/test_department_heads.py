@@ -24,7 +24,7 @@ def test_system_admin_can_create_head_and_assign_department():
 
     assert response.status_code == 201
     new_user = User.objects.get(username='new_head')
-    assert new_user.role.slug == 'responder'
+    assert new_user.role.slug == 'department_head'
     assert new_user.has_usable_password() is True
     assert new_user.must_change_password is True
     department.refresh_from_db()
@@ -109,7 +109,7 @@ def test_head_creation_ignores_role_and_department_fields_in_payload():
 
     assert response.status_code == 201
     new_user = User.objects.get(username='tamper_attempt')
-    assert new_user.role.slug == 'responder'
+    assert new_user.role.slug == 'department_head'
     department.refresh_from_db()
     other_department.refresh_from_db()
     assert department.head_id == new_user.id

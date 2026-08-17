@@ -214,6 +214,11 @@ class ReportConsumer(AsyncWebsocketConsumer):
                         'id': str(message.id),
                         'sender': self.user.username,
                         'content': message.content,
+                        # Always present so the frontend's message shape is
+                        # uniform regardless of send path — WS text messages
+                        # never carry one, REST voice notes might (see
+                        # MessageCreateView.perform_create's own broadcast).
+                        'attachment_url': None,
                         'created_at': message.created_at.isoformat(),
                     }
                 }

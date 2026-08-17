@@ -41,9 +41,12 @@ class Message(BaseModel):
         on_delete=models.CASCADE,
         related_name='sent_messages'
     )
-    content = models.TextField()
-    # Optional: message_type = models.CharField(max_length=20, choices=..., default='text')
-    # We'll keep it simple for now.
+    content = models.TextField(blank=True)
+    # Voice notes (see MessageCreateSerializer) — blank content, populated
+    # attachment instead. Mirrors apps.reports.models.Evidence.file; a
+    # dedicated attachment model felt like overkill for a single optional
+    # file per message.
+    attachment = models.FileField(upload_to='messages/%Y/%m/%d/', null=True, blank=True)
 
     class Meta:
         db_table = 'messages'

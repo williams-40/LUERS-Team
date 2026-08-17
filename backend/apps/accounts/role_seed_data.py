@@ -35,6 +35,16 @@ BUILTIN_ROLES = {
     # already correct regardless of who holds this permission, so this is
     # a UI-reachability decision, not a data-exposure one.
     'responder': ('Responder', ['view_admin_dashboard']),
+    # Phase 10 (2026-08-17): department headship becomes a real role rather
+    # than purely a relationship (Department.head) layered on 'responder'.
+    # Same permission footprint as 'responder' — deliberately NOT
+    # manage_departments/view_all_reports/manage_roles, since those are
+    # system_admin-wide powers. A head's scoping to only their own
+    # department comes entirely from the object-level relationship checks
+    # in apps.reports.services (is_department_head_or_system_admin,
+    # is_department_member_or_head, get_accessible_reports), which key off
+    # Department.head_id/members regardless of role.
+    'department_head': ('Department Head', ['view_admin_dashboard']),
     # 'security'/'ict_admin'/'management' — deactivated in accounts/0010,
     # deleted outright in accounts/0013 (2026-08-17 UI-driven cleanup) once
     # their last real references (management_user, ict_admin_user,

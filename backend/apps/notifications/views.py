@@ -2,6 +2,8 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from apps.reports.models import Report
 from apps.notifications.models import Message
 from apps.notifications.serializers import MessageSerializer, MessageCreateSerializer
@@ -62,4 +64,29 @@ class MessageCreateView(generics.CreateAPIView, CanAccessReportMixin):
 
     def perform_create(self, serializer):
         # The serializer's create() will use the report from context
-        serializer.save()
+        message = serializer.save()
+
+        # REST is the only path that can carry a binary attachment (voice
+        # note) — Channels' WS protocol here is JSON-only (see
+        # ReportConsumer.receive's own chat_message branch, which creates
+        # and broadcasts inline for text). Broadcast here too, using the
+        # same group/event shape, so a live listener sees a voice note
+        # immediately instead of only on next fetchMessages() refetch.
+        attachment_url = None
+        if message.attachment:
+            attachment_url = self.request.build_absolute_uri(message.attachment.url)
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'report_{message.report_id}',
+            {
+                'type': 'chat_message',
+                'data': {
+                    'id': str(message.id),
+                    'sender': message.sender.username,
+                    'content': message.content,
+                    'attachment_url': attachment_url,
+                    'created_at': message.created_at.isoformat(),
+                },
+            },
+        )

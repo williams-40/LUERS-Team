@@ -4,6 +4,7 @@ class Role(models.TextChoices):
     STUDENT = 'student', 'Student'
     STAFF = 'staff', 'Staff'
     RESPONDER = 'responder', 'Responder'
+    DEPARTMENT_HEAD = 'department_head', 'Department Head'
     SYSTEM_ADMIN = 'system_admin', 'System Admin'
     # security/ict_admin/management retired entirely (2026-08-17 UI-driven
     # cleanup) — their Role rows are deleted (accounts/0013), not just

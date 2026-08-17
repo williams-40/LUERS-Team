@@ -77,6 +77,9 @@ class StaffFactory(UserFactory):
 class ResponderFactory(UserFactory):
     role = Role.RESPONDER
 
+class DepartmentHeadFactory(UserFactory):
+    role = Role.DEPARTMENT_HEAD
+
 class SystemAdminFactory(UserFactory):
     role = Role.SYSTEM_ADMIN
 

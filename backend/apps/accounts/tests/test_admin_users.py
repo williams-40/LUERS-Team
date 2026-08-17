@@ -6,7 +6,7 @@ from apps.audit.models import AuditLog
 from apps.core.choices import Action
 from apps.core.factories import (
     UserFactory, ICTAdminFactory, ResponderFactory,
-    StaffFactory, SystemAdminFactory,
+    StaffFactory, SystemAdminFactory, DepartmentHeadFactory,
 )
 
 ROLE_MATRIX = {
@@ -170,6 +170,60 @@ def test_editing_an_existing_responder_without_changing_role_still_works():
     assert response.status_code == 200
     target.refresh_from_db()
     assert target.role.slug == 'responder'
+    assert target.is_active is False
+
+
+@pytest.mark.django_db
+def test_create_user_rejects_department_head_role():
+    """
+    Mirrors test_create_user_rejects_responder_role: department_head
+    accounts may only be created through DepartmentHeadCreateView, tying
+    every one to a real system_admin-initiated head provisioning action.
+    """
+    admin = ICTAdminFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.post('/api/v1/auth/users/', {
+        'username': 'shouldnt_exist_head',
+        'email': 'shouldnt_exist_head@example.com',
+        'role': 'department_head',
+        'password': 'a-much-better-password-9!',
+    })
+
+    assert response.status_code == 400
+    assert 'role' in response.data
+
+
+@pytest.mark.django_db
+def test_update_user_rejects_reassigning_role_to_department_head():
+    admin = ICTAdminFactory()
+    target = StaffFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {'role': 'department_head'})
+
+    assert response.status_code == 400
+    assert 'role' in response.data
+    target.refresh_from_db()
+    assert target.role.slug == 'staff'
+
+
+@pytest.mark.django_db
+def test_editing_an_existing_department_head_without_changing_role_still_works():
+    admin = ICTAdminFactory()
+    target = DepartmentHeadFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.patch(f'/api/v1/auth/users/{target.id}/', {
+        'role': 'department_head', 'is_active': False,
+    })
+
+    assert response.status_code == 200
+    target.refresh_from_db()
+    assert target.role.slug == 'department_head'
     assert target.is_active is False
 
 

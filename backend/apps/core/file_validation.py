@@ -16,6 +16,12 @@ SIGNATURES = {
     "mp4": [(4, b"ftyp")],
     "mp3": [(0, b"ID3"), (0, b"\xff\xfb"), (0, b"\xff\xf3"), (0, b"\xff\xf2")],
     "wav": [(0, b"RIFF")],
+    # EBML/Matroska container signature — the format MediaRecorder produces
+    # in Chrome/Firefox for both in-browser voice-note (.weba) and video
+    # (.webm) recordings. Only one signature entry is needed; see
+    # content_matches_extension for how the two claimed extensions are
+    # reconciled against this single sniffed match.
+    "webm": [(0, b"\x1a\x45\xdf\xa3")],
 }
 
 # Broad category each extension belongs to — matches apps.reports.models.Evidence.file_type.
@@ -28,6 +34,11 @@ EXTENSION_CATEGORY = {
     "mp3": "audio",
     "wav": "audio",
     "pdf": "other",
+    "webm": "video",
+    # Not independently sniffable from "webm" (identical magic bytes) — see
+    # content_matches_extension, which trusts the claimed extension once the
+    # EBML signature itself is confirmed.
+    "weba": "audio",
 }
 
 
@@ -53,4 +64,12 @@ def content_matches_extension(file, claimed_ext: str) -> bool:
     sniffed = sniff_extension(file)
     if sniffed is None:
         return False
+    # WebM/Matroska's EBML magic bytes are identical for audio-only and
+    # video recordings — there is no byte-offset signature that tells them
+    # apart without walking the EBML element tree, so once the file is
+    # confirmed to be an EBML container, trust the claimed extension
+    # (.webm vs .weba) for which category it belongs to, rather than
+    # requiring the sniffed and claimed categories to match exactly.
+    if sniffed == "webm" and claimed_ext in ("webm", "weba"):
+        return True
     return EXTENSION_CATEGORY.get(sniffed) == EXTENSION_CATEGORY.get(claimed_ext)

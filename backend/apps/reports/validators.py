@@ -1,7 +1,7 @@
 import os
 from apps.core.file_validation import EXTENSION_CATEGORY, content_matches_extension
 
-ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mp3', '.wav', '.pdf']
+ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mp3', '.wav', '.pdf', '.webm', '.weba']
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 

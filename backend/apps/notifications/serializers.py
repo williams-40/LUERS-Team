@@ -3,6 +3,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from apps.core.choices import Status
 from apps.notifications.models import Message
+from apps.reports.validators import validate_evidence_file
 
 User = get_user_model()
 
@@ -56,28 +57,68 @@ class MessageSerializer(serializers.ModelSerializer):
     """Serialize a message for list/detail views."""
     sender_username = serializers.CharField(source='sender.username', read_only=True)
     sender_id = serializers.UUIDField(source='sender.id', read_only=True)
+    attachment_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ['id', 'sender_id', 'sender_username', 'content', 'created_at']
+        fields = ['id', 'sender_id', 'sender_username', 'content', 'attachment_url', 'created_at']
+
+    def get_attachment_url(self, obj):
+        request = self.context.get('request')
+        if obj.attachment and request:
+            return request.build_absolute_uri(obj.attachment.url)
+        return None
 
 
 class MessageCreateSerializer(serializers.ModelSerializer):
-    """Create a new message. Returns the full message object."""
+    """
+    Create a new message. Returns the full message object.
+
+    `content` is required UNLESS an `attachment` (voice note) is provided —
+    a voice note stands on its own the same way a text message does. Reuses
+    the same evidence-file validation (extension allowlist, size cap, magic-
+    byte sniffing including the webm/weba audio-vs-video disambiguation) as
+    report evidence uploads, see apps.reports.validators.
+    """
     sender_username = serializers.CharField(source='sender.username', read_only=True)
     sender_id = serializers.UUIDField(source='sender.id', read_only=True)
+    attachment_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ['id', 'content', 'sender_id', 'sender_username', 'created_at']
+        fields = ['id', 'content', 'attachment', 'attachment_url', 'sender_id', 'sender_username', 'created_at']
         read_only_fields = ['id', 'sender_id', 'sender_username', 'created_at']
         extra_kwargs = {
-            'content': {'required': True, 'max_length': 2000}
+            'content': {'required': False, 'allow_blank': True, 'max_length': 2000},
+            'attachment': {'required': False, 'write_only': True},
         }
+
+    def get_attachment_url(self, obj):
+        request = self.context.get('request')
+        if obj.attachment and request:
+            return request.build_absolute_uri(obj.attachment.url)
+        return None
+
+    def validate(self, attrs):
+        content = attrs.get('content', '').strip()
+        attachment = attrs.get('attachment')
+        if not content and not attachment:
+            raise serializers.ValidationError('A message needs text or a voice note.')
+        if attachment:
+            try:
+                validate_evidence_file(attachment)
+            except ValueError as e:
+                raise serializers.ValidationError({'attachment': str(e)})
+        return attrs
 
     def create(self, validated_data):
         report = self.context['report']
         user = self.context['request'].user
-        return Message.objects.create(report=report, sender=user, content=validated_data['content'])
+        return Message.objects.create(
+            report=report,
+            sender=user,
+            content=validated_data.get('content', ''),
+            attachment=validated_data.get('attachment'),
+        )
 
     

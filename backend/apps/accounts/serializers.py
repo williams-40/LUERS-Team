@@ -92,6 +92,11 @@ def _validate_role_assignment(serializer, value):
             "Responder accounts can only be created through a department head's own responder-creation endpoint."
         )
 
+    if value.slug == 'department_head' and not (target is not None and target.role_id == value.id):
+        raise serializers.ValidationError(
+            "Department head accounts can only be created through a system admin's head-creation endpoint."
+        )
+
     return value
 
 
@@ -205,12 +210,17 @@ class HeadCreateSerializer(ResponderCreateSerializer):
     """
     Phase C: system_admin-only department-head creation
     (DepartmentHeadCreateView). Identical shape to ResponderCreateSerializer
-    — same field omissions, same provisioning mechanism — the created
-    account holds the `responder` role too (headship is a relationship
-    layered on top of it, not a separate role; see DepartmentWriteSerializer's
-    own docstring), it just becomes `Department.head` instead of a plain
-    member.
+    — same field omissions, same provisioning mechanism — but the created
+    account holds the dedicated `department_head` role (see `role_slug`
+    override below), not `responder`. `Department.head_id`/`members` is
+    still what actually scopes a head's authority to their own department
+    (see DepartmentWriteSerializer's own docstring and
+    apps.reports.services's relationship helpers) — the role only exists
+    to keep department heads out of `responder`-only accounting (e.g.
+    "who is an assignable responder") and out of general user-management's
+    role picker.
     """
+    role_slug = 'department_head'
 
 
 class AdminUserUpdateSerializer(serializers.ModelSerializer):

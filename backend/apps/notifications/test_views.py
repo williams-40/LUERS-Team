@@ -1,7 +1,10 @@
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 from apps.core.factories import UserFactory, SecurityFactory, SystemAdminFactory, ReportFactory, DepartmentFactory
 from apps.notifications.models import Message
+
+VALID_EBML_BYTES = b'\x1a\x45\xdf\xa3' + b'\x00' * 32
 
 
 @pytest.mark.django_db
@@ -172,3 +175,52 @@ def test_create_message_rejects_content_over_max_length():
     )
 
     assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_create_message_rejects_neither_content_nor_attachment():
+    report = ReportFactory()
+    admin = SystemAdminFactory()
+
+    client = APIClient()
+    client.force_authenticate(user=admin)
+    response = client.post(f'/api/v1/reports/{report.id}/messages/create/', {})
+
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_create_voice_message_without_content_succeeds():
+    """A voice note stands on its own, same as a text message — content is
+    only required when there's no attachment (see MessageCreateSerializer)."""
+    report = ReportFactory()
+    admin = SystemAdminFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    file = SimpleUploadedFile('recording.weba', VALID_EBML_BYTES, content_type='audio/webm')
+    response = client.post(
+        f'/api/v1/reports/{report.id}/messages/create/', {'attachment': file}, format='multipart',
+    )
+
+    assert response.status_code == 201
+    assert response.data['content'] == ''
+    assert response.data['attachment_url'] is not None
+    message = Message.objects.get(report=report, sender=admin)
+    assert message.attachment.name.endswith('.weba')
+
+
+@pytest.mark.django_db
+def test_create_voice_message_rejects_spoofed_attachment():
+    report = ReportFactory()
+    admin = SystemAdminFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    file = SimpleUploadedFile('recording.weba', b'not-actually-ebml' + b'\x00' * 32, content_type='audio/webm')
+    response = client.post(
+        f'/api/v1/reports/{report.id}/messages/create/', {'attachment': file}, format='multipart',
+    )
+
+    assert response.status_code == 400
+    assert 'attachment' in response.data

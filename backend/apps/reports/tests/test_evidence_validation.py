@@ -5,6 +5,9 @@ from apps.core.factories import SecurityFactory, StaffFactory, ReportFactory, De
 
 VALID_JPEG_BYTES = b'\xff\xd8\xff\xe0' + b'\x00' * 32
 SPOOFED_PDF_AS_JPEG = b'%PDF-1.4\n' + b'\x00' * 32
+# EBML/Matroska container header — identical for MediaRecorder's audio-only
+# (.weba) and video (.webm) output; that's the whole point of these tests.
+VALID_EBML_BYTES = b'\x1a\x45\xdf\xa3' + b'\x00' * 32
 
 
 def _report_assigned_to(user):
@@ -99,6 +102,39 @@ def test_evidence_upload_allowed_for_non_security_department_head():
     resp = client.post(f'/api/v1/reports/{report.id}/evidence/', {'file': file}, format='multipart')
 
     assert resp.status_code == 201
+
+
+@pytest.mark.django_db
+def test_evidence_upload_accepts_webm_video_recording():
+    security = SecurityFactory()
+    report = _report_assigned_to(security)
+    client = APIClient()
+    client.force_authenticate(user=security)
+
+    file = SimpleUploadedFile('recording.webm', VALID_EBML_BYTES, content_type='video/webm')
+    resp = client.post(f'/api/v1/reports/{report.id}/evidence/', {'file': file}, format='multipart')
+
+    assert resp.status_code == 201
+    assert resp.data['file_type'] == 'video'
+
+
+@pytest.mark.django_db
+def test_evidence_upload_accepts_weba_voice_recording():
+    """
+    .weba and .webm share identical magic bytes (same EBML container) —
+    this is what actually disambiguates a voice note from a video note into
+    the correct Evidence.file_type, see apps.core.file_validation.
+    """
+    security = SecurityFactory()
+    report = _report_assigned_to(security)
+    client = APIClient()
+    client.force_authenticate(user=security)
+
+    file = SimpleUploadedFile('recording.weba', VALID_EBML_BYTES, content_type='audio/webm')
+    resp = client.post(f'/api/v1/reports/{report.id}/evidence/', {'file': file}, format='multipart')
+
+    assert resp.status_code == 201
+    assert resp.data['file_type'] == 'audio'
 
 
 @pytest.mark.django_db
