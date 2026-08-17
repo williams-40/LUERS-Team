@@ -5,7 +5,7 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from apps.audit.models import AuditLog
 from apps.core.choices import Action
 from apps.core.factories import (
-    UserFactory, SecurityFactory, ICTAdminFactory, ManagementFactory,
+    UserFactory, ICTAdminFactory, ResponderFactory,
     StaffFactory, SystemAdminFactory,
 )
 
@@ -13,9 +13,6 @@ ROLE_MATRIX = {
     'student': 403,
     'staff': 403,
     'responder': 403,
-    'security': 403,
-    'management': 403,
-    'ict_admin': 200,
     'system_admin': 200,
 }
 
@@ -39,6 +36,21 @@ def test_user_detail_role_matrix():
         client.force_authenticate(user=user)
         response = client.get(f'/api/v1/auth/users/{target.id}/')
         assert response.status_code == expected, f"role {role} got {response.status_code}"
+
+
+@pytest.mark.django_db
+def test_manage_users_holder_can_list_and_view_users():
+    """
+    A manage_users holder (without a seeded role of their own — ict_admin
+    was retired 2026-08-17) gets 200 on both endpoints. Uses ICTAdminFactory
+    directly since ROLE_MATRIX above is keyed by raw role slugs and there's
+    no longer a seeded role carrying just manage_users to put in it.
+    """
+    target = UserFactory()
+    client = APIClient()
+    client.force_authenticate(user=ICTAdminFactory())
+    assert client.get('/api/v1/auth/users/').status_code == 200
+    assert client.get(f'/api/v1/auth/users/{target.id}/').status_code == 200
 
 
 @pytest.mark.django_db
@@ -150,34 +162,34 @@ def test_reactivating_does_not_blacklist_tokens():
 
 @pytest.mark.django_db
 def test_filter_users_by_role():
-    SecurityFactory()
-    SecurityFactory()
+    ResponderFactory()
+    ResponderFactory()
     StaffFactory()
     admin = ICTAdminFactory()
 
     client = APIClient()
     client.force_authenticate(user=admin)
-    response = client.get('/api/v1/auth/users/', {'role': 'security'})
+    response = client.get('/api/v1/auth/users/', {'role': 'responder'})
 
     assert response.status_code == 200
-    assert all(u['role']['slug'] == 'security' for u in response.data['results'])
+    assert all(u['role']['slug'] == 'responder' for u in response.data['results'])
     assert len(response.data['results']) == 2
 
 
 @pytest.mark.django_db
 def test_filter_users_by_comma_separated_roles():
-    SecurityFactory()
-    ManagementFactory()
+    ResponderFactory()
     StaffFactory()
+    UserFactory()  # default role: student — must not appear in the filtered results
     admin = ICTAdminFactory()
 
     client = APIClient()
     client.force_authenticate(user=admin)
-    response = client.get('/api/v1/auth/users/', {'role': 'security,management'})
+    response = client.get('/api/v1/auth/users/', {'role': 'responder,staff'})
 
     assert response.status_code == 200
     roles = {u['role']['slug'] for u in response.data['results']}
-    assert roles == {'security', 'management'}
+    assert roles == {'responder', 'staff'}
 
 
 @pytest.mark.django_db

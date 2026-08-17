@@ -19,27 +19,6 @@ ROLE_MATRIX = {
         '/api/v1/reports/create/': 201,   # valid data will be provided
         '/api/v1/dashboard/summary/': 403,
     },
-    'security': {
-        '/api/v1/reports/': 200,
-        '/api/v1/reports/mine/': 403,
-        '/api/v1/reports/create/': 403,
-        '/api/v1/dashboard/summary/': 200,
-    },
-    'ict_admin': {
-        '/api/v1/reports/': 200,
-        '/api/v1/reports/mine/': 403,
-        '/api/v1/reports/create/': 403,
-        '/api/v1/dashboard/summary/': 200,
-    },
-    'management': {
-        '/api/v1/reports/': 200,
-        '/api/v1/reports/mine/': 403,
-        '/api/v1/reports/create/': 403,
-        # Phase 14: dashboard views opened from IsSecurity|IsICTAdmin to the
-        # full IsAdminTier (management/system_admin were an accidental gap,
-        # not a deliberate exclusion).
-        '/api/v1/dashboard/summary/': 200,
-    },
     'responder': {
         '/api/v1/reports/': 200,
         '/api/v1/reports/mine/': 403,

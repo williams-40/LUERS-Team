@@ -4,10 +4,11 @@ class Role(models.TextChoices):
     STUDENT = 'student', 'Student'
     STAFF = 'staff', 'Staff'
     RESPONDER = 'responder', 'Responder'
-    SECURITY = 'security', 'Security Officer'
-    ICT_ADMIN = 'ict_admin', 'ICT Admin'
-    MANAGEMENT = 'management', 'Management / Escrow'
     SYSTEM_ADMIN = 'system_admin', 'System Admin'
+    # security/ict_admin/management retired entirely (2026-08-17 UI-driven
+    # cleanup) — their Role rows are deleted (accounts/0013), not just
+    # deactivated. See apps.core.factories for how the test suite still
+    # exercises their old permission shapes without a seeded row.
 
 class Category(models.TextChoices):
     THEFT = 'theft', 'Theft'

@@ -35,20 +35,14 @@ BUILTIN_ROLES = {
     # already correct regardless of who holds this permission, so this is
     # a UI-reachability decision, not a data-exposure one.
     'responder': ('Responder', ['view_admin_dashboard']),
-    # Phase 4: 'manage_audit_logs' removed — audit-log access became
-    # fully object/query-level (get_accessible_audit_logs) rather than a
-    # standalone permission. 'security'/'ict_admin'/'management' are
-    # retired as active account roles (collapsed into 'responder' or left
-    # for manual reassignment — see the redesign plan's role-migration
-    # report) but kept seeded, inactive, and unmodified here so existing
-    # historical references and this codebase's test factories
-    # (SecurityFactory/ICTAdminFactory/ManagementFactory) keep resolving
-    # correctly; is_active=False (set directly in migration
-    # accounts/0010, not through this seed data) blocks any *new*
-    # assignment of them.
-    'security': ('Security Officer', ['view_admin_dashboard']),
-    'ict_admin': ('ICT Admin', ['view_admin_dashboard', 'manage_users', 'manage_departments']),
-    'management': ('Management / Escrow', ['view_admin_dashboard']),
+    # 'security'/'ict_admin'/'management' — deactivated in accounts/0010,
+    # deleted outright in accounts/0013 (2026-08-17 UI-driven cleanup) once
+    # their last real references (management_user, ict_admin_user,
+    # phase10_test_officer) were removed. No longer seeded here at all —
+    # see apps.core.factories for how the test suite still exercises their
+    # old permission shapes (SecurityFactory/ManagementFactory now resolve
+    # to 'responder', identical single-permission footprint; ICTAdminFactory
+    # get_or_creates its own non-builtin, never-seeded test role).
     'system_admin': ('System Admin', [
         'view_admin_dashboard', 'manage_users', 'manage_departments', 'delete_report',
         'manage_roles', 'view_all_reports',

@@ -4,7 +4,7 @@ from channels.testing import WebsocketCommunicator
 from rest_framework_simplejwt.tokens import AccessToken
 from apps.notifications.consumers import ReportConsumer
 from apps.notifications.models import Message
-from apps.core.factories import UserFactory, SecurityFactory, ReportFactory, DepartmentFactory
+from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, ReportFactory, DepartmentFactory
 from apps.core.choices import Status
 
 
@@ -190,7 +190,7 @@ async def test_status_update_rejected_for_user_without_report_access():
     (not its department head, not assigned) is rejected on access grounds,
     not role.
     """
-    ict_admin = await _acreate(UserFactory, role='ict_admin')
+    ict_admin = await _acreate(ICTAdminFactory)
     report = await _acreate(ReportFactory)
     communicator, _ = await connect(f'token={token_for(ict_admin)}')
 

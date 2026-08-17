@@ -1,5 +1,5 @@
 import pytest
-from apps.core.factories import UserFactory, SecurityFactory, SystemAdminFactory, ReportFactory, DepartmentFactory
+from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, SystemAdminFactory, ReportFactory, DepartmentFactory
 from apps.reports.services import get_accessible_reports, get_accessible_audit_logs, ReportService
 from apps.core.choices import Status, Action
 from apps.audit.models import AuditLog
@@ -113,7 +113,7 @@ def test_ict_admin_with_no_department_sees_nothing():
     all sees nothing (not even the identity-based reporter fallback,
     which only makes sense for actual reporters).
     """
-    ict_admin = UserFactory(role='ict_admin')
+    ict_admin = ICTAdminFactory()
     ReportFactory()
     assert get_accessible_reports(ict_admin).count() == 0
 
@@ -159,7 +159,7 @@ def test_get_accessible_audit_logs_member_sees_only_own_actions():
 
 @pytest.mark.django_db
 def test_get_accessible_audit_logs_unaffiliated_user_sees_nothing():
-    user = UserFactory(role='ict_admin')
+    user = ICTAdminFactory()
     report = ReportFactory()
     AuditLog.objects.create(report=report, actor=user, action=Action.CREATE, after_state={})
     assert get_accessible_audit_logs(user).count() == 0

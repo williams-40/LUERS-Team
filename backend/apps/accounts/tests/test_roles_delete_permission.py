@@ -1,15 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.accounts.models import Role
 from apps.core.factories import ICTAdminFactory, SystemAdminFactory, ReportFactory
-
-
-@pytest.mark.django_db
-def test_ict_admin_role_no_longer_has_delete_report():
-    ict_admin = Role.objects.get(slug='ict_admin')
-    system_admin = Role.objects.get(slug='system_admin')
-    assert not ict_admin.permissions.filter(slug='delete_report').exists()
-    assert system_admin.permissions.filter(slug='delete_report').exists()
 
 
 @pytest.mark.django_db

@@ -12,9 +12,7 @@ from apps.core.factories import (
 # DELETE stay IsAccountAdmin-gated (see test_non_admin_cannot_create_department).
 ROLE_MATRIX = {
     'student': 200,
-    'security': 200,
-    'management': 200,
-    'ict_admin': 200,
+    'responder': 200,
     'system_admin': 200,
 }
 

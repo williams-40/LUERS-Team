@@ -45,24 +45,16 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(f"  Created department: {dept.name}")
 
-        # Assign heads
-        if 'security' in users:
-            security_dept = Department.objects.get(name='Security')
-            security_dept.head = users.get('security')
-            security_dept.save()
-            self.stdout.write("  Assigned security_user as head of Security")
-
-        if 'management' in users:
-            admin_dept = Department.objects.get(name='Administration')
-            admin_dept.head = users.get('management')
-            admin_dept.save()
-            self.stdout.write("  Assigned management_user as head of Administration")
-
-        if 'ict_admin' in users:
-            ict_dept = Department.objects.get(name='ICT Services')
-            ict_dept.head = users.get('ict_admin')
-            ict_dept.save()
-            self.stdout.write("  Assigned ict_admin_user as head of ICT Services")
+        # Assign heads — security/ict_admin/management retired as seeded
+        # roles (2026-08-17), so responder_user now heads what those three
+        # used to (Security, Administration, ICT Services all still get a
+        # real, non-admin example department head out of a fresh seed).
+        if 'responder' in users:
+            for dept_name in ['Security', 'Administration', 'ICT Services']:
+                dept = Department.objects.get(name=dept_name)
+                dept.head = users.get('responder')
+                dept.save()
+            self.stdout.write("  Assigned responder_user as head of Security, Administration, and ICT Services")
 
         # ✅ Assign system admin as head of the 'Other' department
         if 'system_admin' in users:
@@ -90,7 +82,6 @@ class Command(BaseCommand):
                 defaults={
                     'email': email,
                     'role': RoleModel.objects.get(slug=role),
-                    'phone_number': f'+2567{random.randint(10000000,99999999)}' if role == Role.SECURITY else None,
                 }
             )
             if created:
@@ -105,7 +96,7 @@ class Command(BaseCommand):
         self.stdout.write(f'✅ Created {len(departments)} departments.')
 
         # 3. Create reports
-        security_user = users.get(Role.SECURITY)
+        responder_user = users.get(Role.RESPONDER)
         student_user = users.get(Role.STUDENT)
         staff_user = users.get(Role.STAFF)
 
@@ -128,7 +119,7 @@ class Command(BaseCommand):
                 reporter=reporter,
                 latitude=round(random.uniform(2.2, 2.3), 6),
                 longitude=round(random.uniform(32.8, 33.0), 6),
-                assigned_to=security_user if random.choice([True, False]) else None,
+                assigned_to=responder_user if random.choice([True, False]) else None,
                 metadata={'source': 'seed_data'},
                 department=department,
                 custom_department='' if department and department.name != 'Other' else 'Custom Dept',
