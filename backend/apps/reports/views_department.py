@@ -8,8 +8,7 @@ from rest_framework.response import Response
 from apps.reports.models import Department
 from apps.reports.serializers_department import DepartmentSerializer, DepartmentWriteSerializer
 from apps.accounts.permissions import CanManageDepartments
-from apps.accounts.serializers import ResponderCreateSerializer, UserSerializer
-from apps.accounts.services import PasswordResetService
+from apps.accounts.serializers import ResponderCreateSerializer, HeadCreateSerializer, UserSerializer
 from apps.audit.models import AuditLog
 from apps.core.choices import Action
 from apps.core.pagination import StandardPagination
@@ -89,6 +88,13 @@ class DepartmentResponderCreateView(GenericAPIView):
     the AllowAny auth endpoints) — this is a real account-creation
     surface reachable by any department head, flagged as a gap in the
     Phase 6 design doc (D.9) but not closed until now.
+
+    Post-Phase-9 cleanup: the created account gets a real temp password
+    and an invite email (subject/body from AccountProvisioningService,
+    called inside ResponderCreateSerializer.create) rather than an
+    unusable password + separate reset-link email — the recipient logs in
+    directly with the temp password, then must change it
+    (User.must_change_password / ChangePasswordSerializer).
     """
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ResponderCreateSerializer
@@ -103,11 +109,54 @@ class DepartmentResponderCreateView(GenericAPIView):
         user = serializer.save()
         department.members.add(user)
 
-        PasswordResetService.request_reset(user.email)
-
         AuditLog.objects.create(
             actor=request.user,
             action=Action.RESPONDER_CREATED,
+            after_state={
+                'user_id': str(user.id),
+                'username': user.username,
+                'department_id': str(department.id),
+                'department_name': department.name,
+            },
+        )
+
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
+@method_decorator(ratelimit(key='user', rate='10/h', method='POST', block=True), name='post')
+class DepartmentHeadCreateView(GenericAPIView):
+    """
+    POST /api/v1/departments/<id>/heads/
+    Lets system_admin (or anyone else holding manage_departments) create
+    a department-head account and assign it to this department in one
+    step — the deliberate provisioning path replacing the old "create any
+    user, then separately PATCH a department's head field to them" flow.
+    Reassigns the department's head if it already has one; the previous
+    head simply stops being one (Department.head is SET_NULL-safe, and
+    they keep whatever other account state they had).
+
+    Same account-creation mechanics as DepartmentResponderCreateView
+    (HeadCreateSerializer subclasses ResponderCreateSerializer) — temp
+    password + invite email, must_change_password on first login. No
+    role/department/password field ever transits this endpoint either.
+    """
+    permission_classes = [permissions.IsAuthenticated, CanManageDepartments]
+    serializer_class = HeadCreateSerializer
+
+    def post(self, request, id):
+        department = get_object_or_404(Department, id=id, is_active=True)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        department.head = user
+        department.save(update_fields=['head', 'updated_at'])
+        department.members.add(user)
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action=Action.HEAD_CREATED,
             after_state={
                 'user_id': str(user.id),
                 'username': user.username,

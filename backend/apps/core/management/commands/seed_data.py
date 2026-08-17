@@ -19,8 +19,8 @@ class Command(BaseCommand):
             help='Force re-creation even if data exists',
         )
 
-    def _create_departments(self, users):
-        """Create default departments and optionally assign heads."""
+    def _create_departments(self):
+        """Create default departments — headless, see note below."""
         dept_data = [
             {'name': 'Security', 'description': 'Handles theft, assault, harassment, and other security-related incidents'},
             {'name': 'ICT Services', 'description': 'Handles computer, network, and account/access issues'},
@@ -45,24 +45,10 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(f"  Created department: {dept.name}")
 
-        # Assign heads — security/ict_admin/management retired as seeded
-        # roles (2026-08-17), so responder_user now heads what those three
-        # used to (Security, Administration, ICT Services all still get a
-        # real, non-admin example department head out of a fresh seed).
-        if 'responder' in users:
-            for dept_name in ['Security', 'Administration', 'ICT Services']:
-                dept = Department.objects.get(name=dept_name)
-                dept.head = users.get('responder')
-                dept.save()
-            self.stdout.write("  Assigned responder_user as head of Security, Administration, and ICT Services")
-
-        # ✅ Assign system admin as head of the 'Other' department
-        if 'system_admin' in users:
-            other_dept = Department.objects.get(name='Other')
-            other_dept.head = users.get('system_admin')
-            other_dept.save()
-            self.stdout.write("  Assigned system_admin as head of Other department")
-
+        # No seeded heads (2026-08-17): department headship is now a
+        # deliberate system_admin action (DepartmentHeadCreateView), not
+        # leftover seed state — every department starts headless, same as
+        # a fresh production install would.
         return departments
 
     def handle(self, *args, **options):
@@ -72,9 +58,13 @@ class Command(BaseCommand):
 
         self.stdout.write('Seeding database...')
 
-        # 1. Create users
+        # 1. Create users — only the 3 core, always-present roles
+        # (2026-08-17). Responder accounts are no longer seeded: they only
+        # come into existence via DepartmentHeadCreateView (system_admin)
+        # or DepartmentResponderCreateView (a head), matching the real
+        # provisioning chain rather than a shortcut.
         users = {}
-        for role in Role.values:
+        for role in [Role.STUDENT, Role.STAFF, Role.SYSTEM_ADMIN]:
             username = f'{role}_user'
             email = f'{role}@example.com'
             user, created = User.objects.get_or_create(
@@ -91,12 +81,11 @@ class Command(BaseCommand):
 
         self.stdout.write(f'✅ Created {len(users)} users.')
 
-        # 2. Create departments (and assign heads)
-        departments = self._create_departments(users)
+        # 2. Create departments (headless — see _create_departments)
+        departments = self._create_departments()
         self.stdout.write(f'✅ Created {len(departments)} departments.')
 
         # 3. Create reports
-        responder_user = users.get(Role.RESPONDER)
         student_user = users.get(Role.STUDENT)
         staff_user = users.get(Role.STAFF)
 
@@ -119,7 +108,7 @@ class Command(BaseCommand):
                 reporter=reporter,
                 latitude=round(random.uniform(2.2, 2.3), 6),
                 longitude=round(random.uniform(32.8, 33.0), 6),
-                assigned_to=responder_user if random.choice([True, False]) else None,
+                assigned_to=None,  # no responders exist at seed time — see provisioning chain note above
                 metadata={'source': 'seed_data'},
                 department=department,
                 custom_department='' if department and department.name != 'Other' else 'Custom Dept',

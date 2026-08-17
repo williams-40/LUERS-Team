@@ -47,6 +47,25 @@ def test_bulk_status_update_rejects_own_report_for_reporter():
 
 
 @pytest.mark.django_db
+def test_bulk_status_update_rejects_department_head_who_isnt_assigned():
+    """2026-08-17: mirrors the single-report ReportStatusUpdateView tightening — a department head can see every report in their department but no longer updates status on any of them, assigned or not."""
+    head = SecurityFactory()
+    department = DepartmentFactory(head=head)
+    report = ReportFactory(department=department, status=Status.NEW)
+
+    client = APIClient()
+    client.force_authenticate(user=head)
+    response = client.post('/api/v1/reports/bulk/status/', {
+        'report_ids': [str(report.id)], 'status': Status.ACKNOWLEDGED,
+    }, format='json')
+
+    assert response.status_code == 200
+    assert response.data['results'][0]['status'] == 'error'
+    report.refresh_from_db()
+    assert report.status == Status.NEW
+
+
+@pytest.mark.django_db
 def test_bulk_status_update_all_succeed():
     security = SecurityFactory()
     department = DepartmentFactory()

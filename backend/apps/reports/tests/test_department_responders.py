@@ -23,10 +23,13 @@ def test_department_head_can_create_responder_in_own_department():
     assert response.status_code == 201
     new_user = User.objects.get(username='new_responder')
     assert new_user.role.slug == 'responder'
-    assert new_user.has_usable_password() is False
+    assert new_user.has_usable_password() is True
+    assert new_user.must_change_password is True
     assert new_user in department.members.all()
     assert len(mail.outbox) == 1
-    assert 'reset-password' in mail.outbox[0].body
+    assert mail.outbox[0].subject == "Your LUERS account has been created"
+    assert '/login' in mail.outbox[0].body
+    assert 'reset-password' not in mail.outbox[0].body
 
 
 @pytest.mark.django_db

@@ -1,4 +1,5 @@
 import pytest
+from django.core import mail
 from rest_framework.test import APIClient
 from apps.core.factories import UserFactory, SecurityFactory, SystemAdminFactory, ReportFactory, DepartmentFactory
 from apps.audit.models import AuditLog
@@ -21,6 +22,30 @@ def test_department_head_can_assign_within_own_department():
     report.refresh_from_db()
     assert report.assigned_to_id == member.id
     assert AuditLog.objects.filter(report=report, action=Action.ASSIGN, actor=head).exists()
+
+
+@pytest.mark.django_db
+def test_assignment_sends_an_assignment_specific_email():
+    """
+    Requirement (2026-08-17): the assigned responder gets emailed, with
+    copy distinct from the generic report-creation email reused verbatim
+    here until now — assert on the new copy, not just "an email fired".
+    """
+    head = SecurityFactory()
+    department = DepartmentFactory(head=head)
+    member = UserFactory(role='staff')
+    department.members.add(member)
+    report = ReportFactory(department=department)
+
+    client = APIClient()
+    client.force_authenticate(user=head)
+    response = client.post(f'/api/v1/reports/{report.id}/assign/', {'assigned_to': str(member.id)})
+
+    assert response.status_code == 200
+    assignment_emails = [m for m in mail.outbox if m.to == [member.email]]
+    assert len(assignment_emails) == 1
+    assert "you've been assigned" in assignment_emails[0].subject.lower()
+    assert 'a new report has been submitted' not in assignment_emails[0].body.lower()
 
 
 @pytest.mark.django_db
@@ -101,6 +126,29 @@ def test_assignable_officers_returns_head_and_members():
     ids = {o['id'] for o in response.data}
     assert str(head.id) in ids
     assert str(member.id) in ids
+
+
+@pytest.mark.django_db
+def test_assignable_officers_includes_open_report_count():
+    head = SecurityFactory()
+    department = DepartmentFactory(head=head)
+    busy_member = UserFactory(role='staff')
+    free_member = UserFactory(role='staff')
+    department.members.add(busy_member, free_member)
+    # two open reports for busy_member, one resolved (shouldn't count)
+    ReportFactory(department=department, assigned_to=busy_member, status='new')
+    ReportFactory(department=department, assigned_to=busy_member, status='in_progress')
+    ReportFactory(department=department, assigned_to=busy_member, status='resolved')
+    report = ReportFactory(department=department)
+
+    client = APIClient()
+    client.force_authenticate(user=head)
+    response = client.get(f'/api/v1/reports/{report.id}/assignable-officers/')
+
+    assert response.status_code == 200
+    by_id = {o['id']: o for o in response.data}
+    assert by_id[str(busy_member.id)]['open_report_count'] == 2
+    assert by_id[str(free_member.id)]['open_report_count'] == 0
 
 
 @pytest.mark.django_db

@@ -44,7 +44,13 @@ def test_assigned_responder_can_update_status():
 
 
 @pytest.mark.django_db
-def test_department_head_can_update_status_of_unassigned_report():
+def test_department_head_cannot_update_status_even_of_own_departments_report():
+    """
+    2026-08-17: heads assign and monitor, they don't do fieldwork — status
+    updates are exclusively the assigned responder's job now, even for a
+    report in a department this head runs (they can still see it, via
+    get_accessible_reports, just can't change its status).
+    """
     head = SecurityFactory()
     department = DepartmentFactory(head=head)
     report = ReportFactory(department=department, status=Status.NEW)
@@ -53,11 +59,18 @@ def test_department_head_can_update_status_of_unassigned_report():
     client.force_authenticate(user=head)
     response = client.patch(f'/api/v1/reports/{report.id}/status/', {'status': Status.ACKNOWLEDGED})
 
-    assert response.status_code == 200
+    assert response.status_code == 403
+    report.refresh_from_db()
+    assert report.status == Status.NEW
 
 
 @pytest.mark.django_db
-def test_system_admin_can_update_status_of_any_report():
+def test_system_admin_cannot_update_status():
+    """
+    2026-08-17: closes the same backend-only gap already closed for
+    department heads — the frontend already hid this control from
+    system_admin (view-only oversight), now the API rejects it too.
+    """
     system_admin = SystemAdminFactory()
     report = ReportFactory(status=Status.NEW)
 
@@ -65,7 +78,9 @@ def test_system_admin_can_update_status_of_any_report():
     client.force_authenticate(user=system_admin)
     response = client.patch(f'/api/v1/reports/{report.id}/status/', {'status': Status.ACKNOWLEDGED})
 
-    assert response.status_code == 200
+    assert response.status_code == 403
+    report.refresh_from_db()
+    assert report.status == Status.NEW
 
 
 @pytest.mark.django_db

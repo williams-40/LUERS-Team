@@ -1,5 +1,5 @@
 ﻿from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from asgiref.sync import async_to_sync
@@ -276,7 +276,7 @@ class ReportService:
             if assigned_to.phone_number:
                 NotificationService.dispatch(report, Channel.SMS, recipient=assigned_to)
             if assigned_to.email:
-                NotificationService.dispatch(report, Channel.EMAIL, recipient=assigned_to)
+                NotificationService.dispatch(report, Channel.EMAIL, recipient=assigned_to, event_type='assigned')
 
         # Unlike update_status, this broadcast was missing entirely — an
         # assignment never reached the live queue/dashboard/report-detail
@@ -392,12 +392,17 @@ class ReportService:
 
 def filter_reports(queryset, params):
     """
-    Shared status/category/urgency/search filtering for the queue list and
-    export views. `search` is a plain icontains OR across description,
-    custom_department, department name, and assigned officer username —
-    deliberately excludes reporter identity and category/status/urgency (already
-    exact-match filterable above; substring-matching them too would be
-    redundant and could mislead officers about what search actually does).
+    Shared status/category/urgency/assigned_to/search filtering for the
+    queue list and export views. `search` is a plain icontains OR across
+    description, custom_department, department name, and assigned officer
+    username — deliberately excludes reporter identity and
+    category/status/urgency (already exact-match filterable above;
+    substring-matching them too would be redundant and could mislead
+    officers about what search actually does). `assigned_to` is an exact
+    user-id match — used by MyAssignedReportsPanel so a responder's
+    dashboard view is explicitly filtered server-side rather than
+    incidentally correct only because get_accessible_reports already
+    narrows a responder to their own assignments.
 
     icontains can't use a plain btree index, so this scans on `description`
     for now — fine at this app's current scale. A pg_trgm GIN index would
@@ -409,6 +414,7 @@ def filter_reports(queryset, params):
     department = params.get('department')
     urgency = params.get('urgency')
     search = params.get('search')
+    assigned_to = params.get('assigned_to')
     if status:
         queryset = queryset.filter(status=status)
     if category:
@@ -417,6 +423,8 @@ def filter_reports(queryset, params):
         queryset = queryset.filter(department_id=department)
     if urgency:
         queryset = queryset.filter(urgency=urgency)
+    if assigned_to:
+        queryset = queryset.filter(assigned_to_id=assigned_to)
     if search:
         queryset = queryset.filter(
             Q(description__icontains=search)
@@ -522,6 +530,34 @@ def is_department_head_or_system_admin(user, report):
     if user.has_permission('view_all_reports'):
         return True
     return bool(report.department_id and report.department.head_id == user.id)
+
+
+def get_open_report_counts(queryset, user_ids):
+    """
+    How many currently-open (not resolved/closed) reports in `queryset`
+    are assigned to each of `user_ids` — the "busy" signal shown to a
+    department head in the report assignment picker
+    (ReportAssignableOfficersView), for a known set of candidate ids.
+    apps.dashboard.analytics._responder_workload computes a related but
+    shaped-differently metric (discovers every responder with open work
+    rather than looking up specific ids, and also returns usernames) —
+    intentionally left as its own query rather than forced through this
+    helper, since the two have different access patterns. Deliberately
+    scoped to whatever `queryset` the caller already has (e.g.
+    get_accessible_reports(user)) rather than a global count — a head's
+    view of "is this responder busy" is naturally bounded by what that
+    head can already see, mostly their own department's reports, matching
+    this codebase's existing "scope everything through
+    get_accessible_reports" idiom rather than introducing a separate
+    global notion of busy-ness.
+    """
+    counts = (
+        queryset.exclude(status__in=[Status.RESOLVED, Status.CLOSED])
+        .filter(assigned_to_id__in=user_ids)
+        .values('assigned_to_id')
+        .annotate(count=Count('id'))
+    )
+    return {row['assigned_to_id']: row['count'] for row in counts}
 
 
 def is_department_member_or_head(user, department):

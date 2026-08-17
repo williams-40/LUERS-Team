@@ -208,6 +208,63 @@ async def test_status_update_rejected_for_user_without_report_access():
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_department_head_cannot_status_update_over_websocket():
+    """
+    2026-08-17: closes a real, previously-untested gap — the head can
+    SEE this report (get_accessible_reports grants department heads
+    view access to every report in their department), but status
+    updates are the assigned responder's job alone, on both REST and
+    this socket path.
+    """
+    head = await _acreate(SecurityFactory)
+    department = await _adept_member(head)
+
+    def _make_head():
+        department.head = head
+        department.save(update_fields=['head'])
+    await sync_to_async(_make_head)()
+
+    report = await _acreate(ReportFactory, department=department, status=Status.NEW)
+    communicator, _ = await connect(f'token={token_for(head)}')
+
+    await communicator.send_to(text_data=json.dumps({
+        'type': 'status_update',
+        'report_id': str(report.id),
+        'status': Status.ACKNOWLEDGED,
+    }))
+    response = json.loads(await communicator.receive_from())
+    assert response['type'] == 'error'
+    assert response['message'] == "Only this report's assigned responder can update its status"
+    await _arefresh(report)
+    assert report.status == Status.NEW
+
+    await communicator.disconnect()
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_reporter_cannot_status_update_over_websocket():
+    """Mirrors ReportStatusUpdateView's REST-side rejection — the reporter can view their own report but never update its status."""
+    student = await _acreate(UserFactory, role='student')
+    report = await _acreate(ReportFactory, reporter=student, status=Status.NEW)
+    communicator, _ = await connect(f'token={token_for(student)}')
+
+    await communicator.send_to(text_data=json.dumps({
+        'type': 'status_update',
+        'report_id': str(report.id),
+        'status': Status.ACKNOWLEDGED,
+    }))
+    response = json.loads(await communicator.receive_from())
+    assert response['type'] == 'error'
+    assert response['message'] == "Only this report's assigned responder can update its status"
+    await _arefresh(report)
+    assert report.status == Status.NEW
+
+    await communicator.disconnect()
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_status_update_persists_and_broadcasts():
     security = await _acreate(SecurityFactory)
     department = await _adept_member(security)

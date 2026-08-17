@@ -16,6 +16,7 @@ from apps.reports.serializers import (
 from apps.reports.services import (
     ReportService, MessageService, get_accessible_reports, filter_reports,
     is_department_head_or_system_admin, is_department_member_or_head, can_upload_evidence,
+    get_open_report_counts,
 )
 from apps.reports.validators import validate_evidence_file
 from apps.accounts.permissions import IsStudentOrStaff, IsAdminTier, CanDeleteReport
@@ -169,15 +170,17 @@ class ReportDetailView(generics.RetrieveAPIView):
 class ReportStatusUpdateView(APIView):
     """
     PATCH /api/v1/reports/{id}/status/
-    Update report status — its department head, the responder it's
-    assigned to, or System Admin (is_department_head_or_system_admin,
-    or the report's own assigned_to). Deliberately narrower than "can
-    view" (get_accessible_reports): the report's own reporter can see
-    it, but must not be able to mark their own report resolved/closed
-    themselves — the frontend already only ever shows this control to
-    an assigned responder or department head/admin
-    (ReportDetailPage.tsx's canUpdateStatus); Phase 5 closed the
-    matching backend gap so that restriction isn't frontend-only.
+    Update report status — only the responder it's assigned to, no one
+    else, including its department head or System Admin. Heads assign and
+    monitor; the assigned responder is the one actually in the field, so
+    they're the only one who marks progress. Deliberately narrower than
+    "can view" (get_accessible_reports): the report's own reporter, its
+    department head, and System Admin can all see it, but none of them
+    may change its status — the frontend already only ever shows this
+    control to the assigned responder (ReportDetailPage.tsx's
+    canUpdateStatus); Phase 5 first closed the matching backend gap for
+    reporters, and this closes it for heads/system_admin too, so the
+    restriction isn't frontend-only for any of them.
     Supports conflict detection via expected_updated_at.
     """
     permission_classes = [permissions.IsAuthenticated]
@@ -185,8 +188,8 @@ class ReportStatusUpdateView(APIView):
 
     def patch(self, request, id):
         report = get_object_or_404(get_accessible_reports(request.user), id=id)
-        if not (is_department_head_or_system_admin(request.user, report) or report.assigned_to_id == request.user.id):
-            raise PermissionDenied("Only this report's assigned responder, department head, or a System Admin can update its status.")
+        if report.assigned_to_id != request.user.id:
+            raise PermissionDenied("Only this report's assigned responder can update its status.")
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_status = serializer.validated_data['status']
@@ -256,6 +259,13 @@ class ReportAssignableOfficersView(APIView):
     System Admin) can assign the report to. Replaces the old unscoped
     `/auth/officers/` (all security officers, campus-wide) for this
     purpose now that responders are department-scoped, not role-scoped.
+
+    Each candidate also carries `open_report_count` (2026-08-17) — how
+    many currently-open reports they're already assigned, within
+    whatever this caller can see (get_open_report_counts) — so the head
+    can tell who's free before assigning. Informational only: nothing
+    here blocks assigning an already-busy responder, that's a deliberate
+    call left to the head, not a server-side rule.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -272,7 +282,13 @@ class ReportAssignableOfficersView(APIView):
         if department.head and department.head not in candidates:
             candidates.append(department.head)
 
-        return Response([{'id': str(u.id), 'username': u.username} for u in candidates])
+        open_counts = get_open_report_counts(
+            get_accessible_reports(request.user), [u.id for u in candidates],
+        )
+        return Response([
+            {'id': str(u.id), 'username': u.username, 'open_report_count': open_counts.get(u.id, 0)}
+            for u in candidates
+        ])
 
 
 class EvidenceUploadView(APIView):

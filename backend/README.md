@@ -28,7 +28,7 @@ Django REST Framework backend for **LUERS** (Lira University Emergency Reporting
    python manage.py migrate
    python manage.py seed_data
    ```
-   `seed_data` creates one user per live role slug (`student_user`, `staff_user`, `responder_user`, `system_admin_user`), all with password `password123`, plus a full department set. See [Roles & permissions](#roles--permissions).
+   `seed_data` creates exactly the 3 accounts that always exist by design (`student_user`, `staff_user`, `system_admin_user`, password `password123`) plus a full, headless department set — no responders or department heads. Those only come into existence through the app itself: `system_admin` creates a head, a head creates their department's responders. See [Roles & permissions](#roles--permissions).
 5. **Run the dev server:**
    ```bash
    python manage.py runserver 8000
@@ -53,11 +53,18 @@ Authorization is **Role → Permission**, both database-backed (`apps.accounts.m
 | `responder` | `view_admin_dashboard` | Works reports; capability comes from *relationships* below, not the role itself |
 | `system_admin` | everything, incl. `manage_roles`/`view_all_reports` | Full platform access |
 
-**Department headship is a relationship, not a role.** Any active user can head or belong to a `Department` (`Department.head`, `Department.members`); this is what actually differentiates one responder from another — a department head can create new responder accounts scoped to their own department (`POST /api/v1/departments/{id}/responders/`) and sees their department's full report/audit history, while a plain responder sees only what's assigned to them.
+**Department headship is a relationship, not a role.** Any active user can head or belong to a `Department` (`Department.head`, `Department.members`); this is what actually differentiates one responder from another — a department head sees their department's full report/audit history, while a plain responder sees only what's assigned to them.
 
-**Responder is the only role you can't hand out through general user management.** `AdminUserCreateSerializer`/`AdminUserUpdateSerializer` (`system_admin`'s "Manage users" UI) reject assigning anyone into `responder`, whether creating a new account or reassigning an existing one — the department-head endpoint above is the sole path. An account that's already a responder can still be edited (email, active state) without being forced off the role.
+**Responder is the only role you can't hand out through general user management.** `AdminUserCreateSerializer`/`AdminUserUpdateSerializer` (`system_admin`'s "Manage users" UI) reject assigning anyone into `responder`, whether creating a new account or reassigning an existing one. There are exactly two ways a `responder` account can come into existence:
 
-The three legacy roles (`security`, `ict_admin`, `management`) that used to exist alongside these four were deleted outright (migration `accounts/0013_delete_legacy_roles`), not just deactivated — there's no historical-only role data left to account for.
+- `POST /api/v1/departments/{id}/heads/` (`DepartmentHeadCreateView`) — `system_admin`/`manage_departments` only, creates a `responder` account and assigns it as the department's head in one step (reassigns if one already exists).
+- `POST /api/v1/departments/{id}/responders/` (`DepartmentResponderCreateView`) — a department's own head only, adds a `responder` account as a plain member of that department.
+
+Both go through the same `AccountProvisioningService.create_account` (`apps/accounts/services.py`): a real, usable temp password is generated and emailed to the new account (login link + username + password), and `User.must_change_password` is set — the frontend (`RequireAuth`) redirects any such account straight to a forced password-change page until they clear it via `POST /api/v1/auth/change-password/`, which is what actually flips the flag off. This is deliberately different from `PasswordResetService` (unusable password + reset-link email), which is only for the existing self-service "forgot password" flow.
+
+An account that's already a responder can still be edited (email, active state) without being forced off the role.
+
+The three legacy roles (`security`, `ict_admin`, `management`) that used to exist alongside these four were deleted outright (migration `accounts/0013_delete_legacy_roles`), not just deactivated — there's no historical-only role data left to account for. The dev environment's user set was reset to just the 3 core accounts (migration `accounts/0014_reset_users_to_core_three`) — every department starts headless, matching a fresh install.
 
 ### Report visibility — one function, four rules
 
@@ -69,6 +76,14 @@ Every place a report or its audit trail is ever shown — the REST list/detail v
 4. **System Admin** — everything, unconditionally.
 
 If you're adding a new place that needs to know "can this user see this report," call `apps.reports.services.can_access_report(user, report)` — never re-derive the rule locally.
+
+### Who can change what on a report
+
+Visibility (above) and mutation rights are deliberately different populations:
+
+- **Assign** (`POST /reports/{id}/assign/`, `is_department_head_or_system_admin`) — the report's department head, or System Admin.
+- **Update status** (`PATCH /reports/{id}/status/`) — only the report's `assigned_to` responder, full stop. Not the head, not System Admin, not the reporter. Heads assign and monitor; the assigned responder is the one actually in the field, so they're the only one who marks progress. Enforced identically on the REST endpoint, the bulk-status endpoint (`BulkStatusUpdateView`), and the WebSocket `status_update` message handler — all three call the same `report.assigned_to_id == user.id` check rather than three independent implementations.
+- Each candidate returned by `GET /reports/{id}/assignable-officers/` also carries `open_report_count` — how many currently-open reports they already have, informational only (no server-side block on assigning an already-busy responder).
 
 ### Privilege-escalation guards
 

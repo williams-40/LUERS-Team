@@ -53,6 +53,11 @@ class User(BaseModel, AbstractUser):
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name='users')
     university_id = models.CharField(max_length=50, blank=True, null=True)
+    # Set on any account provisioned with a temp password (department
+    # heads, responders — see AccountProvisioningService) so the frontend
+    # can force a password change before anything else on first login.
+    # Cleared by ChangePasswordSerializer.save() once they do.
+    must_change_password = models.BooleanField(default=False)
 
     USERNAME_FIELD = 'username'   # default, but we could set email if desired
     REQUIRED_FIELDS = ['email']

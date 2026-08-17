@@ -3,6 +3,30 @@ from rest_framework.test import APIClient
 from apps.core.factories import SecurityFactory, SystemAdminFactory, ReportFactory, DepartmentFactory
 from apps.core.choices import Status
 
+
+@pytest.mark.django_db
+def test_assigned_to_filter_matches_exact_user():
+    """
+    2026-08-17: added so MyAssignedReportsPanel (a responder's primary
+    dashboard view) can filter server-side explicitly rather than relying
+    on get_accessible_reports already happening to narrow a responder to
+    their own assignments.
+    """
+    system_admin = SystemAdminFactory()
+    responder = SecurityFactory()
+    other_responder = SecurityFactory()
+    mine = ReportFactory(assigned_to=responder)
+    ReportFactory(assigned_to=other_responder)
+    ReportFactory(assigned_to=None)
+
+    client = APIClient()
+    client.force_authenticate(user=system_admin)
+    response = client.get('/api/v1/reports/', {'assigned_to': str(responder.id)})
+
+    assert response.status_code == 200
+    ids = {r['id'] for r in response.data['results']}
+    assert ids == {str(mine.id)}
+
 # These tests are about the search/filter logic itself, not access
 # scoping — the acting user is System Admin throughout (sees everything
 # unconditionally) so department/assignment setup doesn't get in the way

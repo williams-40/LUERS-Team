@@ -54,8 +54,21 @@ class NotificationService:
 
         # --- FIXED: Converted UUID to string before slicing ---
         short_id = str(report.id)[:8]
-        subject = f"LUERS Alert: New Report #{short_id}"
-        message = f"""
+        if kwargs.get('event_type') == 'assigned':
+            subject = f"LUERS Alert: You've been assigned Report #{short_id}"
+            message = f"""
+You've been assigned a report on LUERS.
+
+Report ID: {report.id}
+Category: {report.category}
+Status: {report.status}
+Description: {report.description[:200]}...
+
+Please login to LUERS to view and respond.
+"""
+        else:
+            subject = f"LUERS Alert: New Report #{short_id}"
+            message = f"""
 A new report has been submitted.
 
 Report ID: {report.id}

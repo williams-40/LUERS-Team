@@ -1,4 +1,5 @@
 import logging
+import secrets
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -94,3 +95,41 @@ class PasswordResetService:
 
         user.set_password(new_password)
         user.save(update_fields=["password"])
+
+
+class AccountProvisioningService:
+    """
+    Shared creation path for accounts that get invited in rather than
+    self-registering: department heads (DepartmentHeadCreateView) and
+    responders (DepartmentResponderCreateView). Unlike PasswordResetService
+    (unusable password + reset-link email, for an account that already
+    exists), this gives the new account a real, usable temp password so
+    the recipient can log in immediately — `must_change_password=True`
+    then forces them to pick their own before doing anything else (see
+    ChangePasswordSerializer.save, which clears the flag).
+    """
+
+    @staticmethod
+    def create_account(*, role, **user_fields):
+        temp_password = secrets.token_urlsafe(12)
+        user = User.objects.create_user(
+            password=temp_password, role=role, must_change_password=True, **user_fields,
+        )
+        AccountProvisioningService._send_invite_email(user, temp_password)
+        return user
+
+    @staticmethod
+    def _send_invite_email(user, temp_password):
+        login_url = f"{settings.FRONTEND_URL}/login"
+        send_email_task.delay(
+            user.email,
+            "Your LUERS account has been created",
+            (
+                f"Hi {user.username},\n\n"
+                f"An account has been created for you on LUERS. Sign in here:\n\n"
+                f"{login_url}\n\n"
+                f"Username: {user.username}\n"
+                f"Temporary password: {temp_password}\n\n"
+                f"You'll be required to choose a new password the first time you sign in.\n"
+            ),
+        )

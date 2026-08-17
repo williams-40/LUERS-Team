@@ -132,18 +132,25 @@ class ReportConsumer(AsyncWebsocketConsumer):
             expected_updated_at = validated_data.get('expected_updated_at')
             client_timestamp = validated_data.get('client_timestamp')
 
-            # Status-update eligibility is no longer a fixed 'security'
-            # Role check — responders are department members now,
-            # regardless of account role — so this is folded into the
-            # access check below (get_accessible_reports already only
-            # returns reports the user is legitimately allowed to touch).
-
             # Check access to the report
             report, has_access = await self._get_report_and_check_access(self.user, report_id)
             if not has_access:
                 await self.send(text_data=json.dumps({
                     'type': 'error',
                     'message': 'You do not have permission to update this report'
+                }))
+                return
+
+            # get_accessible_reports (above) is view-level access — broader
+            # than who may actually change status. Mirrors
+            # ReportStatusUpdateView.patch's REST-side rule exactly: only
+            # the assigned responder, not the reporter, department head,
+            # or System Admin — otherwise this socket path could do what
+            # the REST endpoint forbids.
+            if report.assigned_to_id != self.user.id:
+                await self.send(text_data=json.dumps({
+                    'type': 'error',
+                    'message': "Only this report's assigned responder can update its status"
                 }))
                 return
 
