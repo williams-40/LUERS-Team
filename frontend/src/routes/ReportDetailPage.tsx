@@ -92,14 +92,19 @@ export function ReportDetailPage() {
 
   if (!report) return null;
 
-  // Phase 14: assign authority is "this report's department head, or
-  // System Admin" — not a fixed Role list, since responders are
-  // department members now, regardless of account role.
+  // Assign/update-status are hands-on operational actions, reserved for
+  // this report's department head or its assigned responder — System
+  // Admin is oversight-only here and gets read-only visibility (the
+  // StatusBadge above is always shown regardless) rather than action
+  // controls, per explicit product direction. isSystemAdmin still gates
+  // purely informational sections (reporter info, routing suggestion)
+  // since admin oversight still means full visibility, just no actions.
   const isDepartmentHead = Boolean(user && report.department_head_id === user.id);
   const isSystemAdmin = Boolean(user?.permissions.includes('view_all_reports'));
-  const canManageDepartment = isDepartmentHead || isSystemAdmin;
   const isAssignedResponder = Boolean(user && report.assigned_to === user.id);
-  const canUpdateStatus = isAssignedResponder || canManageDepartment;
+  const canViewOperationalDetails = isAssignedResponder || isDepartmentHead || isSystemAdmin;
+  const canUpdateStatus = isAssignedResponder || isDepartmentHead;
+  const canAssign = isDepartmentHead;
   const routingSuggestion = report.metadata.routing_suggestion as RoutingSuggestion | undefined;
 
   return (
@@ -137,7 +142,7 @@ export function ReportDetailPage() {
         </p>
       )}
 
-      {routingSuggestion && canManageDepartment && (
+      {routingSuggestion && canViewOperationalDetails && (
         <p className="bg-status-warning/10 mb-5 rounded-lg px-3 py-2 text-sm">
           <span className="font-semibold">Suggested department:</span> {routingSuggestion.suggested_department} (
           {Math.round(routingSuggestion.confidence * 100)}% confidence) — matched:{' '}
@@ -147,11 +152,11 @@ export function ReportDetailPage() {
 
       <FeedbackDisplay reportId={report.id} />
 
-      {canUpdateStatus && <ReporterInfoSection report={report} />}
+      {canViewOperationalDetails && <ReporterInfoSection report={report} />}
 
       {canUpdateStatus && <StatusUpdateControl report={report} onUpdated={refetch} />}
 
-      {canManageDepartment && <AssignControl report={report} onUpdated={refetch} />}
+      {canAssign && <AssignControl report={report} onUpdated={refetch} />}
 
       {user?.permissions.includes('delete_report') && (
         <div className="mb-5">
