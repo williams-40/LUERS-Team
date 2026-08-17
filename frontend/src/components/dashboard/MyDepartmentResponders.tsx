@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createDepartmentResponder, fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../../lib/departments-api';
+import { fetchDashboardAnalytics } from '../../lib/dashboard-api';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../ui/Button';
 import { useToast } from '../../lib/toast-context';
@@ -155,6 +156,22 @@ export function MyDepartmentResponders() {
   });
 
   const headedDepartments = (departments?.results ?? []).filter((d) => user && d.head === user.id);
+
+  // Busy/free per responder (2026-08-17) — reuses the existing analytics
+  // endpoint's responder_workload rather than a new one; matched by
+  // username (unique) against member_usernames, not by index-pairing the
+  // parallel members/member_usernames arrays, which aren't guaranteed to
+  // stay in the same order. Only fetched once headedDepartments is
+  // non-empty, since a plain responder never needs this.
+  const { data: analytics } = useQuery({
+    queryKey: ['dashboard', 'analytics'],
+    queryFn: fetchDashboardAnalytics,
+    enabled: headedDepartments.length > 0,
+  });
+  const openCountByUsername = new Map(
+    (analytics?.responder_workload ?? []).map((w) => [w.username, w.open_count]),
+  );
+
   if (headedDepartments.length === 0) return null;
 
   function handleCreated(email: string) {
@@ -183,9 +200,17 @@ export function MyDepartmentResponders() {
             <p className="text-ink-muted text-sm">No responders yet.</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
-              {department.member_usernames.map((username) => (
-                <li key={username}>{username}</li>
-              ))}
+              {department.member_usernames.map((username) => {
+                const openCount = openCountByUsername.get(username) ?? 0;
+                return (
+                  <li key={username} className="flex items-center justify-between">
+                    <span>{username}</span>
+                    <span className={openCount > 0 ? 'text-status-warning-ink' : 'text-status-good-ink'}>
+                      {openCount > 0 ? `Busy — ${openCount} open` : 'Free'}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
 

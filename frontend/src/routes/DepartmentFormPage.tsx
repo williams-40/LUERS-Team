@@ -6,9 +6,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   createDepartment,
+  createDepartmentHead,
   deleteDepartment,
   fetchDepartment,
   updateDepartment,
+  type ResponderInput,
 } from '../lib/departments-api';
 import { fetchUsers } from '../lib/admin-users-api';
 import { UserMultiSelect } from '../components/admin/UserMultiSelect';
@@ -26,12 +28,114 @@ const departmentSchema = z.object({
 
 type DepartmentFormValues = z.infer<typeof departmentSchema>;
 
+const headSchema = z.object({
+  username: z.string().trim().min(1, 'Username is required'),
+  email: z.string().trim().email('Enter a valid email'),
+  first_name: z.string().trim(),
+  last_name: z.string().trim(),
+  phone_number: z.string().trim(),
+  university_id: z.string().trim(),
+});
+type HeadFormValues = z.infer<typeof headSchema>;
+const EMPTY_HEAD_VALUES: HeadFormValues = {
+  username: '', email: '', first_name: '', last_name: '', phone_number: '', university_id: '',
+};
+
+function AddHeadForm({ departmentId, onCreated }: { departmentId: string; onCreated: (email: string) => void }) {
+  const [serverError, setServerError] = useState<string | null>(null);
+  const {
+    register, handleSubmit, reset,
+    formState: { errors, isSubmitting },
+  } = useForm<HeadFormValues>({ resolver: zodResolver(headSchema), defaultValues: EMPTY_HEAD_VALUES });
+  const mutation = useMutation({
+    mutationFn: (values: ResponderInput) => createDepartmentHead(departmentId, values),
+  });
+
+  async function onSubmit(values: HeadFormValues) {
+    setServerError(null);
+    try {
+      const created = await mutation.mutateAsync(values);
+      onCreated(created.email);
+      reset(EMPTY_HEAD_VALUES);
+    } catch (err) {
+      const apiError = err as ApiError;
+      const fieldError = apiError.fieldErrors?.username?.[0] ?? apiError.fieldErrors?.email?.[0];
+      setServerError(fieldError ?? apiError.detail ?? 'Could not create this head.');
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="mt-3 flex flex-col gap-3 rounded-lg border border-ink/10 p-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="head-username" className="text-ink-secondary text-[12px] font-semibold">
+            Username
+          </label>
+          <input
+            id="head-username"
+            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            aria-invalid={Boolean(errors.username)}
+            {...register('username')}
+          />
+          {errors.username && <p className="text-status-critical text-xs">{errors.username.message}</p>}
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="head-email" className="text-ink-secondary text-[12px] font-semibold">
+            Email
+          </label>
+          <input
+            id="head-email"
+            type="email"
+            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            aria-invalid={Boolean(errors.email)}
+            {...register('email')}
+          />
+          {errors.email && <p className="text-status-critical text-xs">{errors.email.message}</p>}
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="head-first_name" className="text-ink-secondary text-[12px] font-semibold">
+            First name
+          </label>
+          <input
+            id="head-first_name"
+            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            {...register('first_name')}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="head-last_name" className="text-ink-secondary text-[12px] font-semibold">
+            Last name
+          </label>
+          <input
+            id="head-last_name"
+            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            {...register('last_name')}
+          />
+        </div>
+      </div>
+
+      {serverError && (
+        <p role="alert" className="bg-status-critical/10 text-status-critical rounded-lg px-3 py-2 text-sm">
+          {serverError}
+        </p>
+      )}
+
+      <div>
+        <Button type="submit" variant="secondary" size="sm" disabled={isSubmitting}>
+          {isSubmitting ? 'Creating…' : 'Create head'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function DepartmentFormPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isEdit = Boolean(id);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [showAddHead, setShowAddHead] = useState(false);
   const { show } = useToast();
 
   // Phase 14: Department Head/Responder is decoupled from the account
@@ -153,9 +257,16 @@ export function DepartmentFormPage() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="head" className="text-ink-secondary text-[12.5px] font-semibold">
-            Head
-          </label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="head" className="text-ink-secondary text-[12.5px] font-semibold">
+              Head
+            </label>
+            {isEdit && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddHead((v) => !v)}>
+                {showAddHead ? 'Cancel' : 'Create a new head'}
+              </Button>
+            )}
+          </div>
           <select
             id="head"
             value={head}
@@ -163,11 +274,19 @@ export function DepartmentFormPage() {
             className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">No head assigned</option>
-            {(eligibleUsers?.results ?? []).map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.username}
-              </option>
-            ))}
+            {/* Only responder-role users — headship is layered on top of that
+                role (see DepartmentHeadCreateView), so this is a UI-only
+                cleanup to stop an admin fat-fingering a student/staff/
+                system_admin account into headship via this big dropdown;
+                the backend itself stays permissive per its own Phase 14
+                decision to decouple headship from Role entirely. */}
+            {(eligibleUsers?.results ?? [])
+              .filter((user) => user.role.slug === 'responder')
+              .map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.username}
+                </option>
+              ))}
           </select>
         </div>
 
@@ -212,6 +331,24 @@ export function DepartmentFormPage() {
           )}
         </div>
       </form>
+
+      {/* Deliberately outside the department <form> above — AddHeadForm
+          renders its own <form>, and a nested <form> inside another is
+          invalid HTML (the browser silently de-nests it, breaking submit
+          entirely for whichever one loses). */}
+      {isEdit && showAddHead && (
+        <div className="mt-4">
+          <AddHeadForm
+            departmentId={id!}
+            onCreated={(email) => {
+              setShowAddHead(false);
+              void queryClient.invalidateQueries({ queryKey: ['departments', id] });
+              void queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'all'] });
+              show(`Invite sent to ${email}`, 'success');
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

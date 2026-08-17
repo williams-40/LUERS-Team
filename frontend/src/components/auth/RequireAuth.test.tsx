@@ -6,15 +6,23 @@ import { RequireAuth } from './RequireAuth';
 const { useAuth } = vi.hoisted(() => ({ useAuth: vi.fn() }));
 vi.mock('../../hooks/useAuth', () => ({ useAuth }));
 
-function renderProtected(requirePermission?: string) {
+function renderProtected(requirePermission?: string, initialPath = '/dashboard') {
   return render(
-    <MemoryRouter initialEntries={['/dashboard']}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route
           path="/dashboard"
           element={
             <RequireAuth requirePermission={requirePermission}>
               <div>Protected content</div>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/change-password-required"
+          element={
+            <RequireAuth>
+              <div>Change password page</div>
             </RequireAuth>
           }
         />
@@ -25,8 +33,8 @@ function renderProtected(requirePermission?: string) {
   );
 }
 
-function userWithPermissions(permissions: string[]) {
-  return { role: { slug: 'test-role', label: 'Test Role' }, permissions };
+function userWithPermissions(permissions: string[], extra: Partial<{ must_change_password: boolean }> = {}) {
+  return { role: { slug: 'test-role', label: 'Test Role' }, permissions, ...extra };
 }
 
 describe('RequireAuth', () => {
@@ -63,5 +71,25 @@ describe('RequireAuth', () => {
     useAuth.mockReturnValue({ user: userWithPermissions(['create_report']), isAuthenticated: true, isLoading: false });
     renderProtected('view_admin_dashboard');
     expect(screen.getByText('Forbidden page')).toBeInTheDocument();
+  });
+
+  it('redirects to /change-password-required when must_change_password is set', () => {
+    useAuth.mockReturnValue({
+      user: userWithPermissions(['create_report'], { must_change_password: true }),
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    renderProtected();
+    expect(screen.getByText('Change password page')).toBeInTheDocument();
+  });
+
+  it('does not redirect-loop when already on /change-password-required', () => {
+    useAuth.mockReturnValue({
+      user: userWithPermissions(['create_report'], { must_change_password: true }),
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    renderProtected(undefined, '/change-password-required');
+    expect(screen.getByText('Change password page')).toBeInTheDocument();
   });
 });

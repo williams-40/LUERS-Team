@@ -24,6 +24,13 @@ export function RequireAuth({ requirePermission, children }: RequireAuthProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Temp-password accounts (department head/responder invites) must set
+  // their own password before anything else — exempt only the page that
+  // lets them do that, so this doesn't redirect-loop against itself.
+  if (user?.must_change_password && location.pathname !== '/change-password-required') {
+    return <Navigate to="/change-password-required" replace />;
+  }
+
   if (requirePermission && user && !user.permissions.includes(requirePermission)) {
     return <Navigate to="/forbidden" replace />;
   }

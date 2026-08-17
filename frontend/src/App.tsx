@@ -30,6 +30,9 @@ const StyleGuidePage = lazy(() => import('./routes/StyleGuidePage').then((m) => 
 const ForbiddenPage = lazy(() => import('./routes/ForbiddenPage').then((m) => ({ default: m.ForbiddenPage })));
 const NotFoundPage = lazy(() => import('./routes/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 const ProfilePage = lazy(() => import('./routes/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const ChangePasswordRequiredPage = lazy(() =>
+  import('./routes/ChangePasswordRequiredPage').then((m) => ({ default: m.ChangePasswordRequiredPage })),
+);
 const AdminUsersPage = lazy(() =>
   import('./routes/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })),
 );
@@ -117,6 +120,14 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <ProfilePage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'change-password-required',
+        element: (
+          <RequireAuth>
+            <ChangePasswordRequiredPage />
           </RequireAuth>
         ),
       },

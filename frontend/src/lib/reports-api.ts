@@ -45,6 +45,7 @@ export interface ReportQueueFilters {
   search?: string;
   since?: string;
   page?: number;
+  assigned_to?: string;
 }
 
 export interface ReportQueueResult {

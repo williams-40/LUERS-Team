@@ -20,20 +20,24 @@ const PREVIEW_LIMIT = 5;
  * chart about yourself" rather than being useful. This shows their open
  * assigned reports directly instead, with a link to the full queue.
  *
- * Reads the default (unfiltered, page 1) report list rather than adding
- * a new backend filter for this — good enough for a "quick glance"
- * widget whose entire purpose is to hand off to the real queue for
- * anything beyond the first page.
+ * 2026-08-17: now the responder's PRIMARY view rather than an admin's
+ * secondary preview, so it filters explicitly server-side
+ * (assigned_to=me, filter_reports) instead of relying on
+ * get_accessible_reports already happening to narrow a responder to
+ * their own assignments — that was correct in effect but coincidental,
+ * and paginated over the wrong axis (page 1 of everything, not page 1 of
+ * "mine").
  */
 export function MyAssignedReportsPanel() {
   const { user } = useAuth();
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['reports', 'queue', 'dashboard-preview'],
-    queryFn: () => fetchReportQueue({}),
+    queryKey: ['reports', 'queue', 'dashboard-preview', user?.id],
+    queryFn: () => fetchReportQueue({ assigned_to: user!.id }),
+    enabled: Boolean(user),
   });
 
   const openReports = (data?.page.results ?? [])
-    .filter((r) => r.assigned_to === user?.id && OPEN_STATUSES.has(r.status))
+    .filter((r) => OPEN_STATUSES.has(r.status))
     .slice(0, PREVIEW_LIMIT);
 
   return (

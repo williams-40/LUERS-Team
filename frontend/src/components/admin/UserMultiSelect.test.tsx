@@ -17,6 +17,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     university_id: null,
     is_active: true,
     date_joined: new Date().toISOString(),
+    must_change_password: false,
     ...overrides,
   };
 }

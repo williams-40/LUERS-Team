@@ -92,6 +92,9 @@ export function AssignControl({
           {officers?.map((officer) => (
             <option key={officer.id} value={officer.id}>
               {officer.username}
+              {officer.open_report_count > 0
+                ? ` — busy, ${officer.open_report_count} open`
+                : ' — free'}
             </option>
           ))}
         </select>

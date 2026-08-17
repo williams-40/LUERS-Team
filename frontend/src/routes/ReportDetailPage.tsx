@@ -92,18 +92,19 @@ export function ReportDetailPage() {
 
   if (!report) return null;
 
-  // Assign/update-status are hands-on operational actions, reserved for
-  // this report's department head or its assigned responder — System
-  // Admin is oversight-only here and gets read-only visibility (the
-  // StatusBadge above is always shown regardless) rather than action
-  // controls, per explicit product direction. isSystemAdmin still gates
-  // purely informational sections (reporter info, routing suggestion)
-  // since admin oversight still means full visibility, just no actions.
+  // Assign/update-status are hands-on operational actions. Assignment
+  // stays the department head's call (or System Admin's, who is
+  // oversight-only otherwise). Status updates are narrower still
+  // (2026-08-17): only the assigned responder, who's actually the one in
+  // the field — not even the department head, who monitors/reassigns but
+  // doesn't do the work themselves. isSystemAdmin still gates purely
+  // informational sections (reporter info, routing suggestion) since
+  // admin oversight still means full visibility, just no actions.
   const isDepartmentHead = Boolean(user && report.department_head_id === user.id);
   const isSystemAdmin = Boolean(user?.permissions.includes('view_all_reports'));
   const isAssignedResponder = Boolean(user && report.assigned_to === user.id);
   const canViewOperationalDetails = isAssignedResponder || isDepartmentHead || isSystemAdmin;
-  const canUpdateStatus = isAssignedResponder || isDepartmentHead;
+  const canUpdateStatus = isAssignedResponder;
   const canAssign = isDepartmentHead;
   const routingSuggestion = report.metadata.routing_suggestion as RoutingSuggestion | undefined;
 

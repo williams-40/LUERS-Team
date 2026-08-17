@@ -51,11 +51,22 @@ export async function deleteDepartment(id: string): Promise<void> {
 /**
  * Phase 6: department-head-only responder creation. No `role`/`department`
  * field is even accepted here — the department comes from the URL, the
- * role is hardcoded server-side, and the account gets an unusable
- * password + a password-reset email rather than any credential ever
- * transiting this call.
+ * role is hardcoded server-side, and the account gets a temp password
+ * emailed directly to it (along with a login link) rather than any
+ * credential ever transiting this call.
  */
 export async function createDepartmentResponder(departmentId: string, input: ResponderInput): Promise<User> {
   const { data } = await apiClient.post<User>(`/departments/${departmentId}/responders/`, input);
+  return data;
+}
+
+/**
+ * system_admin-only (manage_departments) department-head creation —
+ * creates the account and assigns it as this department's head in one
+ * step, reassigning any existing head. Same field-omission shape and
+ * temp-password/invite-email mechanism as createDepartmentResponder.
+ */
+export async function createDepartmentHead(departmentId: string, input: ResponderInput): Promise<User> {
+  const { data } = await apiClient.post<User>(`/departments/${departmentId}/heads/`, input);
   return data;
 }

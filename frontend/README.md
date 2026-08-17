@@ -47,9 +47,15 @@ npm test             # vitest run
 
 `DashboardPage.tsx` renders a different layout depending on which of three tiers the signed-in user falls into (detected via `user.permissions` plus whether they head any department — see `HEAD_DETECTION_DEPARTMENTS_QUERY_KEY` in `lib/departments-api.ts`):
 
-- **System Admin** — full campus summary, trends, and analytics.
-- **Department Head** — department-scoped summary/trends/analytics, plus a responder roster and inline "add responder" form (`MyDepartmentResponders.tsx`) for the department(s) they head.
-- **Plain responder** — a focused view: their own report summary plus a compact list of their open assigned reports (`MyAssignedReportsPanel.tsx`) linking straight to the queue, rather than manager-oriented trend/analytics panels that would otherwise just chart one person's handful of reports.
+- **System Admin** — full campus summary, trends, and analytics. Oversight-only: view-only on report detail, no assign/status controls, and can't provision responders through general user management (see backend README) — head/responder accounts are provisioned through the department UI instead.
+- **Department Head** — department-scoped summary/trends/analytics, plus a responder roster and inline "add responder" form (`MyDepartmentResponders.tsx`) for the department(s) they head. The roster shows each responder's busy/free state (open-report count from `/dashboard/analytics/`'s `responder_workload`, matched by username). Heads assign reports but do not update status — that's the assigned responder's job alone.
+- **Plain responder** — a focused view: their own report summary plus a compact list of their open assigned reports (`MyAssignedReportsPanel.tsx`, filtered server-side via `assigned_to`) linking straight to the queue, rather than manager-oriented trend/analytics panels that would otherwise just chart one person's handful of reports. Can update status on their own assigned reports.
+
+### Provisioning department heads/responders
+
+`system_admin` creates a department's head inline on `DepartmentFormPage.tsx` ("Create a new head", `AddHeadForm`, `POST /departments/{id}/heads/`); a head creates their own department's responders from the dashboard (`MyDepartmentResponders.tsx`'s `AddResponderForm`, unchanged). Both flows create the account with a real temp password emailed to them — no password ever transits the browser. The account is force-redirected (`RequireAuth`, gated on `user.must_change_password`) to `ChangePasswordRequiredPage` on first login, which reuses the same `ChangePasswordForm` component as the profile page's self-service change; completing it clears the flag and releases the redirect.
+
+Both `AddHeadForm` and `AddResponderForm` render their own `<form>` — keep them (and any similar future create-inline-account form) rendered as siblings of the enclosing page's own `<form>`, never nested inside it. A `<form>` inside a `<form>` is invalid HTML; the browser silently de-nests it, which breaks `.requestSubmit()`/submit-button semantics for one of the two forms without raising any error you'd notice outside the console (`DepartmentFormPage.tsx`'s head-creation form is deliberately positioned after the page's main `</form>` for this reason).
 
 ## Verifying live
 

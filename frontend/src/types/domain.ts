@@ -66,6 +66,9 @@ export interface User {
   university_id: string | null;
   is_active: boolean;
   date_joined: string;
+  /** True for an account provisioned with a temp password (department
+   * head/responder invite) that hasn't been changed yet — see RequireAuth. */
+  must_change_password: boolean;
 }
 
 export interface Department {
@@ -92,6 +95,9 @@ export interface DepartmentInput {
 export interface Officer {
   id: string;
   username: string;
+  /** Currently-open reports assigned to them, within whatever the caller can
+   * see — informational "busy" signal for the assign picker, not a limit. */
+  open_report_count: number;
 }
 
 export interface Evidence {
