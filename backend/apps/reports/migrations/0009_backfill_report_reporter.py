@@ -3,24 +3,28 @@ from django.db import migrations
 
 def backfill_report_reporter(apps, schema_editor):
     """
-    Populate the new Report.reporter FK from the old encrypted
+    Populated the new Report.reporter FK from the old encrypted
     ReportIdentity table, ahead of dropping that table entirely (removal
-    of anonymous reporting / identity-reveal). Reuses the exact decode
-    logic already proven in migration 0005_reportidentity_reporter_hash
-    (REF_/PLACEHOLDER_ prefixes) and adds a third branch for the SEED_
-    prefix written directly by apps.core.management.commands.seed_data
-    (format: "SEED_{user_id}_{random 4 digits}", bypassing encryption
-    entirely — never previously parsed by any decode path in this
-    codebase, including apps.core.management.commands.rotate_fernet_key).
+    of anonymous reporting / identity-reveal). Originally resolved three
+    ref formats — REF_ (Fernet-encrypted, via the now-deleted
+    EncryptionService), PLACEHOLDER_, and SEED_ — described in more
+    detail in this migration's git history.
 
     Dry-run verified against the live dev DB before this migration was
-    written: 28/28 ReportIdentity rows resolve to a real, existing User
-    via this three-branch logic — not the lossy backfill originally
-    anticipated in the redesign plan (which only accounted for the first
-    two branches).
-    """
-    from apps.core.services import EncryptionService
+    written: 28/28 ReportIdentity rows resolved to a real, existing User
+    via that three-branch logic — not the lossy backfill originally
+    anticipated in the redesign plan.
 
+    The REF_/EncryptionService branch is removed here: EncryptionService
+    was deleted along with the rest of the identity-escrow feature (see
+    reports/0010, which drops ReportIdentity itself a migration later),
+    so on any database migrated from scratch this loop only ever runs
+    against an empty ReportIdentity queryset anyway — the PLACEHOLDER_/
+    SEED_ branches are kept as an accurate record of the resolution
+    logic that isn't broken by that deletion. Editing this function does
+    not affect a database where it already ran (Django only replays
+    un-applied migrations).
+    """
     Report = apps.get_model('reports', 'Report')
     ReportIdentity = apps.get_model('reports', 'ReportIdentity')
     User = apps.get_model('accounts', 'User')
@@ -30,10 +34,7 @@ def backfill_report_reporter(apps, schema_editor):
         ref = identity.encrypted_reporter_ref
         user_id = None
 
-        decrypted = EncryptionService.decrypt(ref)
-        if decrypted and decrypted.startswith('REF_'):
-            user_id = decrypted.replace('REF_', '')
-        elif ref.startswith('PLACEHOLDER_') and ref != 'PLACEHOLDER_ANONYMOUS':
+        if ref.startswith('PLACEHOLDER_') and ref != 'PLACEHOLDER_ANONYMOUS':
             user_id = ref.replace('PLACEHOLDER_', '')
         elif ref.startswith('SEED_'):
             user_id = ref[5:].rsplit('_', 1)[0]

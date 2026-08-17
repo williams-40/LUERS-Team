@@ -3,28 +3,18 @@ from django.db import migrations, models
 
 def backfill_reporter_hash(apps, schema_editor):
     """
-    Recompute reporter_hash for any existing ReportIdentity rows by decrypting
-    encrypted_reporter_ref with the current FERNET_KEY and re-hashing with
-    EncryptionService.hash_for_lookup. Rows that fail to decrypt (e.g. legacy
-    plaintext PLACEHOLDER_ refs from before encryption was wired up) are
-    backfilled directly from the embedded user id instead.
+    Historically recomputed reporter_hash for existing ReportIdentity rows
+    by decrypting encrypted_reporter_ref (via the now-deleted
+    EncryptionService, removed along with the rest of the anonymous-
+    reporting/identity-escrow feature — see reports/0010, which drops the
+    ReportIdentity model this field lives on entirely). That target model
+    is gone, so this is now a no-op on any database migrated from scratch
+    — kept as a no-op rather than deleted so the migration history stays
+    linear and this file's own dependency chain doesn't need rewriting.
+    Editing this function does not affect a database where it already
+    ran (Django only replays un-applied migrations).
     """
-    from apps.core.services import EncryptionService
-
-    ReportIdentity = apps.get_model('reports', 'ReportIdentity')
-    for identity in ReportIdentity.objects.all():
-        ref = identity.encrypted_reporter_ref
-        user_id = None
-
-        decrypted = EncryptionService.decrypt(ref)
-        if decrypted and decrypted.startswith('REF_'):
-            user_id = decrypted.replace('REF_', '')
-        elif ref.startswith('PLACEHOLDER_') and ref != 'PLACEHOLDER_ANONYMOUS':
-            user_id = ref.replace('PLACEHOLDER_', '')
-
-        if user_id:
-            identity.reporter_hash = EncryptionService.hash_for_lookup(user_id)
-            identity.save(update_fields=['reporter_hash'])
+    pass
 
 
 def noop(apps, schema_editor):
