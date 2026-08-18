@@ -16,6 +16,7 @@ from apps.accounts.serializers import (
     ChangePasswordSerializer,
     MeUpdateSerializer,
     OfficerSerializer,
+    SelfRegisterSerializer,
     UserSerializer,
 )
 from django.db.models import Q
@@ -144,6 +145,28 @@ class PasswordResetConfirmView(APIView):
             )
         PasswordResetService.confirm_reset(uid, token, new_password)
         return Response({'detail': 'Password has been reset.'})
+
+
+@method_decorator(ratelimit(key='ip', rate='5/h', method='POST', block=True), name='post')
+class SelfRegisterView(generics.CreateAPIView):
+    """
+    POST /api/v1/auth/register/
+    Public self-registration for students/staff only (see
+    SelfRegisterSerializer) — immediate activation, no admin-approval step,
+    consistent with every other account in this system having no identity-
+    verification step. Never auto-logs-in the created account; the client
+    separately POSTs to /auth/login/, same as every other account-creation
+    flow here.
+    """
+    permission_classes = [AllowAny]
+    serializer_class = SelfRegisterSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(UserSerializer(serializer.instance).data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class MeView(APIView):

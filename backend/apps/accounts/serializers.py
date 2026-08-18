@@ -174,6 +174,41 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
         return user
 
 
+class SelfRegisterSerializer(serializers.ModelSerializer):
+    """
+    Public self-registration (unauthenticated, AllowAny). There is no actor
+    to check for _validate_role_assignment's self-promotion/manage_roles
+    rules, so this doesn't reuse it — restriction to the two lowest-
+    privilege reporter roles is enforced purely by the `role` field's
+    queryset (student/staff only; anything else 400s as "does not exist"),
+    the same way ResponderCreateSerializer/HeadCreateSerializer restrict
+    their roles by construction rather than by an actor-aware check.
+    """
+    password = serializers.CharField(write_only=True)
+    role = serializers.SlugRelatedField(
+        slug_field='slug', queryset=Role.objects.filter(is_active=True, slug__in=['student', 'staff']),
+    )
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'phone_number', 'role', 'university_id', 'password',
+        ]
+
+    def validate_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.messages)
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        user = User.objects.create_user(password=password, **validated_data)
+        return user
+
+
 class ResponderCreateSerializer(serializers.ModelSerializer):
     """
     Phase 6: department-scoped responder account creation

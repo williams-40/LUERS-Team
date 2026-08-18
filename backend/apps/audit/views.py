@@ -7,6 +7,7 @@ from apps.audit.serializers import AuditLogSerializer
 from apps.core.pagination import StandardPagination
 from apps.core.export import csv_response, pdf_response
 from apps.reports.services import get_accessible_audit_logs
+from reportlab.lib.units import inch
 
 
 def filter_audit_logs(queryset, params):
@@ -77,9 +78,46 @@ class AuditLogExportView(APIView):
         'IP Address', 'Sync Origin', 'Before State', 'After State',
     ]
 
+    # Proportioned to fit the ~9.6in usable width of a landscape-letter PDF
+    # page (see apps.core.export.pdf_response) so columns don't get cropped.
+    PDF_COL_WIDTHS = [
+        1.0 * inch, 1.1 * inch, 0.7 * inch, 1.0 * inch, 0.9 * inch,
+        0.9 * inch, 0.9 * inch, 1.55 * inch, 1.55 * inch,
+    ]
+    PDF_STATE_MAX_CHARS = 150
+
+    @classmethod
+    def _truncate_state(cls, state):
+        text = str(state) if state else ''
+        if len(text) > cls.PDF_STATE_MAX_CHARS:
+            return text[:cls.PDF_STATE_MAX_CHARS] + '…'
+        return text
+
     def get(self, request):
         queryset = get_accessible_audit_logs(request.user).select_related('report', 'actor').order_by('-created_at')
         queryset = filter_audit_logs(queryset, request.query_params)
+
+        export_format = request.query_params.get('export_format', 'csv')
+        if export_format == 'pdf':
+            # Truncated ID/timestamp/state fields to keep columns narrow
+            # enough to fit the page without cropping (before/after_state are
+            # raw JSON snapshots and can otherwise be unboundedly long; full
+            # detail stays available via the CSV export / audit API).
+            rows = [
+                [
+                    entry.created_at.strftime('%Y-%m-%d %H:%M'),
+                    entry.get_action_display(),
+                    str(entry.report_id)[:8] if entry.report_id else '',
+                    entry.report.category if entry.report else '',
+                    entry.actor.username if entry.actor else '',
+                    entry.ip_address or '',
+                    entry.get_sync_origin_display(),
+                    self._truncate_state(entry.before_state),
+                    self._truncate_state(entry.after_state),
+                ]
+                for entry in queryset
+            ]
+            return pdf_response('Audit Log', self.HEADER, rows, 'audit_log.pdf', col_widths=self.PDF_COL_WIDTHS)
 
         rows = [
             [
@@ -95,8 +133,4 @@ class AuditLogExportView(APIView):
             ]
             for entry in queryset
         ]
-
-        export_format = request.query_params.get('export_format', 'csv')
-        if export_format == 'pdf':
-            return pdf_response('Audit Log', self.HEADER, rows, 'audit_log.pdf')
         return csv_response(self.HEADER, rows, 'audit_log.csv')

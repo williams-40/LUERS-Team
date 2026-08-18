@@ -22,6 +22,7 @@ from apps.reports.validators import validate_evidence_file
 from apps.accounts.permissions import IsStudentOrStaff, IsAdminTier, CanDeleteReport
 from apps.core.export import csv_response, pdf_response
 from apps.core.pagination import StandardPagination
+from reportlab.lib.units import inch
 from apps.reports.serializers import SyncRequestSerializer, SyncResultSerializer
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from apps.core.choices import SyncOrigin
@@ -116,10 +117,38 @@ class ReportExportView(APIView):
         'Assigned To', 'Evidence Count', 'Created At', 'Updated At',
     ]
 
+    # Proportioned to fit the ~9.6in usable width of a landscape-letter PDF
+    # page (see apps.core.export.pdf_response) so columns don't get cropped.
+    PDF_COL_WIDTHS = [
+        0.7 * inch, 1.1 * inch, 0.9 * inch, 0.8 * inch, 1.1 * inch,
+        1.2 * inch, 1.1 * inch, 0.7 * inch, 1.0 * inch, 1.0 * inch,
+    ]
+
     def get(self, request):
         queryset = get_accessible_reports(request.user)
         queryset = filter_reports(queryset, request.query_params)
         queryset = queryset.select_related('department', 'assigned_to', 'reporter').prefetch_related('evidence').order_by('-created_at')
+
+        export_format = request.query_params.get('export_format', 'csv')
+        if export_format == 'pdf':
+            # Truncated ID/timestamps to keep columns narrow enough to fit
+            # the page without cropping (full detail stays in the CSV export).
+            rows = [
+                [
+                    str(r.id)[:8],
+                    r.category,
+                    r.status,
+                    r.urgency,
+                    r.reporter.username if r.reporter else '',
+                    r.department.name if r.department else '',
+                    r.assigned_to.username if r.assigned_to else '',
+                    len(r.evidence.all()),
+                    r.created_at.strftime('%Y-%m-%d %H:%M'),
+                    r.updated_at.strftime('%Y-%m-%d %H:%M'),
+                ]
+                for r in queryset
+            ]
+            return pdf_response('Reports', self.HEADER, rows, 'reports.pdf', col_widths=self.PDF_COL_WIDTHS)
 
         rows = [
             [
@@ -136,10 +165,6 @@ class ReportExportView(APIView):
             ]
             for r in queryset
         ]
-
-        export_format = request.query_params.get('export_format', 'csv')
-        if export_format == 'pdf':
-            return pdf_response('Reports', self.HEADER, rows, 'reports.pdf')
         return csv_response(self.HEADER, rows, 'reports.csv')
 
 

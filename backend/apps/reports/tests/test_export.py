@@ -30,6 +30,19 @@ def test_reports_export_csv():
 
 
 @pytest.mark.django_db
+def test_reports_export_pdf():
+    system_admin = SystemAdminFactory()
+    ReportFactory()
+    ReportFactory()
+
+    client = APIClient()
+    client.force_authenticate(user=system_admin)
+    response = client.get('/api/v1/reports/export/', {'export_format': 'pdf'})
+    assert response.status_code == 200
+    assert response['Content-Type'] == 'application/pdf'
+
+
+@pytest.mark.django_db
 def test_reports_export_respects_status_filter():
     from apps.core.choices import Status
     system_admin = SystemAdminFactory()

@@ -3,10 +3,12 @@ from apps.accounts.views import (
     LoginView, RefreshView, MeView, SecurityOfficersView,
     LogoutView, PasswordResetRequestView, PasswordResetConfirmView,
     ChangePasswordView, AdminUserListCreateView, AdminUserDetailView,
+    SelfRegisterView,
 )
 
 urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
+    path('register/', SelfRegisterView.as_view(), name='self_register'),
     path('refresh/', RefreshView.as_view(), name='refresh'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('me/', MeView.as_view(), name='me'),

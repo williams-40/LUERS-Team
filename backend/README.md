@@ -28,11 +28,16 @@ Django REST Framework backend for **LUERS** (Lira University Emergency Reporting
    python manage.py migrate
    python manage.py seed_data
    ```
-   `seed_data` creates exactly the 3 accounts that always exist by design (`student_user`, `staff_user`, `system_admin_user`, password `password123`) plus a full, headless department set — no responders or department heads. Those only come into existence through the app itself: `system_admin` creates a head, a head creates their department's responders. See [Roles & permissions](#roles--permissions).
+   `seed_data` creates exactly the 3 accounts that always exist by design (`student_user`, `staff_user`, `system_admin_user`, password `password123`) plus a full, headless department set — no responders or department heads. Those only come into existence through the app itself: `system_admin` creates a head, a head creates their department's responders, and students/staff can also self-register. See [Roles & permissions](#roles--permissions).
 5. **Run the dev server:**
    ```bash
    python manage.py runserver 8000
    ```
+6. **Run a Celery worker** (separate terminal) — required for password-reset, account-invite, and any other email/SMS to actually be delivered:
+   ```bash
+   celery -A luers_backend worker --loglevel=info --pool=solo  # --pool=solo is required on Windows
+   ```
+   Email/SMS dispatch is `.delay()`'d onto Celery (`apps/notifications/tasks.py`), not sent inline in the request. Without a worker running, tasks just sit in Redis forever — Mailtrap/Twilio never receive anything, and nothing in the API response indicates a problem (the enqueue itself always succeeds). If outbound mail seems to silently vanish, check for a running worker before suspecting the SMTP credentials.
 
 ## Running tests
 
@@ -56,9 +61,9 @@ Authorization is **Role → Permission**, both database-backed (`apps.accounts.m
 
 **Department headship is still a relationship, layered on top of a dedicated role.** Every authorization check that cares about headship (`is_department_head_or_system_admin`, `is_department_member_or_head`, `get_accessible_reports`, `get_accessible_audit_logs` — all in `apps/reports/services.py`) keys off `Department.head_id`/`members`, not the account's role — a head's scoping to "their own department only" would be unaffected even if the role didn't exist. `department_head` exists so a head's account is visibly distinct from a plain responder's (in the admin UI, in audit logs, in `who is a responder` accounting), not to carry any extra permission.
 
-**`responder` and `department_head` are the only two roles you can't hand out through general user management.** `AdminUserCreateSerializer`/`AdminUserUpdateSerializer` (`system_admin`'s "Manage users" UI) reject assigning anyone into either, whether creating a new account or reassigning an existing one. There are exactly two ways these accounts come into existence:
+**`responder` and `department_head` are the only two roles you can't hand out through the general create/update serializers directly.** `AdminUserCreateSerializer`/`AdminUserUpdateSerializer` (`system_admin`'s "Manage users" UI) reject assigning anyone into either via their own `role` field, whether creating a new account or reassigning an existing one. There are exactly two ways these accounts come into existence:
 
-- `POST /api/v1/departments/{id}/heads/` (`DepartmentHeadCreateView`) — `system_admin`/`manage_departments` only, creates a `department_head` account and assigns it as the department's head in one step (reassigns if one already exists).
+- `POST /api/v1/departments/{id}/heads/` (`DepartmentHeadCreateView`) — `system_admin`/`manage_departments` only, creates a `department_head` account and assigns it as the department's head in one step (reassigns if one already exists). The frontend's "New user" page also reaches this same endpoint: picking `Department Head` in the role picker swaps in a department selector and routes the submission here instead of the general create endpoint, so a head is always created department-scoped and provisioned identically (temp password + invite email) regardless of which screen the admin started from.
 - `POST /api/v1/departments/{id}/responders/` (`DepartmentResponderCreateView`) — a department's own head only, adds a `responder` account as a plain member of that department.
 
 Both go through the same `AccountProvisioningService.create_account` (`apps/accounts/services.py`): a real, usable temp password is generated and emailed to the new account (login link + username + password), and `User.must_change_password` is set — the frontend (`RequireAuth`) redirects any such account straight to a forced password-change page until they clear it via `POST /api/v1/auth/change-password/`, which is what actually flips the flag off. This is deliberately different from `PasswordResetService` (unusable password + reset-link email), which is only for the existing self-service "forgot password" flow.
@@ -91,6 +96,18 @@ Visibility (above) and mutation rights are deliberately different populations:
 `POST /reports/create/` accepts an optional `phone_number` field, persisted onto `reporter.phone_number` when provided (`ReportService.create_report`, `apps/reports/services.py`) — the frontend makes this conditionally *required* (only when the reporter's profile has none on file yet), but the backend itself stays permissive, consistent with how this codebase treats client-side UX requirements versus server-side security boundaries.
 
 There's no dedicated "voice description"/"video description" field on `Report` — recording a voice note or video instead of typing a description (`MediaRecorderControl.tsx` on the frontend, wrapping `MediaRecorder`/`getUserMedia`) attaches the recording as ordinary `Evidence`, same as any other file upload, with `description` auto-filled with a short placeholder. Chrome/Firefox's `MediaRecorder` outputs WebM containers for both audio-only and video capture with identical magic bytes — `apps/core/file_validation.py` disambiguates them by claimed extension instead of content alone: `.weba` (audio) and `.webm` (video) both sniff to the same EBML signature but resolve to their respective `Evidence.file_type` category once that signature is confirmed.
+
+### Self-registration
+
+`POST /api/v1/auth/register/` (`SelfRegisterView`, `AllowAny`, rate-limited `5/h` per IP like the password-reset endpoints) lets students and staff create their own account — the only two roles a registrant can pick, enforced by `SelfRegisterSerializer.role`'s queryset (`slug__in=['student', 'staff']`) rather than the actor-aware `_validate_role_assignment` guard used elsewhere (there's no authenticated actor here to check). Accounts are active immediately, with no admin-approval step — consistent with every other account in this system having no identity-verification step. The created account is never auto-logged-in; the client separately calls `POST /api/v1/auth/login/`.
+
+### Report exports
+
+`GET /api/v1/reports/export/` and `GET /api/v1/audit/export/` (`?export_format=csv|pdf`) share `apps.core.export.pdf_response`, which wraps every cell in a `Paragraph` (so long text wraps instead of overflowing the page) and takes explicit per-column `colWidths` proportioned to the ~9.6in usable width of a landscape-letter page. The PDF branch of each view also truncates IDs to 8 characters and formats timestamps without seconds/timezone — and, for the audit export, caps `before_state`/`after_state` (raw JSON snapshots, otherwise unbounded) to 150 characters with an ellipsis — purely for the PDF's fixed page width; the CSV export of the same data stays untruncated.
+
+### Report location
+
+`Report.latitude`/`longitude` (submitted via the frontend's `navigator.geolocation`, `src/lib/geolocation.ts` in the frontend repo) are already serialized on every report list/detail response with no extra permission gating — visibility is governed purely by whether the requester can see the report at all. They're `DecimalField`s, so DRF renders them as strings, not JSON numbers — any consumer needs to coerce before doing arithmetic on them. The frontend renders them on a Leaflet/OpenStreetMap map (`ReportLocationMap.tsx`) on the report detail page; a report submitted without geolocation permission just shows a "Location not available" placeholder instead.
 
 ### Voice notes in report chat
 
