@@ -8,6 +8,7 @@ import { RequireAuth } from './components/auth/RequireAuth';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
 const LoginPage = lazy(() => import('./routes/LoginPage').then((m) => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import('./routes/RegisterPage').then((m) => ({ default: m.RegisterPage })));
 const ForgotPasswordPage = lazy(() =>
   import('./routes/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })),
 );
@@ -220,6 +221,7 @@ const router = createBrowserRouter([
         ),
       },
       { path: 'login', element: <LoginPage /> },
+      { path: 'register', element: <RegisterPage /> },
       { path: 'forgot-password', element: <ForgotPasswordPage /> },
       { path: 'reset-password', element: <ResetPasswordPage /> },
       { path: 'style-guide', element: <StyleGuidePage /> },

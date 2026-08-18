@@ -5,23 +5,46 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createUser, fetchUser, updateUser } from '../lib/admin-users-api';
+import { createDepartmentHead, fetchDepartments } from '../lib/departments-api';
 import { RoleSelect } from '../components/admin/RoleSelect';
 import { Button } from '../components/ui/Button';
 import type { ApiError } from '../lib/api-client';
 import { useToast } from '../lib/toast-context';
+import { useAuth } from '../hooks/useAuth';
 
-const createUserSchema = z.object({
-  username: z.string().trim().min(1, 'Username is required'),
-  email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
-  first_name: z.string().optional().or(z.literal('')),
-  last_name: z.string().optional().or(z.literal('')),
-  phone_number: z.string().optional().or(z.literal('')),
-  university_id: z.string().optional().or(z.literal('')),
-  role: z.string().min(1, 'Please select a role'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-});
+// A department_head's account is always created department-scoped (see
+// createDepartmentHead) so it gets the same temp-password/invite-email
+// provisioning as every other head/responder — the schema branches on role
+// rather than accepting a password for that case.
+function buildCreateUserSchema(isDepartmentHead: boolean) {
+  return z.object({
+    username: z.string().trim().min(1, 'Username is required'),
+    email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
+    first_name: z.string().optional().or(z.literal('')),
+    last_name: z.string().optional().or(z.literal('')),
+    phone_number: z.string().optional().or(z.literal('')),
+    university_id: z.string().optional().or(z.literal('')),
+    role: z.string().min(1, 'Please select a role'),
+    password: isDepartmentHead
+      ? z.string().optional().or(z.literal(''))
+      : z.string().min(8, 'Password must be at least 8 characters'),
+    department: isDepartmentHead
+      ? z.string().min(1, 'Please select a department')
+      : z.string().optional().or(z.literal('')),
+  });
+}
 
-type CreateUserFormValues = z.infer<typeof createUserSchema>;
+interface CreateUserFormValues {
+  username: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string;
+  university_id?: string;
+  role: string;
+  password: string | undefined;
+  department: string | undefined;
+}
 
 const editUserSchema = z.object({
   first_name: z.string().optional().or(z.literal('')),
@@ -41,6 +64,7 @@ function fieldErrorFor(err: unknown, field: string): string | undefined {
 
 function CreateUserForm() {
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
   const { show } = useToast();
 
@@ -51,23 +75,54 @@ function CreateUserForm() {
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreateUserFormValues>({
-    resolver: zodResolver(createUserSchema),
+    resolver: (values, context, options) =>
+      zodResolver(buildCreateUserSchema(values.role === 'department_head'))(values, context, options),
     defaultValues: { role: '' },
   });
 
   const createMutation = useMutation({ mutationFn: createUser });
+  const createHeadMutation = useMutation({
+    mutationFn: ({ departmentId, input }: { departmentId: string; input: Parameters<typeof createDepartmentHead>[1] }) =>
+      createDepartmentHead(departmentId, input),
+  });
   const role = watch('role');
+  const isDepartmentHead = role === 'department_head';
+  const hasManageDepartments = Boolean(currentUser?.permissions.includes('manage_departments'));
+
+  const { data: departments } = useQuery({
+    queryKey: ['departments', 'active-for-head-creation'],
+    queryFn: () => fetchDepartments({ is_active: true }),
+    enabled: isDepartmentHead,
+  });
 
   async function onSubmit(values: CreateUserFormValues) {
     setServerError(null);
     try {
-      await createMutation.mutateAsync(values);
-      show('User created.', 'success');
+      if (values.role === 'department_head') {
+        const created = await createHeadMutation.mutateAsync({
+          departmentId: values.department!,
+          input: {
+            username: values.username,
+            email: values.email,
+            first_name: values.first_name || '',
+            last_name: values.last_name || '',
+            phone_number: values.phone_number || '',
+            university_id: values.university_id || '',
+          },
+        });
+        show(`Invite sent to ${created.email}`, 'success');
+      } else {
+        await createMutation.mutateAsync({ ...values, password: values.password! });
+        show('User created.', 'success');
+      }
       navigate('/admin/users');
     } catch (err) {
       const apiError = err as ApiError;
       const fieldError =
-        fieldErrorFor(err, 'username') ?? fieldErrorFor(err, 'email') ?? fieldErrorFor(err, 'password');
+        fieldErrorFor(err, 'username') ??
+        fieldErrorFor(err, 'email') ??
+        fieldErrorFor(err, 'password') ??
+        fieldErrorFor(err, 'department');
       const message = fieldError ?? apiError.detail;
       setServerError(message);
       show(message ?? 'Could not create this user.', 'error');
@@ -152,23 +207,55 @@ function CreateUserForm() {
         <label htmlFor="role" className="text-ink-secondary text-[12.5px] font-semibold">
           Role
         </label>
-        <RoleSelect id="role" value={role} onChange={(r) => setValue('role', r)} excludeResponder excludeDepartmentHead />
+        <RoleSelect
+          id="role"
+          value={role}
+          onChange={(r) => setValue('role', r)}
+          excludeResponder
+          excludeDepartmentHead={!hasManageDepartments}
+        />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="password" className="text-ink-secondary text-[12.5px] font-semibold">
-          Password
-        </label>
-        <input
-          id="password"
-          type="password"
-          autoComplete="new-password"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          aria-invalid={Boolean(errors.password)}
-          {...register('password')}
-        />
-        {errors.password && <p className="text-status-critical text-xs">{errors.password.message}</p>}
-      </div>
+      {isDepartmentHead && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="department" className="text-ink-secondary text-[12.5px] font-semibold">
+            Department
+          </label>
+          <select
+            id="department"
+            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+            {...register('department')}
+          >
+            <option value="">Select a department</option>
+            {(departments?.results ?? []).map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name}
+              </option>
+            ))}
+          </select>
+          {errors.department && <p className="text-status-critical text-xs">{errors.department.message}</p>}
+          <p className="text-ink-muted text-xs">
+            A temporary password will be emailed to this account, so no password is set here.
+          </p>
+        </div>
+      )}
+
+      {!isDepartmentHead && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="password" className="text-ink-secondary text-[12.5px] font-semibold">
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            aria-invalid={Boolean(errors.password)}
+            {...register('password')}
+          />
+          {errors.password && <p className="text-status-critical text-xs">{errors.password.message}</p>}
+        </div>
+      )}
 
       {serverError && (
         <p role="alert" className="bg-status-critical/10 text-status-critical rounded-lg px-3 py-2 text-sm">

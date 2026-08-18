@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'leaflet/dist/leaflet.css';
 
 /* Self-hosted fonts (offline-friendly — no external font CDN calls) */
 @import '@fontsource/manrope/700.css';

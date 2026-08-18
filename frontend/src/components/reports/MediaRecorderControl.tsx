@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import fixWebmDuration from 'fix-webm-duration';
 import { Button } from '../ui/Button';
 import { MAX_EVIDENCE_FILE_SIZE } from '../../lib/evidence-constraints';
 
@@ -36,6 +37,8 @@ export function MediaRecorderControl({
   const chunksRef = useRef<Blob[]>([]);
   const bytesRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const startedAtRef = useRef(0);
 
   useEffect(
     () => () => {
@@ -46,6 +49,14 @@ export function MediaRecorderControl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  // The live <video> preview element only exists once the 'recording' branch
+  // renders, so the stream has to be (re)attached here rather than inline.
+  useEffect(() => {
+    if (state === 'recording' && mode === 'video' && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [state, mode]);
 
   function stopStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -90,11 +101,27 @@ export function MediaRecorderControl({
       }
     };
 
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
       stopStream();
       if (timerRef.current) clearInterval(timerRef.current);
+      // The playback <video> below reuses this same DOM node (React only
+      // diffs props at the same tree position, and neither element carries
+      // a `key`) — srcObject was set imperatively here for the live
+      // preview, outside React's prop diffing, so it's never otherwise
+      // cleared. A non-null srcObject silently takes priority over `src`
+      // on a media element, so without this the "review" player kept
+      // showing the now-frozen live camera feed (stuck at 0:00, play does
+      // nothing) instead of ever loading the recorded blob.
+      if (videoRef.current) videoRef.current.srcObject = null;
 
-      const blob = new Blob(chunksRef.current, { type: FILE_TYPE[mode] });
+      const rawBlob = new Blob(chunksRef.current, { type: FILE_TYPE[mode] });
+      // MediaRecorder's WebM output has no duration written into its
+      // container — Chrome in particular then fails to play the blob back
+      // in a <video>/<audio> element (shows as frozen/unseekable) until
+      // that's patched in. fix-webm-duration appends the missing EBML
+      // Duration section using our own measured wall-clock elapsed time.
+      const duration = Date.now() - startedAtRef.current;
+      const blob = await fixWebmDuration(rawBlob, duration, { logger: false });
       const file = new File([blob], `recording${EXTENSION[mode]}`, { type: FILE_TYPE[mode] });
       setPreviewUrl(URL.createObjectURL(blob));
       setState('recorded');
@@ -102,6 +129,7 @@ export function MediaRecorderControl({
     };
 
     recorder.start(1000);
+    startedAtRef.current = Date.now();
     setState('recording');
     timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
   }
@@ -144,8 +172,11 @@ export function MediaRecorderControl({
     return (
       <div className="flex flex-col gap-2">
         {mode === 'video' ? (
+          // key="playback" forces a fresh DOM node rather than reusing the
+          // live-preview element from the 'recording' state — see the
+          // srcObject note in onstop above for why that matters.
           // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video src={previewUrl} controls className="max-h-64 rounded-[9px]" />
+          <video key="playback" src={previewUrl} controls className="max-h-64 rounded-[9px]" />
         ) : (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <audio src={previewUrl} controls className="w-full" />
@@ -159,12 +190,25 @@ export function MediaRecorderControl({
 
   if (state === 'recording') {
     return (
-      <div className="flex items-center gap-3">
-        <span className="bg-status-critical h-2.5 w-2.5 shrink-0 animate-pulse rounded-full" aria-hidden />
-        <span className="text-ink-secondary text-sm tabular-nums">{formatSeconds(seconds)}</span>
-        <Button type="button" variant="destructive" size="sm" onClick={stopRecording}>
-          Stop recording
-        </Button>
+      <div className="flex flex-col gap-2">
+        {mode === 'video' && (
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <video
+            key="live"
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="bg-ink max-h-64 w-full rounded-[9px] object-contain"
+          />
+        )}
+        <div className="flex items-center gap-3">
+          <span className="bg-status-critical h-2.5 w-2.5 shrink-0 animate-pulse rounded-full" aria-hidden />
+          <span className="text-ink-secondary text-sm tabular-nums">{formatSeconds(seconds)}</span>
+          <Button type="button" variant="destructive" size="sm" onClick={stopRecording}>
+            Stop recording
+          </Button>
+        </div>
       </div>
     );
   }

@@ -7,6 +7,7 @@ import { StatusUpdateControl } from '../components/reports/StatusUpdateControl';
 import { AssignControl } from '../components/reports/AssignControl';
 import { FeedbackDisplay } from '../components/reports/FeedbackDisplay';
 import { ReporterInfoSection } from '../components/reports/ReporterInfoSection';
+import { ReportLocationMap } from '../components/reports/ReportLocationMap';
 import { ReportChat } from '../components/reports/ReportChat';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { Button } from '../components/ui/Button';
@@ -132,6 +133,12 @@ export function ReportDetailPage() {
       </p>
 
       <p className="text-ink mb-5 text-sm leading-relaxed whitespace-pre-wrap">{report.description}</p>
+
+      <ReportLocationMap
+        latitude={report.latitude}
+        longitude={report.longitude}
+        locationAccuracy={report.location_accuracy}
+      />
 
       {report.category_display && (
         <p className="text-ink-muted mb-5 text-xs">Legacy category: {report.category_display}</p>

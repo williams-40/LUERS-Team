@@ -36,6 +36,22 @@ export async function logout(): Promise<void> {
   }
 }
 
+export interface RegisterInput {
+  username: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string;
+  university_id?: string;
+  password: string;
+  role: 'student' | 'staff';
+}
+
+export async function register(input: RegisterInput): Promise<User> {
+  const { data } = await apiClient.post<User>('/auth/register/', input);
+  return data;
+}
+
 export async function requestPasswordReset(email: string): Promise<void> {
   await apiClient.post('/auth/password-reset/', { email });
 }

@@ -15,6 +15,7 @@ import { PanicButton } from '../components/ui/PanicButton';
 import { DepartmentPicker } from '../components/reports/DepartmentPicker';
 import { EvidencePicker } from '../components/reports/EvidencePicker';
 import { MediaRecorderControl } from '../components/reports/MediaRecorderControl';
+import { PhotoCaptureControl } from '../components/reports/PhotoCaptureControl';
 import { useToast } from '../lib/toast-context';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
@@ -57,6 +58,7 @@ export function ReportCreatePage() {
   const [descriptionMode, setDescriptionMode] = useState<DescriptionMode>('text');
   const [recordingFile, setRecordingFile] = useState<File | null>(null);
   const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const previousDescriptionRef = useRef('');
 
   // Only required when the profile has none on file yet — once a number is
@@ -121,7 +123,9 @@ export function ReportCreatePage() {
     const location = await getCurrentLocation();
     setLocating(false);
 
-    const attachments = recordingFile ? [recordingFile, ...evidenceFiles] : evidenceFiles;
+    const attachments = [recordingFile, photoFile, ...evidenceFiles].filter(
+      (file): file is File => file !== null,
+    );
 
     const payload: CreateReportInput = {
       department: values.department,
@@ -289,6 +293,11 @@ export function ReportCreatePage() {
           )}
           {errors.description && <p className="text-status-critical text-xs">{errors.description.message}</p>}
           {recordingError && <p className="text-status-critical text-xs">{recordingError}</p>}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-ink-secondary text-[12.5px] font-semibold">Photo (optional)</span>
+          <PhotoCaptureControl onCapture={setPhotoFile} />
         </div>
 
         <div className="flex flex-col gap-1.5">

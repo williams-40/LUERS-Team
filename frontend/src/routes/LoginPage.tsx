@@ -40,6 +40,7 @@ export function LoginPage() {
   }
 
   const passwordReset = Boolean((location.state as { passwordReset?: boolean } | null)?.passwordReset);
+  const registered = Boolean((location.state as { registered?: boolean } | null)?.registered);
 
   async function onSubmit(values: LoginFormValues) {
     setServerError(null);
@@ -65,6 +66,12 @@ export function LoginPage() {
       {passwordReset && (
         <p className="bg-status-good/10 text-status-good-ink mb-4 rounded-lg px-3 py-2 text-center text-sm font-semibold">
           {t('login.passwordResetNotice')}
+        </p>
+      )}
+
+      {registered && (
+        <p className="bg-status-good/10 text-status-good-ink mb-4 rounded-lg px-3 py-2 text-center text-sm font-semibold">
+          Account created. Sign in with your new credentials.
         </p>
       )}
 
@@ -113,6 +120,10 @@ export function LoginPage() {
         <Button type="submit" disabled={isSubmitting} className="mt-2">
           {isSubmitting ? t('login.signingIn') : t('login.signIn')}
         </Button>
+
+        <Link to="/register" className="text-brand text-center text-sm font-semibold hover:underline">
+          Create an account
+        </Link>
       </form>
     </div>
   );

@@ -87,7 +87,9 @@ export function ReportChat({
               key={m.id}
               className={cn(
                 'max-w-[80%] rounded-lg px-3 py-1.5 text-sm',
-                isMine ? 'bg-brand/10 self-end' : 'bg-ink/4 self-start',
+                isMine
+                  ? 'bg-brand/15 self-end'
+                  : 'bg-ink/8 border-ink/10 self-start border',
               )}
             >
               {!isMine && <p className="text-ink-muted mb-0.5 text-[11px] font-semibold">{m.sender}</p>}
