@@ -1,4 +1,4 @@
-﻿import { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -35,8 +35,6 @@ function buildReportSchema(phoneRequired: boolean) {
 }
 
 type ReportFormValues = z.infer<ReturnType<typeof buildReportSchema>>;
-
-type Mode = 'panic' | 'detailed';
 type DescriptionMode = 'text' | 'voice' | 'video';
 
 const RECORDING_PLACEHOLDER: Record<'voice' | 'video', string> = {
@@ -44,12 +42,17 @@ const RECORDING_PLACEHOLDER: Record<'voice' | 'video', string> = {
   video: 'Video note attached.',
 };
 
+/**
+ * The non-urgent report path — department, full description, evidence.
+ * Panic reports have their own dedicated /emergency flow (EmergencyPage),
+ * not a mode toggle on this form: the red button below navigates there
+ * instead of switching this page's local state.
+ */
 export function ReportCreatePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { show } = useToast();
   const { user } = useAuth();
-  const [mode, setMode] = useState<Mode>('detailed');
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidenceErrors, setEvidenceErrors] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -84,11 +87,6 @@ export function ReportCreatePage() {
     mutationFn: (args: { reportId: string; file: File }) => uploadEvidence(args.reportId, args.file),
   });
 
-  function selectMode(next: Mode) {
-    setMode(next);
-    setSubmitError(null);
-  }
-
   function selectDescriptionMode(next: DescriptionMode) {
     if (next === descriptionMode) return;
     if (next === 'text') {
@@ -110,7 +108,7 @@ export function ReportCreatePage() {
   async function onSubmit(values: ReportFormValues) {
     setSubmitError(null);
 
-    if (mode === 'detailed' && descriptionMode !== 'text' && !recordingFile) {
+    if (descriptionMode !== 'text' && !recordingFile) {
       setRecordingError(
         descriptionMode === 'voice'
           ? 'Record a voice note before submitting, or switch to text.'
@@ -130,7 +128,7 @@ export function ReportCreatePage() {
     const payload: CreateReportInput = {
       department: values.department,
       description: values.description,
-      urgency: mode === 'panic' ? Urgency.PANIC : Urgency.NORMAL,
+      urgency: Urgency.NORMAL,
       ...(values.phone_number?.trim() ? { phone_number: values.phone_number.trim() } : {}),
       ...(location ?? {}),
     };
@@ -163,7 +161,7 @@ export function ReportCreatePage() {
 
     show('Report submitted.', 'success');
 
-    if (mode === 'detailed' && attachments.length > 0) {
+    if (attachments.length > 0) {
       for (const file of attachments) {
         try {
           // Sequential, not parallel — keeps evidence order predictable and
@@ -211,30 +209,13 @@ export function ReportCreatePage() {
     <div className="mx-auto max-w-xl px-5 py-8">
       <h1 className="mb-1 text-2xl">Report an incident</h1>
       <p className="text-ink-secondary mb-6 text-sm">
-        In immediate danger? Use the panic report below, it's faster and skips the extra questions.
+        In immediate danger? Use the emergency button below — it's a separate, faster flow with no department to
+        pick.
       </p>
 
-      {mode === 'detailed' && (
-        <PanicButton type="button" onClick={() => selectMode('panic')} className="mb-6">
-          This is an emergency
-        </PanicButton>
-      )}
-
-      {mode === 'panic' && (
-        <div
-          role="alert"
-          className="bg-status-critical/10 border-status-critical/30 mb-6 flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
-        >
-          <span className="text-status-critical text-sm font-semibold">Panic report (sent as urgent)</span>
-          <button
-            type="button"
-            onClick={() => selectMode('detailed')}
-            className="text-ink-secondary shrink-0 text-xs font-semibold underline"
-          >
-            Switch to detailed report
-          </button>
-        </div>
-      )}
+      <PanicButton type="button" onClick={() => navigate('/emergency')} className="mb-6">
+        This is an emergency
+      </PanicButton>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
@@ -254,31 +235,29 @@ export function ReportCreatePage() {
             <label htmlFor="description" className="text-ink-secondary text-[12.5px] font-semibold">
               What's happening?
             </label>
-            {mode === 'detailed' && (
-              <div role="radiogroup" aria-label="How to describe what's happening" className="inline-flex gap-1">
-                {(['text', 'voice', 'video'] as const).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    role="radio"
-                    aria-checked={descriptionMode === option}
-                    onClick={() => selectDescriptionMode(option)}
-                    className={cn(
-                      'rounded-full px-2.5 py-1 text-xs font-semibold transition',
-                      descriptionMode === option ? 'bg-brand text-white' : 'text-ink-secondary hover:bg-ink/6',
-                    )}
-                  >
-                    {option === 'text' ? 'Text' : option === 'voice' ? 'Voice' : 'Video'}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div role="radiogroup" aria-label="How to describe what's happening" className="inline-flex gap-1">
+              {(['text', 'voice', 'video'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="radio"
+                  aria-checked={descriptionMode === option}
+                  onClick={() => selectDescriptionMode(option)}
+                  className={cn(
+                    'rounded-full px-2.5 py-1 text-xs font-semibold transition',
+                    descriptionMode === option ? 'bg-brand text-white' : 'text-ink-secondary hover:bg-ink/6',
+                  )}
+                >
+                  {option === 'text' ? 'Text' : option === 'voice' ? 'Voice' : 'Video'}
+                </button>
+              ))}
+            </div>
           </div>
 
           {descriptionMode === 'text' ? (
             <textarea
               id="description"
-              rows={mode === 'panic' ? 2 : 4}
+              rows={4}
               className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
               {...register('description')}
             />
@@ -320,17 +299,15 @@ export function ReportCreatePage() {
           {errors.phone_number && <p className="text-status-critical text-xs">{errors.phone_number.message}</p>}
         </div>
 
-        {mode === 'detailed' && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-ink-secondary text-[12.5px] font-semibold">Evidence (optional)</span>
-            <EvidencePicker
-              files={evidenceFiles}
-              onChange={setEvidenceFiles}
-              errors={evidenceErrors}
-              onErrorsChange={setEvidenceErrors}
-            />
-          </div>
-        )}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-ink-secondary text-[12.5px] font-semibold">Evidence (optional)</span>
+          <EvidencePicker
+            files={evidenceFiles}
+            onChange={setEvidenceFiles}
+            errors={evidenceErrors}
+            onErrorsChange={setEvidenceErrors}
+          />
+        </div>
 
         {submitError && (
           <p role="alert" className="bg-status-critical/10 text-status-critical rounded-lg px-3 py-2 text-sm">
@@ -338,15 +315,9 @@ export function ReportCreatePage() {
           </p>
         )}
 
-        {mode === 'panic' ? (
-          <PanicButton type="submit" disabled={isSubmitting} className={cn(isSubmitting && 'opacity-70')}>
-            {isSubmitting ? (locating ? 'Getting your location…' : 'Sending…') : 'Send Panic Report Now'}
-          </PanicButton>
-        ) : (
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (locating ? 'Getting your location…' : 'Submitting…') : 'Submit report'}
-          </Button>
-        )}
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? (locating ? 'Getting your location…' : 'Submitting…') : 'Submit report'}
+        </Button>
       </form>
     </div>
   );

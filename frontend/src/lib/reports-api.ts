@@ -46,6 +46,8 @@ export interface ReportQueueFilters {
   since?: string;
   page?: number;
   assigned_to?: string;
+  /** Excludes resolved/closed/cancelled/false_alarm — used by ActiveEmergenciesMap. */
+  active?: boolean;
 }
 
 export interface ReportQueueResult {
@@ -83,6 +85,41 @@ export async function assignReport(args: {
     client_timestamp: new Date().toISOString(),
   });
   return data;
+}
+
+export async function acknowledgeEmergency(reportId: string): Promise<{ acknowledged_at: string; assigned_to: string }> {
+  const { data } = await apiClient.post(`/reports/${reportId}/acknowledge/`);
+  return data;
+}
+
+export async function respondToEmergency(reportId: string): Promise<{ responding_at: string }> {
+  const { data } = await apiClient.post(`/reports/${reportId}/respond/`);
+  return data;
+}
+
+export async function arriveAtEmergency(reportId: string): Promise<{ arrived_at: string }> {
+  const { data } = await apiClient.post(`/reports/${reportId}/arrive/`);
+  return data;
+}
+
+export async function cancelEmergency(
+  reportId: string,
+  reason: 'cancelled' | 'false_alarm',
+): Promise<{ cancelled_at: string; status: Status }> {
+  const { data } = await apiClient.post(`/reports/${reportId}/cancel/`, { reason });
+  return data;
+}
+
+export async function escalateEmergency(reportId: string): Promise<{ escalation_level: number }> {
+  const { data } = await apiClient.post(`/reports/${reportId}/escalate/`);
+  return data;
+}
+
+export async function updateReportLocation(
+  reportId: string,
+  location: { latitude: number; longitude: number; location_accuracy?: number },
+): Promise<void> {
+  await apiClient.patch(`/reports/${reportId}/location/`, location);
 }
 
 export async function fetchOfficers(): Promise<Officer[]> {

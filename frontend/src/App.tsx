@@ -23,6 +23,7 @@ const AuditLogPage = lazy(() => import('./routes/AuditLogPage').then((m) => ({ d
 const ReportCreatePage = lazy(() =>
   import('./routes/ReportCreatePage').then((m) => ({ default: m.ReportCreatePage })),
 );
+const EmergencyPage = lazy(() => import('./routes/EmergencyPage').then((m) => ({ default: m.EmergencyPage })));
 const MyReportsPage = lazy(() => import('./routes/MyReportsPage').then((m) => ({ default: m.MyReportsPage })));
 const ReportDetailPage = lazy(() =>
   import('./routes/ReportDetailPage').then((m) => ({ default: m.ReportDetailPage })),
@@ -97,6 +98,14 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth requirePermission="create_report">
             <ReportCreatePage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'emergency',
+        element: (
+          <RequireAuth requirePermission="create_report">
+            <EmergencyPage />
           </RequireAuth>
         ),
       },

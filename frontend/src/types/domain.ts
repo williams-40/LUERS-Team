@@ -42,8 +42,19 @@ export const Status = {
   IN_PROGRESS: 'in_progress',
   RESOLVED: 'resolved',
   CLOSED: 'closed',
+  CANCELLED: 'cancelled',
+  FALSE_ALARM: 'false_alarm',
 } as const;
 export type Status = (typeof Status)[keyof typeof Status];
+
+export const EmergencyType = {
+  SECURITY: 'security',
+  MEDICAL: 'medical',
+  FIRE: 'fire',
+  ACCIDENT: 'accident',
+  OTHER: 'other',
+} as const;
+export type EmergencyType = (typeof EmergencyType)[keyof typeof EmergencyType];
 
 export const FileType = {
   IMAGE: 'image',
@@ -108,6 +119,21 @@ export interface Evidence {
   created_at: string;
 }
 
+export interface EmergencyDispatch {
+  emergency_type: EmergencyType;
+  emergency_type_display: string;
+  escalation_level: number;
+  acknowledged_at: string | null;
+  acknowledged_by_username: string | null;
+  responding_at: string | null;
+  arrived_at: string | null;
+  resolved_at: string | null;
+  cancelled_at: string | null;
+  ack_deadline: string | null;
+  response_deadline: string | null;
+  resolution_deadline: string | null;
+}
+
 export interface ReportListItem {
   id: string;
   // Legacy incident-type classifier — retired as of Phase 14's department-
@@ -133,11 +159,14 @@ export interface ReportListItem {
   department_name: string | null;
   /** Lets the frontend decide if the viewer has assign authority without a separate lookup. */
   department_head_id: string | null;
+  /** Only present for urgency='panic' reports — null for everything else. */
+  emergency_dispatch: EmergencyDispatch | null;
 }
 
 export interface ReportDetail extends Omit<ReportListItem, 'evidence_count'> {
   metadata: Record<string, unknown>;
   evidence: Evidence[];
+  reporter: string | null;
   reporter_name: string | null;
   reporter_phone: string | null;
 }
@@ -153,8 +182,12 @@ export interface ReportFeedback {
 }
 
 export interface CreateReportInput {
-  department: string;
-  description: string;
+  // Required for a normal report; omitted for panic, where the backend
+  // routes the department deterministically from emergency_type instead.
+  department?: string;
+  // Required for panic reports only (see emergency_type above).
+  emergency_type?: EmergencyType;
+  description?: string;
   urgency: Urgency;
   phone_number?: string;
   latitude?: number;
@@ -206,7 +239,7 @@ export interface DashboardAnalytics {
   closed: number;
   average_assignment_time_hours: number | null;
   average_resolution_time_hours: number | null;
-  overdue: number;
+  overdue: { panic: number; normal: number; total: number };
   urgency_counts: { urgency: Urgency; count: number }[];
   monthly_trend: { month: string; count: number }[];
   responder_workload: { responder_id: string; username: string; open_count: number }[];

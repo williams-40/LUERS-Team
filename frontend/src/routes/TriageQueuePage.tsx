@@ -5,6 +5,7 @@ import type { QueueFilterState } from '../hooks/useReportQueue';
 import { useReportSocket } from '../hooks/useReportSocket';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { SelectableReportRow } from '../components/reports/SelectableReportRow';
+import { ActiveEmergenciesMap } from '../components/reports/ActiveEmergenciesMap';
 import { BulkActionToolbar } from '../components/reports/BulkActionToolbar';
 import { ReportCardSkeleton } from '../components/reports/ReportCardSkeleton';
 import { Button } from '../components/ui/Button';
@@ -171,6 +172,8 @@ export function TriageQueuePage() {
           </Button>
         </div>
       </div>
+
+      <ActiveEmergenciesMap />
 
       <div className="mb-6 flex flex-wrap gap-3">
         <label className="flex flex-col gap-1 text-[12.5px]">

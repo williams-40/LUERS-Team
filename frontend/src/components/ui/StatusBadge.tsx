@@ -33,6 +33,16 @@ const STATUS_STYLES: Record<Status, { label: string; dot: string; classes: strin
     dot: 'bg-ink-muted',
     classes: 'bg-ink-muted/14 text-ink-muted',
   },
+  [Status.CANCELLED]: {
+    label: 'Cancelled',
+    dot: 'bg-ink-muted',
+    classes: 'bg-ink-muted/14 text-ink-muted',
+  },
+  [Status.FALSE_ALARM]: {
+    label: 'False alarm',
+    dot: 'bg-ink-muted',
+    classes: 'bg-ink-muted/14 text-ink-muted',
+  },
 };
 
 export function StatusBadge({ status, className }: { status: Status; className?: string }) {

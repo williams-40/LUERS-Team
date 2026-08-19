@@ -51,6 +51,8 @@
   "pendingReports": {
     "pending_one": "{{count}} report pending",
     "pending_other": "{{count}} reports pending",
+    "pendingEmergency_one": "Emergency queued — no signal",
+    "pendingEmergency_other": "Emergency queued — no signal ({{count}} pending)",
     "retryNow": "Retry now",
     "retrying": "Retrying…"
   }

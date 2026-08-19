@@ -8,6 +8,8 @@ import { AssignControl } from '../components/reports/AssignControl';
 import { FeedbackDisplay } from '../components/reports/FeedbackDisplay';
 import { ReporterInfoSection } from '../components/reports/ReporterInfoSection';
 import { ReportLocationMap } from '../components/reports/ReportLocationMap';
+import { EmergencyStatusChecklist } from '../components/reports/EmergencyStatusChecklist';
+import { EmergencyActionsControl } from '../components/reports/EmergencyActionsControl';
 import { ReportChat } from '../components/reports/ReportChat';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { Button } from '../components/ui/Button';
@@ -132,7 +134,11 @@ export function ReportDetailPage() {
         {report.urgency === Urgency.PANIC && <span className="text-status-critical font-sans"> · Panic</span>}
       </p>
 
-      <p className="text-ink mb-5 text-sm leading-relaxed whitespace-pre-wrap">{report.description}</p>
+      {report.urgency === Urgency.PANIC && <EmergencyStatusChecklist report={report} />}
+
+      {report.description && (
+        <p className="text-ink mb-5 text-sm leading-relaxed whitespace-pre-wrap">{report.description}</p>
+      )}
 
       <ReportLocationMap
         latitude={report.latitude}
@@ -161,6 +167,10 @@ export function ReportDetailPage() {
       <FeedbackDisplay reportId={report.id} />
 
       {canViewOperationalDetails && <ReporterInfoSection report={report} />}
+
+      {report.urgency === Urgency.PANIC && (
+        <EmergencyActionsControl report={report} onUpdated={refetch} />
+      )}
 
       {canUpdateStatus && <StatusUpdateControl report={report} onUpdated={refetch} />}
 

@@ -46,8 +46,11 @@ export function DashboardAnalyticsPanel() {
           <span className="font-semibold">Avg. resolution time:</span>{' '}
           {data.average_resolution_time_hours !== null ? `${data.average_resolution_time_hours.toFixed(1)} hrs` : 'N/A'}
         </p>
-        <p className={data.overdue > 0 ? 'text-status-critical font-semibold' : ''}>
-          <span className="font-semibold">Overdue:</span> {data.overdue}
+        <p className={data.overdue.panic > 0 ? 'text-status-critical font-semibold' : ''}>
+          <span className="font-semibold">Overdue emergencies:</span> {data.overdue.panic}
+        </p>
+        <p className={data.overdue.normal > 0 ? 'text-status-warning font-semibold' : ''}>
+          <span className="font-semibold">Overdue reports:</span> {data.overdue.normal}
         </p>
       </div>
 

@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { Urgency } from '../types/domain';
 import type { CreateReportInput } from '../types/domain';
 
 export interface QueuedReport {
@@ -55,7 +56,14 @@ export async function enqueueReport(
 export async function getQueuedReports(): Promise<QueuedReport[]> {
   const db = await getDB();
   const all = await db.getAll(STORE_NAME);
-  return all.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // Panic-queued reports jump ahead of routine ones — a panic report
+  // queued after a routine one must not wait behind it once connectivity
+  // returns. FIFO (by createdAt) within each priority tier.
+  return all.sort((a, b) => {
+    const priority = (item: QueuedReport) => (item.payload.urgency === Urgency.PANIC ? 0 : 1);
+    const priorityDiff = priority(a) - priority(b);
+    return priorityDiff !== 0 ? priorityDiff : a.createdAt.localeCompare(b.createdAt);
+  });
 }
 
 export async function removeQueuedReport(id: string): Promise<void> {
