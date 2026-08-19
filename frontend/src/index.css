@@ -1,6 +1,20 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+/*
+ * Leaflet's own CSS puts its zoom controls/attribution at z-index: 1000 and
+ * popups/tooltips/markers at 600-700 (see .leaflet-top/.leaflet-bottom etc.
+ * in leaflet.css). .leaflet-container only sets position: relative, not a
+ * new stacking context, so those z-indexes escape the map box and can sit
+ * above the sticky top bar (z-40), the account menu dropdown (z-50), and
+ * anything else on the page with a lower z-index. `isolation: isolate`
+ * traps Leaflet's internal stacking inside the map's own box so the map
+ * behaves as one flat layer from the rest of the page's point of view.
+ */
+.leaflet-container {
+  isolation: isolate;
+}
+
 /* Self-hosted fonts (offline-friendly — no external font CDN calls) */
 @import '@fontsource/manrope/700.css';
 @import '@fontsource/manrope/800.css';

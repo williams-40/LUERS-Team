@@ -7,15 +7,22 @@ import { createPortal } from 'react-dom';
  * Built for FeedbackModal, which the spec explicitly asks to appear as
  * "a popup/modal."
  */
+const SIZE_CLASS = {
+  md: 'max-w-md',
+  lg: 'max-w-3xl',
+} as const;
+
 export function Modal({
   title,
   onClose,
   dismissible = true,
+  size = 'md',
   children,
 }: {
   title: string;
   onClose: () => void;
   dismissible?: boolean;
+  size?: keyof typeof SIZE_CLASS;
   children: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -67,7 +74,7 @@ export function Modal({
         aria-label={title}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface w-full max-w-md rounded-xl p-5 shadow-lg outline-none"
+        className={`bg-surface w-full ${SIZE_CLASS[size]} rounded-xl p-5 shadow-lg outline-none`}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">{title}</h2>

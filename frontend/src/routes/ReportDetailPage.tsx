@@ -16,10 +16,11 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ErrorState } from '../components/ui/ErrorState';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { MediaViewerModal } from '../components/ui/MediaViewerModal';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { CATEGORY_LABELS } from '../lib/labels';
-import { Urgency } from '../types/domain';
-import type { ReportDetail, RoutingSuggestion } from '../types/domain';
+import { FileType, Urgency } from '../types/domain';
+import type { Evidence, ReportDetail, RoutingSuggestion } from '../types/domain';
 import type { ApiError } from '../lib/api-client';
 import type { ChatMessagePayload } from '../lib/ws-client';
 import { useAuth } from '../hooks/useAuth';
@@ -36,6 +37,7 @@ export function ReportDetailPage() {
   const queueHref = user?.permissions.includes('view_admin_dashboard') ? '/admin' : '/reports/mine';
   const queueLabel = user?.permissions.includes('view_admin_dashboard') ? 'Report queue' : 'My reports';
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [viewingEvidence, setViewingEvidence] = useState<Evidence | null>(null);
 
   const deleteMutation = useMutation({ mutationFn: () => deleteReport(id!) });
 
@@ -181,17 +183,28 @@ export function ReportDetailPage() {
                 Evidence ({report.evidence.length})
               </h2>
               <ul className="flex flex-col gap-1.5">
-                {report.evidence.map((item) => (
-                  <li key={item.id} className="rounded-lg bg-ink/4 px-3 py-1.5 text-sm">
-                    {item.file_url ? (
-                      <a href={item.file_url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
-                        {item.file_type} evidence
-                      </a>
-                    ) : (
-                      <span className="text-ink-muted">{item.file_type} evidence</span>
-                    )}
-                  </li>
-                ))}
+                {report.evidence.map((item) => {
+                  const isPreviewable = item.file_type === FileType.IMAGE || item.file_type === FileType.VIDEO;
+                  return (
+                    <li key={item.id} className="rounded-lg bg-ink/4 px-3 py-1.5 text-sm">
+                      {item.file_url && isPreviewable ? (
+                        <button
+                          type="button"
+                          onClick={() => setViewingEvidence(item)}
+                          className="text-brand hover:underline"
+                        >
+                          {item.file_type} evidence
+                        </button>
+                      ) : item.file_url ? (
+                        <a href={item.file_url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                          {item.file_type} evidence
+                        </a>
+                      ) : (
+                        <span className="text-ink-muted">{item.file_type} evidence</span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </Card>
           )}
@@ -254,6 +267,15 @@ export function ReportDetailPage() {
           destructive
           onConfirm={() => void handleDelete()}
           onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
+
+      {viewingEvidence && viewingEvidence.file_url && (
+        <MediaViewerModal
+          url={viewingEvidence.file_url}
+          fileType={viewingEvidence.file_type as 'image' | 'video'}
+          label={`${viewingEvidence.file_type} evidence`}
+          onClose={() => setViewingEvidence(null)}
         />
       )}
     </div>
