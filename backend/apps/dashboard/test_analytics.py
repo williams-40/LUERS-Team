@@ -94,7 +94,7 @@ def test_overdue_counts_panic_reports_past_4_hours():
     not_overdue.save(update_fields=['created_at'])
 
     result = compute_dashboard_analytics(head)
-    assert result['overdue'] == 1
+    assert result['overdue'] == {'panic': 1, 'normal': 0, 'total': 1}
 
 
 @pytest.mark.django_db

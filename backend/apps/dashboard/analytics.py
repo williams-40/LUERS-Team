@@ -72,13 +72,24 @@ def _average_assignment_time_hours(queryset):
     return (sum(deltas) / len(deltas)) / 3600
 
 
+_CLOSED_STATUSES = ['resolved', 'closed', 'cancelled', 'false_alarm']
+
+
 def _overdue_count(queryset):
+    """
+    Split by urgency (not blended into one number) — a head seeing
+    "Overdue: 3" couldn't previously tell three stale routine reports from
+    three unattended emergencies. `total` is kept for callers that only
+    want the headline figure.
+    """
     now = timezone.now()
-    open_reports = queryset.exclude(status__in=['resolved', 'closed'])
-    total = 0
-    for urgency, hours in OVERDUE_HOURS.items():
-        total += open_reports.filter(urgency=urgency, created_at__lt=now - timedelta(hours=hours)).count()
-    return total
+    open_reports = queryset.exclude(status__in=_CLOSED_STATUSES)
+    counts = {
+        urgency: open_reports.filter(urgency=urgency, created_at__lt=now - timedelta(hours=hours)).count()
+        for urgency, hours in OVERDUE_HOURS.items()
+    }
+    counts['total'] = sum(counts.values())
+    return counts
 
 
 def _monthly_trend(queryset, months=12):

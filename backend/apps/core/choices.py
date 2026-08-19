@@ -30,6 +30,15 @@ class Status(models.TextChoices):
     IN_PROGRESS = 'in_progress', 'In Progress'
     RESOLVED = 'resolved', 'Resolved'
     CLOSED = 'closed', 'Closed'
+    CANCELLED = 'cancelled', 'Cancelled'
+    FALSE_ALARM = 'false_alarm', 'False Alarm'
+
+class EmergencyType(models.TextChoices):
+    SECURITY = 'security', 'Security / Threat'
+    MEDICAL = 'medical', 'Medical Emergency'
+    FIRE = 'fire', 'Fire'
+    ACCIDENT = 'accident', 'Accident'
+    OTHER = 'other', 'Other'
 
 class FileType(models.TextChoices):
     IMAGE = 'image', 'Image'
@@ -60,6 +69,12 @@ class Action(models.TextChoices):
     ROLE_CHANGED = 'role_changed', 'Role Changed'
     ACCOUNT_ACTIVATED = 'account_activated', 'Account Activated'
     ACCOUNT_DEACTIVATED = 'account_deactivated', 'Account Deactivated'
+    EMERGENCY_ACKNOWLEDGED = 'emergency_acknowledged', 'Emergency Acknowledged'
+    EMERGENCY_RESPONDING = 'emergency_responding', 'Emergency Responding'
+    EMERGENCY_ARRIVED = 'emergency_arrived', 'Emergency Arrived'
+    EMERGENCY_ESCALATED = 'emergency_escalated', 'Emergency Escalated'
+    EMERGENCY_CANCELLED = 'emergency_cancelled', 'Emergency Cancelled'
+    EMERGENCY_FALSE_ALARM = 'emergency_false_alarm', 'Emergency Marked False Alarm'
 
 class SyncOrigin(models.TextChoices):
     LIVE = 'live', 'Live'

@@ -1,6 +1,6 @@
 ﻿from django.db import models
 from django.conf import settings
-from apps.core.choices import Category, Urgency, Status, FileType
+from apps.core.choices import Category, Urgency, Status, FileType, EmergencyType
 from apps.core.models import BaseModel
 
 class Report(BaseModel):
@@ -106,6 +106,50 @@ class Department(BaseModel):
 
     def __str__(self):
         return self.name
+
+
+class EmergencyDispatch(BaseModel):
+    """
+    Emergency-only lifecycle state for a panic Report, kept off the base
+    Report row (same 1:1 extension pattern as ReportFeedback) since these
+    fields are meaningless for the ~all normal reports that never need them.
+    Created once, in the same transaction as the Report, for every
+    urgency='panic' report — see ReportService.create_report.
+    """
+    report = models.OneToOneField(Report, on_delete=models.CASCADE, related_name='emergency_dispatch')
+    emergency_type = models.CharField(max_length=10, choices=EmergencyType.choices, default=EmergencyType.OTHER)
+    escalation_level = models.PositiveSmallIntegerField(default=0)
+
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='acknowledged_emergencies'
+    )
+    responding_at = models.DateTimeField(null=True, blank=True)
+    arrived_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='cancelled_emergencies'
+    )
+
+    # Computed once at creation from settings.EMERGENCY_SLA_MINUTES so the
+    # Celery Beat escalation scanner never has to recompute them per tick.
+    ack_deadline = models.DateTimeField(null=True, blank=True)
+    response_deadline = models.DateTimeField(null=True, blank=True)
+    resolution_deadline = models.DateTimeField(null=True, blank=True)
+    last_escalated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'emergency_dispatches'
+        indexes = [
+            models.Index(fields=['emergency_type']),
+            models.Index(fields=['ack_deadline']),
+            models.Index(fields=['response_deadline']),
+            models.Index(fields=['resolution_deadline']),
+        ]
+
+    def __str__(self):
+        return f"EmergencyDispatch for Report {self.report_id} ({self.emergency_type})"
 
 
 class ReportFeedback(BaseModel):

@@ -1,23 +1,28 @@
 ﻿from datetime import datetime
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied, NotFound
-from django.db.models import Q
+from django.db.models import Q, Case, When, Value, IntegerField
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
+from django_ratelimit.core import is_ratelimited
+from django_ratelimit.exceptions import Ratelimited
 from apps.reports.models import Report, Evidence, Department
 from apps.reports.serializers import (
     ReportListSerializer, ReportDetailSerializer, ReportCreateSerializer,
     ReportUpdateStatusSerializer, ReportAssignSerializer, EvidenceSerializer,
+    ReportLocationUpdateSerializer,
 )
 from apps.reports.services import (
-    ReportService, MessageService, get_accessible_reports, filter_reports,
+    ReportService, MessageService, EmergencyDispatchService, get_accessible_reports, filter_reports,
     is_department_head_or_system_admin, is_department_member_or_head, can_upload_evidence,
-    get_open_report_counts,
+    can_view_panic_report, get_open_report_counts,
 )
+from apps.notifications.services import NotificationService
 from apps.reports.validators import validate_evidence_file
 from apps.accounts.permissions import IsStudentOrStaff, IsAdminTier, CanDeleteReport
 from apps.core.export import csv_response, pdf_response
@@ -25,7 +30,7 @@ from apps.core.pagination import StandardPagination
 from reportlab.lib.units import inch
 from apps.reports.serializers import SyncRequestSerializer, SyncResultSerializer
 from rest_framework.exceptions import ValidationError as DRFValidationError
-from apps.core.choices import SyncOrigin
+from apps.core.choices import SyncOrigin, Status
 
 
 def get_client_ip(request):
@@ -36,15 +41,28 @@ def get_client_ip(request):
     return request.META.get('REMOTE_ADDR', '0.0.0.0')
 
 
-@method_decorator(ratelimit(key='user', rate='5/h', method='POST', block=True), name='post')
 class ReportCreateView(generics.CreateAPIView):
     """
     POST /api/v1/reports/
     Submit a report (panic or detailed).
-    Rate-limited to 5 reports per hour per user.
+
+    Rate limit is split by urgency, in two independent django_ratelimit
+    groups, so exhausting the normal-report quota can never block a real
+    emergency: 5/h per user for normal reports (unchanged from before this
+    split), 10/h per user for panic reports (still abuse-resistant, just
+    more generous, since a burst of real emergencies from one account is a
+    lot more plausible than a burst of routine reports).
     """
     serializer_class = ReportCreateSerializer
     permission_classes = [permissions.IsAuthenticated, IsStudentOrStaff]
+
+    def post(self, request, *args, **kwargs):
+        is_panic = request.data.get('urgency') == 'panic'
+        group = 'report-create-panic' if is_panic else 'report-create-normal'
+        rate = '10/h' if is_panic else '5/h'
+        if is_ratelimited(request, group=group, key='user', rate=rate, method='POST', increment=True):
+            raise Ratelimited()
+        return super().post(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         ip = get_client_ip(self.request)
@@ -83,7 +101,18 @@ class ReportListView(generics.ListAPIView):
             except ValueError:
                 pass
 
-        return queryset.order_by('-created_at')
+        # Open panic reports first, then newest-first within each tier —
+        # a panic report no longer waits its turn behind older routine
+        # tickets. Only applied when the caller hasn't asked for a specific
+        # ordering (none of this view's callers currently do).
+        queryset = queryset.annotate(
+            _priority=Case(
+                When(Q(urgency='panic') & ~Q(status__in=['resolved', 'closed', 'cancelled', 'false_alarm']), then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        )
+        return queryset.order_by('_priority', '-created_at')
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
@@ -180,9 +209,7 @@ class ReportDetailView(generics.RetrieveAPIView):
 
     def get_object(self):
         obj = super().get_object()
-        user = self.request.user
-        accessible = get_accessible_reports(user)
-        if accessible.filter(id=obj.id).exists():
+        if can_view_panic_report(self.request.user, obj):
             return obj
         raise PermissionDenied("You do not have access to this report.")
 
@@ -237,6 +264,38 @@ class ReportStatusUpdateView(APIView):
         return Response({'status': result['status']})
 
 
+class ReportLocationUpdateView(APIView):
+    """
+    PATCH /api/v1/reports/{id}/location/
+    The /emergency flow never awaits geolocation before submitting — this
+    lets the client send coordinates afterward, once they resolve. Reporter
+    only, and only while the report doesn't already have a location (no
+    silently overwriting a location that came in some other way).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ReportLocationUpdateSerializer
+
+    def patch(self, request, id):
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        if report.reporter_id != request.user.id:
+            raise PermissionDenied("Only this report's reporter can update its location.")
+        if report.latitude is not None:
+            raise DRFValidationError({'error': 'This report already has a location.'})
+
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        report.latitude = serializer.validated_data['latitude']
+        report.longitude = serializer.validated_data['longitude']
+        report.location_accuracy = serializer.validated_data.get('location_accuracy')
+        report.save(update_fields=['latitude', 'longitude', 'location_accuracy', 'updated_at'])
+
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
+        return Response({
+            'latitude': report.latitude, 'longitude': report.longitude,
+            'location_accuracy': report.location_accuracy,
+        })
+
+
 class ReportAssignView(APIView):
     """
     POST /api/v1/reports/{id}/assign/
@@ -275,6 +334,107 @@ class ReportAssignView(APIView):
             sync_origin=SyncOrigin.LIVE
         )
         return Response({'assigned_to': result['assigned_to']})
+
+
+class EmergencyAcknowledgeView(APIView):
+    """
+    POST /api/v1/reports/{id}/acknowledge/
+    Any member or head of a panic report's department can acknowledge it —
+    "first to acknowledge claims it": if nobody is assigned yet, the
+    acknowledging user becomes the assigned responder (reuses the existing
+    single-FK assigned_to; a head can still reassign afterward via /assign/).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, id):
+        # Deliberately not scoped through get_accessible_reports: an
+        # unassigned department member has no other reason to be able to
+        # *view* an arbitrary report yet, but must still be able to find
+        # and claim one that was just dispatched to their department.
+        # is_department_member_or_head is the real authorization check here.
+        report = get_object_or_404(Report.objects.filter(deleted_at__isnull=True), id=id)
+        if not is_department_member_or_head(request.user, report.department):
+            raise PermissionDenied("Only this report's department can acknowledge it.")
+        dispatch = EmergencyDispatchService.acknowledge(report, request.user, ip_address=get_client_ip(request))
+        return Response({'acknowledged_at': dispatch.acknowledged_at, 'assigned_to': str(report.assigned_to_id)})
+
+
+class EmergencyRespondView(APIView):
+    """
+    POST /api/v1/reports/{id}/respond/
+    Only the report's assigned responder — same rule as status-PATCH.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, id):
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        if report.assigned_to_id != request.user.id:
+            raise PermissionDenied("Only this report's assigned responder can mark it as responding.")
+        dispatch = EmergencyDispatchService.respond(report, request.user, ip_address=get_client_ip(request))
+        return Response({'responding_at': dispatch.responding_at})
+
+
+class EmergencyArriveView(APIView):
+    """
+    POST /api/v1/reports/{id}/arrive/
+    Only the report's assigned responder.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, id):
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        if report.assigned_to_id != request.user.id:
+            raise PermissionDenied("Only this report's assigned responder can mark it as arrived.")
+        dispatch = EmergencyDispatchService.arrive(report, request.user, ip_address=get_client_ip(request))
+        return Response({'arrived_at': dispatch.arrived_at})
+
+
+class EmergencyCancelView(APIView):
+    """
+    POST /api/v1/reports/{id}/cancel/  { "reason": "cancelled" | "false_alarm" }
+    The reporter can cancel their own panic report, but only before a
+    responder is actively en route (status new/acknowledged) — covers an
+    accidental tap. The department head or System Admin can cancel at any
+    stage. Never deletes the row — soft, same as every other report state.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, id):
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        reason = request.data.get('reason')
+        if reason not in ('cancelled', 'false_alarm'):
+            raise DRFValidationError({'reason': "Must be 'cancelled' or 'false_alarm'."})
+
+        is_head_or_admin = is_department_head_or_system_admin(request.user, report)
+        is_reporter_pre_dispatch = (
+            report.reporter_id == request.user.id and report.status in (Status.NEW, Status.ACKNOWLEDGED)
+        )
+        if not (is_head_or_admin or is_reporter_pre_dispatch):
+            raise PermissionDenied(
+                "Only the reporter (before a responder is dispatched), this report's department head, "
+                "or a System Admin can cancel it."
+            )
+
+        dispatch = EmergencyDispatchService.cancel(report, request.user, reason, ip_address=get_client_ip(request))
+        return Response({'cancelled_at': dispatch.cancelled_at, 'status': report.status})
+
+
+class EmergencyEscalateView(APIView):
+    """
+    POST /api/v1/reports/{id}/escalate/
+    Manual escalation by the department head or System Admin. The same
+    underlying action also fires automatically from the Celery Beat SLA
+    scanner (apps.reports.tasks.check_emergency_escalations) when nobody
+    escalates it manually in time.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, id):
+        report = get_object_or_404(get_accessible_reports(request.user), id=id)
+        if not is_department_head_or_system_admin(request.user, report):
+            raise PermissionDenied("Only this report's department head or a System Admin can escalate it.")
+        dispatch = EmergencyDispatchService.escalate(report, actor=request.user, ip_address=get_client_ip(request))
+        return Response({'escalation_level': dispatch.escalation_level})
 
 
 class ReportAssignableOfficersView(APIView):

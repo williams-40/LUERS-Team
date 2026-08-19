@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.reports.models import Report, Evidence, Department
-from apps.core.choices import Urgency, Status
+from apps.reports.models import Report, Evidence, Department, EmergencyDispatch
+from apps.core.choices import Urgency, Status, EmergencyType
 from apps.reports.validators import validate_evidence_file
 
 User = get_user_model()
@@ -19,6 +19,20 @@ class EvidenceSerializer(serializers.ModelSerializer):
         if obj.file and request:
             return request.build_absolute_uri(obj.file.url)
         return None
+
+
+class EmergencyDispatchSerializer(serializers.ModelSerializer):
+    emergency_type_display = serializers.CharField(source='get_emergency_type_display', read_only=True)
+    acknowledged_by_username = serializers.CharField(source='acknowledged_by.username', read_only=True, default=None)
+
+    class Meta:
+        model = EmergencyDispatch
+        fields = [
+            'emergency_type', 'emergency_type_display', 'escalation_level',
+            'acknowledged_at', 'acknowledged_by_username', 'responding_at', 'arrived_at',
+            'resolved_at', 'cancelled_at',
+            'ack_deadline', 'response_deadline', 'resolution_deadline',
+        ]
 
 
 class ReportListSerializer(serializers.ModelSerializer):
@@ -40,6 +54,7 @@ class ReportListSerializer(serializers.ModelSerializer):
     # Lets the frontend decide whether the *viewer* is this report's
     # department head (assign authority) without a separate lookup.
     department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
+    emergency_dispatch = EmergencyDispatchSerializer(read_only=True, default=None)
 
     class Meta:
         model = Report
@@ -49,6 +64,7 @@ class ReportListSerializer(serializers.ModelSerializer):
             'assigned_to', 'assigned_to_username', 'created_at', 'updated_at',
             'evidence_count', 'deleted_at',
             'department_id', 'department_name', 'department_head_id',
+            'emergency_dispatch',
         ]
 
 
@@ -63,8 +79,14 @@ class ReportDetailSerializer(serializers.ModelSerializer):
     department_id = serializers.UUIDField(source='department.id', read_only=True, default=None)
     department_name = serializers.CharField(source='department.name', read_only=True, default=None)
     department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
+    # Already implicitly exposed via reporter_name/reporter_phone below to
+    # the same audience — the frontend needs the bare id too, to decide
+    # whether the *viewer themself* is the reporter (e.g. can they cancel
+    # their own just-filed panic report).
+    reporter = serializers.UUIDField(source='reporter_id', read_only=True, default=None)
     reporter_name = serializers.SerializerMethodField()
     reporter_phone = serializers.SerializerMethodField()
+    emergency_dispatch = EmergencyDispatchSerializer(read_only=True, default=None)
 
     class Meta:
         model = Report
@@ -74,7 +96,8 @@ class ReportDetailSerializer(serializers.ModelSerializer):
             'assigned_to', 'assigned_to_username', 'metadata', 'created_at', 'updated_at',
             'evidence',
             'department_id', 'department_name', 'department_head_id',
-            'reporter_name', 'reporter_phone',
+            'reporter', 'reporter_name', 'reporter_phone',
+            'emergency_dispatch',
         ]
 
     def get_reporter_name(self, obj):
@@ -99,7 +122,19 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         write_only=True
     )
 
-    department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.filter(is_active=True))
+    # Required for a normal report; not required for panic (routed
+    # deterministically from emergency_type instead — see validate() and
+    # ReportService.create_report). A reporter mid-emergency should never
+    # have to make a routing decision.
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.filter(is_active=True), required=False, allow_null=True
+    )
+
+    # Panic-only: which kind of emergency this is, used to deterministically
+    # resolve `department` (settings.EMERGENCY_TYPE_DEPARTMENT_MAP) and to
+    # populate the EmergencyDispatch row created alongside the Report. Not a
+    # Report field — popped out in ReportService.create_report.
+    emergency_type = serializers.ChoiceField(choices=EmergencyType.choices, required=False, allow_null=True)
 
     # Not a Report field — captured here only to optionally persist it onto
     # the reporter's own profile (see ReportService.create_report). Always
@@ -112,6 +147,7 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'department',
+            'emergency_type',
             'description',
             'urgency',
             'phone_number',
@@ -135,7 +171,10 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         # this must be explicit instead of relying on it.
         read_only_fields = ['id', 'status', 'created_at', 'assigned_to']
         extra_kwargs = {
-            'description': {'required': True},
+            # Required for normal reports only — enforced in validate()
+            # below, since a panic report may have nothing more to say than
+            # the emergency type itself.
+            'description': {'required': False, 'allow_blank': True},
             'idempotency_key': {'required': False, 'allow_blank': True, 'max_length': 64},
             'client_created_at': {'required': False, 'allow_null': True},
         }
@@ -146,6 +185,19 @@ class ReportCreateSerializer(serializers.ModelSerializer):
                 validate_evidence_file(file)
             except ValueError as e:
                 raise serializers.ValidationError({'evidence': str(e)})
+
+        urgency = attrs.get('urgency') or Urgency.NORMAL
+        errors = {}
+        if urgency == Urgency.PANIC:
+            if not attrs.get('emergency_type'):
+                errors['emergency_type'] = 'Required for a panic report.'
+        else:
+            if attrs.get('department') is None:
+                errors['department'] = 'This field is required.'
+            if not (attrs.get('description') or '').strip():
+                errors['description'] = 'This field is required.'
+        if errors:
+            raise serializers.ValidationError(errors)
 
         return attrs
 
@@ -181,6 +233,14 @@ class ReportUpdateStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Status.choices)
     expected_updated_at = serializers.DateTimeField(required=False, allow_null=True)
     client_timestamp = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class ReportLocationUpdateSerializer(serializers.Serializer):
+    """Follow-up location for a report created before GPS resolved (the
+    /emergency flow never awaits geolocation before submitting)."""
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    location_accuracy = serializers.FloatField(required=False, allow_null=True)
 
 
 class ReportAssignSerializer(serializers.Serializer):
@@ -241,10 +301,18 @@ class SyncActionSerializer(serializers.Serializer):
         report_id = attrs.get('report_id')
 
         if action == 'create_report':
-            required = ['department', 'description']
-            for field in required:
-                if field not in data:
-                    raise serializers.ValidationError(f"Missing required field '{field}' for create_report")
+            # Mirrors ReportCreateSerializer.validate()'s urgency-conditional
+            # requirements — this is just an early, cheap pre-check ahead of
+            # the real serializer validation in SyncView; department/
+            # description stay required for normal reports, but a panic
+            # report only needs emergency_type.
+            if data.get('urgency') == Urgency.PANIC:
+                if 'emergency_type' not in data:
+                    raise serializers.ValidationError("Missing required field 'emergency_type' for create_report")
+            else:
+                for field in ['department', 'description']:
+                    if field not in data:
+                        raise serializers.ValidationError(f"Missing required field '{field}' for create_report")
         elif action == 'update_status':
             if not report_id:
                 raise serializers.ValidationError("report_id is required for update_status")

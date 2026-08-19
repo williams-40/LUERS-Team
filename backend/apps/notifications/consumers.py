@@ -84,8 +84,12 @@ class ReportConsumer(AsyncWebsocketConsumer):
         uniformly, so this is now the single source of truth for both
         REST and WebSocket access.
         """
-        from apps.reports.services import get_accessible_reports
-        return get_accessible_reports(user, include_deleted=True).filter(id=report_id).exists()
+        from apps.reports.services import can_view_panic_report
+        try:
+            report = Report.objects.get(id=report_id)
+        except (Report.DoesNotExist, ValueError):
+            return False
+        return can_view_panic_report(user, report)
 
     async def _get_report_and_check_access(self, user, report_id):
         """Fetch report and check access."""

@@ -2,6 +2,7 @@
 from asgiref.sync import async_to_sync
 from apps.reports.serializers import ReportListSerializer
 from apps.core.choices import Channel
+from apps.notifications.models import Notification
 from apps.notifications.tasks import send_sms_task, send_email_task
 import logging
 
@@ -40,11 +41,24 @@ class NotificationService:
             logger.warning(f"[SMS] No phone number for {recipient}")
             return {'status': 'skipped', 'reason': 'No phone number'}
 
-        # --- FIXED: Converted UUID to string before slicing ---
         short_id = str(report.id)[:8]
-        message = f"LUERS Alert: New report #{short_id} - {report.category} at {report.created_at.strftime('%H:%M')}"
-        send_sms_task.delay(recipient.phone_number, message)
-        return {'status': 'queued'}
+        if kwargs.get('event_type') == 'panic_created':
+            emergency_type = getattr(getattr(report, 'emergency_dispatch', None), 'emergency_type', None)
+            message = (
+                f"LUERS EMERGENCY #{short_id}: {emergency_type or 'panic'} report just filed"
+                f"{f' ({report.department.name})' if report.department else ''}"
+                f" at {report.created_at.strftime('%H:%M')}. Respond in LUERS now."
+            )
+        else:
+            message = f"LUERS Alert: New report #{short_id} - {report.category} at {report.created_at.strftime('%H:%M')}"
+
+        # Creates a real Notification row for SMS (unlike before this
+        # redesign, when SMS/email dispatch was invisible in the DB beyond a
+        # discarded Celery return dict) — the task itself flips its status
+        # to sent/failed once the send actually resolves.
+        notification = Notification.objects.create(recipient=recipient, report=report, channel=Channel.SMS)
+        send_sms_task.delay(recipient.phone_number, message, str(notification.id))
+        return {'status': 'queued', 'notification_id': str(notification.id)}
 
     @staticmethod
     def _send_email(report, recipient, **kwargs):
@@ -52,7 +66,6 @@ class NotificationService:
             logger.warning(f"[EMAIL] No email for {recipient}")
             return {'status': 'skipped', 'reason': 'No email'}
 
-        # --- FIXED: Converted UUID to string before slicing ---
         short_id = str(report.id)[:8]
         if kwargs.get('event_type') == 'assigned':
             subject = f"LUERS Alert: You've been assigned Report #{short_id}"
@@ -65,6 +78,20 @@ Status: {report.status}
 Description: {report.description[:200]}...
 
 Please login to LUERS to view and respond.
+"""
+        elif kwargs.get('event_type') == 'panic_created':
+            emergency_type = getattr(getattr(report, 'emergency_dispatch', None), 'emergency_type', None)
+            subject = f"LUERS EMERGENCY: New {emergency_type or 'panic'} report #{short_id}"
+            message = f"""
+An emergency report was just filed and routed to your department.
+
+Report ID: {report.id}
+Emergency type: {emergency_type or 'unspecified'}
+Department: {report.department.name if report.department else 'Unassigned'}
+Description: {(report.description or '(none provided)')[:200]}
+Filed: {report.created_at}
+
+Please login to LUERS immediately to acknowledge and respond.
 """
         else:
             subject = f"LUERS Alert: New Report #{short_id}"
@@ -79,8 +106,9 @@ Created: {report.created_at}
 
 Please login to LUERS for more details.
 """
-        send_email_task.delay(recipient.email, subject, message)
-        return {'status': 'queued'}
+        notification = Notification.objects.create(recipient=recipient, report=report, channel=Channel.EMAIL)
+        send_email_task.delay(recipient.email, subject, message, str(notification.id))
+        return {'status': 'queued', 'notification_id': str(notification.id)}
 
     @staticmethod
     def broadcast_report_created(report):

@@ -163,6 +163,17 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 
+# Static schedule (not django-celery-beat's DB-backed one — these SLA scan
+# intervals aren't meant to be edited per-emergency from an admin UI).
+# Requires a separate `celery -A luers_backend beat` process running
+# alongside the worker — see backend README.
+CELERY_BEAT_SCHEDULE = {
+    "check-emergency-escalations": {
+        "task": "apps.reports.tasks.check_emergency_escalations",
+        "schedule": env.int("EMERGENCY_ESCALATION_SCAN_SECONDS", default=60),
+    },
+}
+
 # Redis cache (for ratelimiting, sessions, etc.)
 CACHES = {
     'default': {
@@ -250,6 +261,32 @@ LOGGING = {
 # sandbox that isn't configured with real credentials.
 NOTIFICATION_TASK_MAX_RETRIES = env.int("NOTIFICATION_TASK_MAX_RETRIES", default=3)
 NOTIFICATION_TASK_RETRY_DELAY = env.int("NOTIFICATION_TASK_RETRY_DELAY", default=30)
+
+# Emergency/panic dispatch SLAs (minutes), used to compute
+# EmergencyDispatch.ack_deadline/response_deadline/resolution_deadline at
+# creation time. Distinct from apps.dashboard.analytics.OVERDUE_HOURS, which
+# stays a separate read-only reporting metric for the general report queue.
+EMERGENCY_SLA_MINUTES = {
+    "acknowledge": env.int("EMERGENCY_SLA_ACK_MINUTES", default=5),
+    "respond": env.int("EMERGENCY_SLA_RESPOND_MINUTES", default=15),
+    "resolve": env.int("EMERGENCY_SLA_RESOLVE_MINUTES", default=240),
+}
+
+# Deterministic emergency_type -> Department.name routing for panic reports
+# (apps.reports.services.create_report), replacing the keyword-based
+# DepartmentRoutingService for this path — a reporter in an emergency should
+# never have to pick a department. Department names must match real seeded
+# Department rows (see apps/reports/routing.py's DEPARTMENT_KEYWORDS for the
+# full department list). No dedicated Fire or "Emergency Coordination"
+# department exists today, so fire/accident/other fall back to the closest
+# existing department (Health & Safety, Health & Safety, Security).
+EMERGENCY_TYPE_DEPARTMENT_MAP = {
+    "security": "Security",
+    "medical": "Health & Safety",
+    "fire": "Health & Safety",
+    "accident": "Health & Safety",
+    "other": "Security",
+}
 
 # Sentry — no-op unless SENTRY_DSN is set, matching how Twilio/Mailtrap
 # already degrade gracefully in this codebase without their own credentials.

@@ -6,8 +6,8 @@ Django REST Framework backend for **LUERS** (Lira University Emergency Reporting
 
 - Django 6 + Django REST Framework, JWT auth (`djangorestframework-simplejwt`)
 - PostgreSQL (via `psycopg2`)
-- Channels + Redis (WebSocket live updates for the triage queue and in-report chat)
-- Celery + Redis (async SMS/email dispatch, off the request path)
+- Channels (WebSocket live updates for the triage queue and in-report chat) — Redis-backed channel layer in production; the dev/test settings use the in-process `InMemoryChannelLayer` instead (see Setup step 6)
+- Celery + Redis (async SMS/email dispatch off the request path, plus a scheduled Beat task for emergency-response SLA escalation)
 - `drf-spectacular` for an auto-generated, always-current API reference (see below)
 
 ## Setup
@@ -33,11 +33,18 @@ Django REST Framework backend for **LUERS** (Lira University Emergency Reporting
    ```bash
    python manage.py runserver 8000
    ```
-6. **Run a Celery worker** (separate terminal) — required for password-reset, account-invite, and any other email/SMS to actually be delivered:
+6. **Run a Celery worker** (separate terminal) — required for password-reset, account-invite, panic-dispatch, and any other email/SMS to actually be delivered:
    ```bash
    celery -A luers_backend worker --loglevel=info --pool=solo  # --pool=solo is required on Windows
    ```
    Email/SMS dispatch is `.delay()`'d onto Celery (`apps/notifications/tasks.py`), not sent inline in the request. Without a worker running, tasks just sit in Redis forever — Mailtrap/Twilio never receive anything, and nothing in the API response indicates a problem (the enqueue itself always succeeds). If outbound mail seems to silently vanish, check for a running worker before suspecting the SMTP credentials.
+7. **Run Celery Beat** (separate terminal) — required for emergency SLA escalation (`apps/reports/tasks.check_emergency_escalations`, scanning every 60s by default):
+   ```bash
+   celery -A luers_backend beat --loglevel=info
+   ```
+   Without Beat running, an unacknowledged/unanswered panic report will just sit past its SLA deadline forever — nothing else in the system escalates it. See [Emergency/panic dispatch](#emergencypanic-dispatch) below.
+
+**A note on `channels_redis` in dev on Windows:** `development.py` deliberately stays on `InMemoryChannelLayer` (the same default as `base.py`) rather than switching to `channels_redis.core.RedisChannelLayer` like `production.py` does. That switch was tried and reverted — on this stack's Windows dev setup it hit `redis.exceptions.TimeoutError: Timeout reading from localhost:6379` on essentially every WebSocket connect/disconnect, breaking live updates outright. Since `manage.py runserver` is single-process anyway, `InMemoryChannelLayer`'s real limitation (no fan-out *across* processes) never actually applies here. Revisit only if this dev environment ever moves off `runserver` onto something multi-process.
 
 ## Running tests
 
@@ -108,6 +115,20 @@ There's no dedicated "voice description"/"video description" field on `Report` �
 ### Report location
 
 `Report.latitude`/`longitude` (submitted via the frontend's `navigator.geolocation`, `src/lib/geolocation.ts` in the frontend repo) are already serialized on every report list/detail response with no extra permission gating — visibility is governed purely by whether the requester can see the report at all. They're `DecimalField`s, so DRF renders them as strings, not JSON numbers — any consumer needs to coerce before doing arithmetic on them. The frontend renders them on a Leaflet/OpenStreetMap map (`ReportLocationMap.tsx`) on the report detail page; a report submitted without geolocation permission just shows a "Location not available" placeholder instead.
+
+### Emergency/panic dispatch
+
+A panic report (`urgency=panic`) gets a genuinely different creation and lifecycle path from a normal report, not just a flag — see `apps.reports.services.ReportService.create_report` and `apps.reports.services.EmergencyDispatchService`:
+
+- **Creation**: `department`/`description` are optional; a required `emergency_type` (`security`/`medical`/`fire`/`accident`/`other`) deterministically resolves the department via `settings.EMERGENCY_TYPE_DEPARTMENT_MAP` instead of the keyword-based `DepartmentRoutingService` used for normal "Other" reports. An `EmergencyDispatch` row (`apps/reports/models.py`, 1:1 with `Report`, same extension pattern as `ReportFeedback`) is created in the same transaction, with `ack_deadline`/`response_deadline`/`resolution_deadline` computed from `settings.EMERGENCY_SLA_MINUTES` (`{'acknowledge': 5, 'respond': 15, 'resolve': 240}` by default, env-overridable).
+- **Rate limiting**: split into two independent `django_ratelimit` groups (`ReportCreateView.post`) — `5/h` for normal reports (unchanged), `10/h` for panic — so exhausting one quota can never block the other.
+- **Dispatch**: on creation, the department's head/members are notified over all three channels (WebSocket, SMS, email) via `NotificationService`, `.delay()`'d off the request path from `transaction.on_commit`. `Notification.status` (`created`/`sent`/`failed`) now tracks real delivery outcome for SMS/email too (previously only WebSocket rows were ever created).
+- **Lifecycle actions** (`POST /reports/{id}/acknowledge|respond|arrive|cancel|escalate/`): any department member/head can acknowledge (first to acknowledge claims the report — reuses the existing single-FK `assigned_to`, no separate assignment model); only the assigned responder can mark responding/arrived; the reporter can cancel their own report only before a responder is dispatched (`status` still `new`/`acknowledged`), a department head or System Admin can cancel at any stage. All write to `AuditLog` with dedicated `Action` values (`EMERGENCY_ACKNOWLEDGED` etc.) and broadcast `report_updated`.
+- **Transition constraint**: panic reports (only) follow a fixed status graph (`PANIC_STATUS_TRANSITIONS` in `services.py`) — e.g. `new` can only move to `acknowledged`/`cancelled`/`false_alarm`, never straight to `resolved`. Normal reports keep the existing free-for-all status transitions unchanged.
+- **Escalation**: Celery Beat (`check-emergency-escalations`, every 60s by default) scans open `EmergencyDispatch` rows for a missed deadline and calls `EmergencyDispatchService.escalate` automatically (`actor=None` in the audit trail) — bumps `escalation_level`, re-notifies the department, and pulls in every `system_admin` once `escalation_level >= 2`. Idempotent per deadline via `last_escalated_at`. The same method also powers the manual `POST .../escalate/` endpoint (head/System Admin only).
+- **Visibility widening**: `can_view_panic_report` (`services.py`) lets an unassigned department member/head read a panic report's detail (REST and the WebSocket `report_{id}` group) even though `get_accessible_reports`' normal four-rule visibility wouldn't otherwise include them — they have no reason to see it until they might acknowledge it. Deliberately *not* folded into `can_access_report` itself, so evidence/chat visibility for an unassigned panic report stays governed by the narrower existing rule.
+- **Queue priority**: `ReportListView` sorts open panic reports first (`Case/When` on `urgency`+status), then newest-first within each tier — a panic report no longer waits behind older routine tickets. `?active=true` is a convenience filter (excludes resolved/closed/cancelled/false_alarm) used by the frontend's active-emergencies map.
+- **Dashboard**: `compute_dashboard_analytics`'s `overdue` key is now `{panic, normal, total}` instead of one blended integer.
 
 ### Voice notes in report chat
 
