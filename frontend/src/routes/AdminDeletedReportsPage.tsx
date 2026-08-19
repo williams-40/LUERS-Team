@@ -68,7 +68,7 @@ export function AdminDeletedReportsPage() {
               setPage(1);
             }}
             placeholder="Description, department, officer"
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+            className="bg-surface-2 text-ink appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           />
         </label>
       </div>

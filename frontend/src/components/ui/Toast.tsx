@@ -25,7 +25,7 @@ interface ToastProps extends VariantProps<typeof toastVariants> {
 
 export function Toast({ message, variant, onDismiss, className }: ToastProps & { className?: string }) {
   return (
-    <div role={roleFor(variant)} className={cn(toastVariants({ variant }), className)}>
+    <div role={roleFor(variant)} aria-atomic="true" className={cn(toastVariants({ variant }), className)}>
       <span className="flex-1">{message}</span>
       <button
         type="button"

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchDepartments } from '../../lib/departments-api';
 import { cn } from '../../lib/utils';
+import { handleRadiogroupKeyDown, radioTabIndex } from '../../lib/roving-radiogroup';
 
 export function DepartmentPicker({
   value,
@@ -21,9 +22,11 @@ export function DepartmentPicker({
     return <p className="text-status-critical text-sm">Couldn't load departments. Please try again.</p>;
   }
 
+  const anyActive = data.results.some((d) => d.id === value);
+
   return (
-    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Department">
-      {data.results.map((department) => {
+    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Department" onKeyDown={handleRadiogroupKeyDown}>
+      {data.results.map((department, index) => {
         const active = value === department.id;
         return (
           <button
@@ -31,6 +34,7 @@ export function DepartmentPicker({
             type="button"
             role="radio"
             aria-checked={active}
+            tabIndex={radioTabIndex(active, index === 0, anyActive)}
             onClick={() => onChange(department.id)}
             className={cn(
               'rounded-full border-[1.5px] px-3.5 py-2 text-sm font-semibold transition',

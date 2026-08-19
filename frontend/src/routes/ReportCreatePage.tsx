@@ -12,6 +12,8 @@ import type { ApiError } from '../lib/api-client';
 import { enqueueReport, OFFLINE_QUEUE_KEY } from '../lib/offline-queue';
 import { Button } from '../components/ui/Button';
 import { PanicButton } from '../components/ui/PanicButton';
+import { Input } from '../components/ui/Input';
+import { Textarea } from '../components/ui/Textarea';
 import { DepartmentPicker } from '../components/reports/DepartmentPicker';
 import { EvidencePicker } from '../components/reports/EvidencePicker';
 import { MediaRecorderControl } from '../components/reports/MediaRecorderControl';
@@ -19,6 +21,7 @@ import { PhotoCaptureControl } from '../components/reports/PhotoCaptureControl';
 import { useToast } from '../lib/toast-context';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
+import { handleRadiogroupKeyDown, radioTabIndex } from '../lib/roving-radiogroup';
 
 function buildReportSchema(phoneRequired: boolean) {
   return z.object({
@@ -224,7 +227,11 @@ export function ReportCreatePage() {
         This is an emergency
       </PanicButton>
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        noValidate
+        className="bg-surface-2 flex flex-col gap-5 rounded-xl border border-ink/10 p-4"
+      >
         <div className="flex flex-col gap-1.5">
           <span className="text-ink-secondary text-[12.5px] font-semibold">Department</span>
           <DepartmentPicker
@@ -242,13 +249,19 @@ export function ReportCreatePage() {
             <label htmlFor="description" className="text-ink-secondary text-[12.5px] font-semibold">
               What's happening?
             </label>
-            <div role="radiogroup" aria-label="How to describe what's happening" className="inline-flex gap-1">
-              {(['text', 'voice', 'video'] as const).map((option) => (
+            <div
+              role="radiogroup"
+              aria-label="How to describe what's happening"
+              className="inline-flex gap-1"
+              onKeyDown={handleRadiogroupKeyDown}
+            >
+              {(['text', 'voice', 'video'] as const).map((option, index) => (
                 <button
                   key={option}
                   type="button"
                   role="radio"
                   aria-checked={descriptionMode === option}
+                  tabIndex={radioTabIndex(descriptionMode === option, index === 0, true)}
                   onClick={() => selectDescriptionMode(option)}
                   className={cn(
                     'rounded-full px-2.5 py-1 text-xs font-semibold transition',
@@ -262,12 +275,7 @@ export function ReportCreatePage() {
           </div>
 
           {descriptionMode === 'text' ? (
-            <textarea
-              id="description"
-              rows={4}
-              className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-              {...register('description')}
-            />
+            <Textarea id="description" rows={4} error={errors.description?.message} {...register('description')} />
           ) : (
             <MediaRecorderControl
               mode={descriptionMode === 'voice' ? 'audio' : 'video'}
@@ -277,7 +285,6 @@ export function ReportCreatePage() {
               }}
             />
           )}
-          {errors.description && <p className="text-status-critical text-xs">{errors.description.message}</p>}
           {recordingError && <p className="text-status-critical text-xs">{recordingError}</p>}
         </div>
 
@@ -286,25 +293,19 @@ export function ReportCreatePage() {
           <PhotoCaptureControl onCapture={setPhotoFile} />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="phone_number" className="text-ink-secondary text-[12.5px] font-semibold">
-            Phone number {phoneRequired ? '(required)' : '(optional)'}
-          </label>
-          <input
-            id="phone_number"
-            type="tel"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.phone_number)}
-            aria-required={phoneRequired}
-            {...register('phone_number')}
-          />
-          <p className="text-ink-muted text-xs">
-            {phoneRequired
+        <Input
+          id="phone_number"
+          type="tel"
+          label={`Phone number ${phoneRequired ? '(required)' : '(optional)'}`}
+          required={phoneRequired}
+          error={errors.phone_number?.message}
+          helperText={
+            phoneRequired
               ? "We don't have a phone number on file for you yet. Add one so a responder can reach you."
-              : 'So a responder can reach you if they need more information.'}
-          </p>
-          {errors.phone_number && <p className="text-status-critical text-xs">{errors.phone_number.message}</p>}
-        </div>
+              : 'So a responder can reach you if they need more information.'
+          }
+          {...register('phone_number')}
+        />
 
         <div className="flex flex-col gap-1.5">
           <span className="text-ink-secondary text-[12.5px] font-semibold">Evidence (optional)</span>

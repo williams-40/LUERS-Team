@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { Logo } from '../components/layout/Logo';
 import { register as registerAccount } from '../lib/auth-api';
 import type { ApiError } from '../lib/api-client';
@@ -85,95 +86,27 @@ export function RegisterPage() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="username" className="text-ink-secondary text-[12.5px] font-semibold">
-            Username
-          </label>
-          <input
-            id="username"
-            autoComplete="username"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.username)}
-            {...register('username')}
-          />
-          {errors.username && <p className="text-status-critical text-xs">{errors.username.message}</p>}
-        </div>
+        <Input id="username" label="Username" autoComplete="username" error={errors.username?.message} {...register('username')} />
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-ink-secondary text-[12.5px] font-semibold">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.email)}
-            {...register('email')}
-          />
-          {errors.email && <p className="text-status-critical text-xs">{errors.email.message}</p>}
-        </div>
+        <Input id="email" type="email" label="Email" autoComplete="email" error={errors.email?.message} {...register('email')} />
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="first_name" className="text-ink-secondary text-[12.5px] font-semibold">
-              First name
-            </label>
-            <input
-              id="first_name"
-              className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-              {...register('first_name')}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="last_name" className="text-ink-secondary text-[12.5px] font-semibold">
-              Last name
-            </label>
-            <input
-              id="last_name"
-              className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-              {...register('last_name')}
-            />
-          </div>
+          <Input id="first_name" label="First name" {...register('first_name')} />
+          <Input id="last_name" label="Last name" {...register('last_name')} />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="phone_number" className="text-ink-secondary text-[12.5px] font-semibold">
-            Phone number
-          </label>
-          <input
-            id="phone_number"
-            type="tel"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            {...register('phone_number')}
-          />
-        </div>
+        <Input id="phone_number" type="tel" label="Phone number" {...register('phone_number')} />
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="university_id" className="text-ink-secondary text-[12.5px] font-semibold">
-            University ID
-          </label>
-          <input
-            id="university_id"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            {...register('university_id')}
-          />
-        </div>
+        <Input id="university_id" label="University ID" {...register('university_id')} />
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="text-ink-secondary text-[12.5px] font-semibold">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.password)}
-            {...register('password')}
-          />
-          {errors.password && <p className="text-status-critical text-xs">{errors.password.message}</p>}
-        </div>
+        <Input
+          id="password"
+          type="password"
+          label="Password"
+          autoComplete="new-password"
+          error={errors.password?.message}
+          {...register('password')}
+        />
 
         {serverError && (
           <p role="alert" className="bg-status-critical/10 text-status-critical rounded-lg px-3 py-2 text-sm">

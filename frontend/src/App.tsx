@@ -3,7 +3,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './lib/auth-context';
 import { ToastProvider } from './lib/toast-context';
 import { ThemeProvider } from './lib/theme-context';
-import { AppLayout } from './components/layout/AppLayout';
+import { AppShell } from './components/layout/AppShell';
 import { RequireAuth } from './components/auth/RequireAuth';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
@@ -58,11 +58,12 @@ const EscalatedReportsPage = lazy(() =>
 );
 const RolesPage = lazy(() => import('./routes/RolesPage').then((m) => ({ default: m.RolesPage })));
 const RoleFormPage = lazy(() => import('./routes/RoleFormPage').then((m) => ({ default: m.RoleFormPage })));
+const AnalyticsPage = lazy(() => import('./routes/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage })));
 
 const router = createBrowserRouter([
   {
     path: '/',
-    element: <AppLayout />,
+    element: <AppShell />,
     errorElement: <RouteErrorBoundary />,
     children: [
       {
@@ -213,6 +214,17 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth requirePermission="view_all_reports">
             <EscalatedReportsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        // Reuses the same permission as /admin and /admin/audit — this is a
+        // deeper view of data those pages' panels already fetch, not a new
+        // capability, so it doesn't need its own permission slug.
+        path: 'admin/analytics',
+        element: (
+          <RequireAuth requirePermission="view_admin_dashboard">
+            <AnalyticsPage />
           </RequireAuth>
         ),
       },

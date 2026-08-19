@@ -1,8 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { ArrowUpCircle } from 'lucide-react';
 import { fetchReportQueue } from '../../lib/reports-api';
 import { StatusBadge } from '../ui/StatusBadge';
 import { Button } from '../ui/Button';
+import { EmptyState } from '../ui/EmptyState';
+import { ErrorState } from '../ui/ErrorState';
 
 const PREVIEW_LIMIT = 5;
 
@@ -26,7 +29,8 @@ export function EscalatedReportsPanel() {
   return (
     <div className="border-status-critical/30 bg-status-critical/5 mb-6 rounded-xl border p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-status-critical text-[12.5px] font-semibold">
+        <h2 className="text-status-critical flex items-center gap-1.5 text-[12.5px] font-semibold">
+          <ArrowUpCircle className="h-4 w-4" aria-hidden />
           Escalated to you{total > 0 ? ` (${total})` : ''}
         </h2>
         <Link to="/admin/escalated">
@@ -37,10 +41,10 @@ export function EscalatedReportsPanel() {
       </div>
 
       {isLoading && <p className="text-ink-muted text-sm">Loading…</p>}
-      {isError && <p className="text-status-critical text-sm">Couldn't load escalated reports.</p>}
+      {isError && <ErrorState description="Couldn't load escalated reports." className="bg-transparent p-0" />}
 
       {data && reports.length === 0 && (
-        <p className="text-ink-muted text-sm">Nothing currently escalated to you.</p>
+        <EmptyState title="Nothing escalated" description="Nothing currently escalated to you." className="items-start p-0 text-left" />
       )}
 
       {reports.length > 0 && (

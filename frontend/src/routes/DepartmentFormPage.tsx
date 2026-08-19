@@ -15,6 +15,12 @@ import {
 import { fetchUsers } from '../lib/admin-users-api';
 import { UserMultiSelect } from '../components/admin/UserMultiSelect';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Textarea } from '../components/ui/Textarea';
+import { Select } from '../components/ui/Select';
+import { Card } from '../components/ui/Card';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import type { ApiError } from '../lib/api-client';
 import { useToast } from '../lib/toast-context';
 
@@ -67,51 +73,10 @@ function AddHeadForm({ departmentId, onCreated }: { departmentId: string; onCrea
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="mt-3 flex flex-col gap-3 rounded-lg border border-ink/10 p-3">
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="head-username" className="text-ink-secondary text-[12px] font-semibold">
-            Username
-          </label>
-          <input
-            id="head-username"
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
-            aria-invalid={Boolean(errors.username)}
-            {...register('username')}
-          />
-          {errors.username && <p className="text-status-critical text-xs">{errors.username.message}</p>}
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="head-email" className="text-ink-secondary text-[12px] font-semibold">
-            Email
-          </label>
-          <input
-            id="head-email"
-            type="email"
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
-            aria-invalid={Boolean(errors.email)}
-            {...register('email')}
-          />
-          {errors.email && <p className="text-status-critical text-xs">{errors.email.message}</p>}
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="head-first_name" className="text-ink-secondary text-[12px] font-semibold">
-            First name
-          </label>
-          <input
-            id="head-first_name"
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
-            {...register('first_name')}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="head-last_name" className="text-ink-secondary text-[12px] font-semibold">
-            Last name
-          </label>
-          <input
-            id="head-last_name"
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
-            {...register('last_name')}
-          />
-        </div>
+        <Input id="head-username" label="Username" error={errors.username?.message} {...register('username')} />
+        <Input id="head-email" type="email" label="Email" error={errors.email?.message} {...register('email')} />
+        <Input id="head-first_name" label="First name" {...register('first_name')} />
+        <Input id="head-last_name" label="Last name" {...register('last_name')} />
       </div>
 
       {serverError && (
@@ -136,6 +101,7 @@ export function DepartmentFormPage() {
   const isEdit = Boolean(id);
   const [serverError, setServerError] = useState<string | null>(null);
   const [showAddHead, setShowAddHead] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { show } = useToast();
 
   // Phase 14: Department Head/Responder is decoupled from the account
@@ -211,9 +177,7 @@ export function DepartmentFormPage() {
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${department?.name}"? This cannot be undone.`)) {
-      return;
-    }
+    setConfirmingDelete(false);
     try {
       await deleteMutation.mutateAsync();
       show('Department deleted.', 'success');
@@ -235,51 +199,27 @@ export function DepartmentFormPage() {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
+      <Breadcrumbs
+        items={[{ label: 'Departments', to: '/admin/departments' }, { label: isEdit ? 'Edit department' : 'New department' }]}
+      />
       <h1 className="mb-6 text-2xl">{isEdit ? 'Edit department' : 'New department'}</h1>
 
+      <Card>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-ink-secondary text-[12.5px] font-semibold">
-            Name
-          </label>
-          <input
-            id="name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.name)}
-            {...register('name')}
-          />
-          {errors.name && <p className="text-status-critical text-xs">{errors.name.message}</p>}
-        </div>
+        <Input id="name" label="Name" error={errors.name?.message} {...register('name')} />
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="description" className="text-ink-secondary text-[12.5px] font-semibold">
-            Description
-          </label>
-          <textarea
-            id="description"
-            rows={3}
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            {...register('description')}
-          />
-        </div>
+        <Textarea id="description" label="Description" rows={3} {...register('description')} />
 
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <label htmlFor="head" className="text-ink-secondary text-[12.5px] font-semibold">
-              Head
-            </label>
+            <span className="text-ink-secondary text-[12.5px] font-semibold">Head</span>
             {isEdit && (
               <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddHead((v) => !v)}>
                 {showAddHead ? 'Cancel' : 'Create a new head'}
               </Button>
             )}
           </div>
-          <select
-            id="head"
-            value={head}
-            onChange={(e) => setValue('head', e.target.value)}
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
-          >
+          <Select id="head" value={head} onChange={(e) => setValue('head', e.target.value)}>
             <option value="">No head assigned</option>
             {/* responder (plain members, reassignable to head elsewhere) and
                 department_head (existing heads, reassignable to a different
@@ -295,7 +235,7 @@ export function DepartmentFormPage() {
                   {user.username}
                 </option>
               ))}
-          </select>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -331,7 +271,7 @@ export function DepartmentFormPage() {
             <Button
               type="button"
               variant="destructive"
-              onClick={() => void handleDelete()}
+              onClick={() => setConfirmingDelete(true)}
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
@@ -339,6 +279,7 @@ export function DepartmentFormPage() {
           )}
         </div>
       </form>
+      </Card>
 
       {/* Deliberately outside the department <form> above — AddHeadForm
           renders its own <form>, and a nested <form> inside another is
@@ -356,6 +297,17 @@ export function DepartmentFormPage() {
             }}
           />
         </div>
+      )}
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title={`Delete "${department?.name}"?`}
+          description="This cannot be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => void handleDelete()}
+          onCancel={() => setConfirmingDelete(false)}
+        />
       )}
     </div>
   );

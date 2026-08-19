@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,6 +8,10 @@ import { createUser, fetchUser, updateUser } from '../lib/admin-users-api';
 import { createDepartmentHead, fetchDepartments } from '../lib/departments-api';
 import { RoleSelect } from '../components/admin/RoleSelect';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { Card } from '../components/ui/Card';
+import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import type { ApiError } from '../lib/api-client';
 import { useToast } from '../lib/toast-context';
 import { useAuth } from '../hooks/useAuth';
@@ -131,77 +135,18 @@ function CreateUserForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="username" className="text-ink-secondary text-[12.5px] font-semibold">
-          Username
-        </label>
-        <input
-          id="username"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          aria-invalid={Boolean(errors.username)}
-          {...register('username')}
-        />
-        {errors.username && <p className="text-status-critical text-xs">{errors.username.message}</p>}
-      </div>
+      <Input id="username" label="Username" error={errors.username?.message} {...register('username')} />
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="email" className="text-ink-secondary text-[12.5px] font-semibold">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          aria-invalid={Boolean(errors.email)}
-          {...register('email')}
-        />
-        {errors.email && <p className="text-status-critical text-xs">{errors.email.message}</p>}
-      </div>
+      <Input id="email" type="email" label="Email" error={errors.email?.message} {...register('email')} />
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="first_name" className="text-ink-secondary text-[12.5px] font-semibold">
-            First name
-          </label>
-          <input
-            id="first_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            {...register('first_name')}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="last_name" className="text-ink-secondary text-[12.5px] font-semibold">
-            Last name
-          </label>
-          <input
-            id="last_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            {...register('last_name')}
-          />
-        </div>
+        <Input id="first_name" label="First name" {...register('first_name')} />
+        <Input id="last_name" label="Last name" {...register('last_name')} />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="phone_number" className="text-ink-secondary text-[12.5px] font-semibold">
-          Phone number
-        </label>
-        <input
-          id="phone_number"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          {...register('phone_number')}
-        />
-      </div>
+      <Input id="phone_number" label="Phone number" {...register('phone_number')} />
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="university_id" className="text-ink-secondary text-[12.5px] font-semibold">
-          University ID
-        </label>
-        <input
-          id="university_id"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          {...register('university_id')}
-        />
-      </div>
+      <Input id="university_id" label="University ID" {...register('university_id')} />
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="role" className="text-ink-secondary text-[12.5px] font-semibold">
@@ -218,22 +163,14 @@ function CreateUserForm() {
 
       {isDepartmentHead && (
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="department" className="text-ink-secondary text-[12.5px] font-semibold">
-            Department
-          </label>
-          <select
-            id="department"
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
-            {...register('department')}
-          >
+          <Select id="department" label="Department" error={errors.department?.message} {...register('department')}>
             <option value="">Select a department</option>
             {(departments?.results ?? []).map((dept) => (
               <option key={dept.id} value={dept.id}>
                 {dept.name}
               </option>
             ))}
-          </select>
-          {errors.department && <p className="text-status-critical text-xs">{errors.department.message}</p>}
+          </Select>
           <p className="text-ink-muted text-xs">
             A temporary password will be emailed to this account, so no password is set here.
           </p>
@@ -241,20 +178,14 @@ function CreateUserForm() {
       )}
 
       {!isDepartmentHead && (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="text-ink-secondary text-[12.5px] font-semibold">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.password)}
-            {...register('password')}
-          />
-          {errors.password && <p className="text-status-critical text-xs">{errors.password.message}</p>}
-        </div>
+        <Input
+          id="password"
+          type="password"
+          label="Password"
+          autoComplete="new-password"
+          error={errors.password?.message}
+          {...register('password')}
+        />
       )}
 
       {serverError && (
@@ -335,63 +266,15 @@ function EditUserForm({ userId }: { userId: string }) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="first_name" className="text-ink-secondary text-[12.5px] font-semibold">
-            First name
-          </label>
-          <input
-            id="first_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            {...register('first_name')}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="last_name" className="text-ink-secondary text-[12.5px] font-semibold">
-            Last name
-          </label>
-          <input
-            id="last_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            {...register('last_name')}
-          />
-        </div>
+        <Input id="first_name" label="First name" {...register('first_name')} />
+        <Input id="last_name" label="Last name" {...register('last_name')} />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="email" className="text-ink-secondary text-[12.5px] font-semibold">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          aria-invalid={Boolean(errors.email)}
-          {...register('email')}
-        />
-        {errors.email && <p className="text-status-critical text-xs">{errors.email.message}</p>}
-      </div>
+      <Input id="email" type="email" label="Email" error={errors.email?.message} {...register('email')} />
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="phone_number" className="text-ink-secondary text-[12.5px] font-semibold">
-          Phone number
-        </label>
-        <input
-          id="phone_number"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          {...register('phone_number')}
-        />
-      </div>
+      <Input id="phone_number" label="Phone number" {...register('phone_number')} />
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="university_id" className="text-ink-secondary text-[12.5px] font-semibold">
-          University ID
-        </label>
-        <input
-          id="university_id"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          {...register('university_id')}
-        />
-      </div>
+      <Input id="university_id" label="University ID" {...register('university_id')} />
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="role" className="text-ink-secondary text-[12.5px] font-semibold">
@@ -444,8 +327,9 @@ export function AdminUserFormPage() {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
+      <Breadcrumbs items={[{ label: 'Users', to: '/admin/users' }, { label: id ? 'Edit user' : 'New user' }]} />
       <h1 className="mb-6 text-2xl">{id ? 'Edit user' : 'New user'}</h1>
-      {id ? <EditUserForm userId={id} /> : <CreateUserForm />}
+      <Card>{id ? <EditUserForm userId={id} /> : <CreateUserForm />}</Card>
     </div>
   );
 }

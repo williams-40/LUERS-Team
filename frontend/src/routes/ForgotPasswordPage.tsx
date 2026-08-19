@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { Logo } from '../components/layout/Logo';
 import { requestPasswordReset } from '../lib/auth-api';
 
@@ -53,20 +54,7 @@ export function ForgotPasswordPage() {
             Enter the email associated with your account and we'll send you a link to reset your password.
           </p>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" className="text-ink-secondary text-[12.5px] font-semibold">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-              aria-invalid={Boolean(errors.email)}
-              {...register('email')}
-            />
-            {errors.email && <p className="text-status-critical text-xs">{errors.email.message}</p>}
-          </div>
+          <Input id="email" type="email" label="Email" autoComplete="email" error={errors.email?.message} {...register('email')} />
 
           <Button type="submit" disabled={isSubmitting} className="mt-2">
             {isSubmitting ? 'Sending…' : 'Send reset link'}

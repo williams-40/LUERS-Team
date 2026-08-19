@@ -3,10 +3,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Users } from 'lucide-react';
 import { createDepartmentResponder, fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../../lib/departments-api';
 import { fetchDashboardAnalytics } from '../../lib/dashboard-api';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { EmptyState } from '../ui/EmptyState';
 import { useToast } from '../../lib/toast-context';
 import type { ApiError } from '../../lib/api-client';
 
@@ -57,7 +60,7 @@ function AddResponderForm({ departmentId, onCreated }: { departmentId: string; o
           </label>
           <input
             id={fieldId('username')}
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            className="bg-surface-2 text-ink appearance-none rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
             aria-invalid={Boolean(errors.username)}
             {...register('username')}
           />
@@ -70,7 +73,7 @@ function AddResponderForm({ departmentId, onCreated }: { departmentId: string; o
           <input
             id={fieldId('email')}
             type="email"
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            className="bg-surface-2 text-ink appearance-none rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
             aria-invalid={Boolean(errors.email)}
             {...register('email')}
           />
@@ -82,7 +85,7 @@ function AddResponderForm({ departmentId, onCreated }: { departmentId: string; o
           </label>
           <input
             id={fieldId('first_name')}
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            className="bg-surface-2 text-ink appearance-none rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
             {...register('first_name')}
           />
         </div>
@@ -92,7 +95,7 @@ function AddResponderForm({ departmentId, onCreated }: { departmentId: string; o
           </label>
           <input
             id={fieldId('last_name')}
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            className="bg-surface-2 text-ink appearance-none rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
             {...register('last_name')}
           />
         </div>
@@ -102,7 +105,7 @@ function AddResponderForm({ departmentId, onCreated }: { departmentId: string; o
           </label>
           <input
             id={fieldId('phone_number')}
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            className="bg-surface-2 text-ink appearance-none rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
             {...register('phone_number')}
           />
         </div>
@@ -112,7 +115,7 @@ function AddResponderForm({ departmentId, onCreated }: { departmentId: string; o
           </label>
           <input
             id={fieldId('university_id')}
-            className="rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
+            className="bg-surface-2 text-ink appearance-none rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm"
             {...register('university_id')}
           />
         </div>
@@ -183,9 +186,12 @@ export function MyDepartmentResponders() {
   return (
     <div className="mb-6 flex flex-col gap-4">
       {headedDepartments.map((department) => (
-        <div key={department.id} className="rounded-xl border border-ink/10 p-4">
+        <Card key={department.id}>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-ink-secondary text-[12.5px] font-semibold">{department.name} Responders</h2>
+            <h2 className="text-ink-secondary flex items-center gap-1.5 text-[12.5px] font-semibold">
+              <Users className="h-4 w-4" aria-hidden />
+              {department.name} Responders
+            </h2>
             <Button
               type="button"
               variant="ghost"
@@ -197,7 +203,7 @@ export function MyDepartmentResponders() {
           </div>
 
           {department.member_usernames.length === 0 ? (
-            <p className="text-ink-muted text-sm">No responders yet.</p>
+            <EmptyState title="No responders yet" className="items-start p-0 text-left" />
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {department.member_usernames.map((username) => {
@@ -217,7 +223,7 @@ export function MyDepartmentResponders() {
           {openFormFor === department.id && (
             <AddResponderForm departmentId={department.id} onCreated={handleCreated} />
           )}
-        </div>
+        </Card>
       ))}
     </div>
   );

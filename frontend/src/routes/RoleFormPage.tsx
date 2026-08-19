@@ -6,6 +6,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createRole, deleteRole, fetchPermissions, fetchRole, updateRole } from '../lib/roles-api';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Textarea } from '../components/ui/Textarea';
+import { Card } from '../components/ui/Card';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import type { ApiError } from '../lib/api-client';
 import type { Permission } from '../types/domain';
 import { useToast } from '../lib/toast-context';
@@ -30,6 +35,7 @@ export function RoleFormPage() {
   const queryClient = useQueryClient();
   const isEdit = Boolean(id);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { show } = useToast();
 
   const { data: permissions } = useQuery({
@@ -102,9 +108,7 @@ export function RoleFormPage() {
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${role?.label}"? This cannot be undone.`)) {
-      return;
-    }
+    setConfirmingDelete(false);
     try {
       await deleteMutation.mutateAsync();
       show('Role deleted.', 'success');
@@ -134,6 +138,7 @@ export function RoleFormPage() {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
+      <Breadcrumbs items={[{ label: 'Roles', to: '/admin/roles' }, { label: isEdit ? 'Edit role' : 'New role' }]} />
       <h1 className="mb-1 text-2xl">{isEdit ? 'Edit role' : 'New role'}</h1>
       {isBuiltin && (
         <p className="bg-ink/5 text-ink-secondary mb-6 rounded-lg px-3 py-2 text-sm">
@@ -141,47 +146,13 @@ export function RoleFormPage() {
         </p>
       )}
 
+      <Card>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="slug" className="text-ink-secondary text-[12.5px] font-semibold">
-            Slug
-          </label>
-          <input
-            id="slug"
-            disabled={isBuiltin || isEdit}
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent disabled:opacity-60"
-            aria-invalid={Boolean(errors.slug)}
-            {...register('slug')}
-          />
-          {errors.slug && <p className="text-status-critical text-xs">{errors.slug.message}</p>}
-        </div>
+        <Input id="slug" label="Slug" disabled={isBuiltin || isEdit} error={errors.slug?.message} {...register('slug')} />
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="label" className="text-ink-secondary text-[12.5px] font-semibold">
-            Label
-          </label>
-          <input
-            id="label"
-            disabled={isBuiltin}
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent disabled:opacity-60"
-            aria-invalid={Boolean(errors.label)}
-            {...register('label')}
-          />
-          {errors.label && <p className="text-status-critical text-xs">{errors.label.message}</p>}
-        </div>
+        <Input id="label" label="Label" disabled={isBuiltin} error={errors.label?.message} {...register('label')} />
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="description" className="text-ink-secondary text-[12.5px] font-semibold">
-            Description
-          </label>
-          <textarea
-            id="description"
-            rows={2}
-            disabled={isBuiltin}
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent disabled:opacity-60"
-            {...register('description')}
-          />
-        </div>
+        <Textarea id="description" label="Description" rows={2} disabled={isBuiltin} {...register('description')} />
 
         <div className="flex flex-col gap-2">
           <span className="text-ink-secondary text-[12.5px] font-semibold">Permissions</span>
@@ -235,7 +206,7 @@ export function RoleFormPage() {
               <Button
                 type="button"
                 variant="destructive"
-                onClick={() => void handleDelete()}
+                onClick={() => setConfirmingDelete(true)}
                 disabled={deleteMutation.isPending}
               >
                 {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
@@ -244,6 +215,18 @@ export function RoleFormPage() {
           </div>
         )}
       </form>
+      </Card>
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title={`Delete "${role?.label}"?`}
+          description="This cannot be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => void handleDelete()}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,10 +1,16 @@
 ﻿import { useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Inbox, Clock, CheckCircle2 } from 'lucide-react';
 import { fetchDashboardSummary } from '../../lib/dashboard-api';
 import { fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../../lib/departments-api';
 import { useReportSocket } from '../../hooks/useReportSocket';
 import { LiveIndicator } from '../ui/LiveIndicator';
 import { useAuth } from '../../hooks/useAuth';
+import { Card } from '../ui/Card';
+import { KPIStatCard } from './KPIStatCard';
+import { Status } from '../../types/domain';
+
+const OPEN_STATUSES = new Set<string>([Status.NEW, Status.ACKNOWLEDGED]);
 
 const SUMMARY_KEY = ['dashboard', 'summary'];
 const REFRESH_DEBOUNCE_MS = 400;
@@ -47,9 +53,12 @@ export function DashboardSummaryPanel() {
     onReportUpdated: scheduleRefresh,
   });
 
+  const openCount = data?.status_counts.filter((s) => OPEN_STATUSES.has(s.status)).reduce((sum, s) => sum + s.count, 0) ?? 0;
+  const resolvedCount = data?.status_counts.find((s) => s.status === Status.RESOLVED)?.count ?? 0;
+
   return (
-    <div className="mb-6 rounded-xl border border-ink/10 p-4">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="mb-6 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
         <h2 className="text-ink-secondary text-[12.5px] font-semibold">{heading}</h2>
         <LiveIndicator status={socketStatus} onReconnect={reconnect} />
       </div>
@@ -58,13 +67,14 @@ export function DashboardSummaryPanel() {
       {isError && <p className="text-status-critical text-sm">Couldn't load the summary.</p>}
 
       {data && (
-        <div className="flex flex-col gap-4">
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold">{data.total}</span>
-            <span className="text-ink-muted text-sm">total reports</span>
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <KPIStatCard label="Total" value={data.total} icon={Inbox} />
+            <KPIStatCard label="Open" value={openCount} icon={Clock} />
+            <KPIStatCard label="Resolved" value={resolvedCount} icon={CheckCircle2} tone="good" />
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+          <Card className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <div>
               <h3 className="text-ink-muted mb-1 text-[11px] font-semibold uppercase">By status</h3>
               <ul className="flex flex-col gap-0.5">
@@ -98,15 +108,15 @@ export function DashboardSummaryPanel() {
                 ))}
               </ul>
             </div>
-          </div>
 
-          {data.average_response_time_hours !== null && (
-            <p className="text-ink-secondary text-sm">
-              <span className="font-semibold">Avg. resolution time:</span>{' '}
-              {data.average_response_time_hours.toFixed(1)} hrs
-            </p>
-          )}
-        </div>
+            {data.average_response_time_hours !== null && (
+              <p className="text-ink-secondary col-span-2 border-t border-ink/10 pt-3 text-sm">
+                <span className="font-semibold">Avg. time to resolve:</span>{' '}
+                {data.average_response_time_hours.toFixed(1)} hrs
+              </p>
+            )}
+          </Card>
+        </>
       )}
     </div>
   );

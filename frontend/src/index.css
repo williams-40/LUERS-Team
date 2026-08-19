@@ -110,3 +110,21 @@
     @apply font-mono;
   }
 }
+
+@layer components {
+  /*
+   * Paired with `appearance-none` on every plain <select> that isn't using
+   * the Select component — native selects can pick up the OS/browser's own
+   * dark-mode widget theme (from color-scheme) and ignore an author
+   * background-color entirely unless appearance is reset first, which also
+   * drops the native dropdown arrow, so this replaces it with a static one.
+   * Middle-grey works in both themes without needing two SVGs.
+   */
+  .select-chevron {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23898781' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-size: 1em;
+    padding-right: 2rem;
+  }
+}

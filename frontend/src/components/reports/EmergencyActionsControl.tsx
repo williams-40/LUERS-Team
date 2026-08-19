@@ -202,7 +202,7 @@ export function EmergencyActionsControl({
             value={escalateReason}
             onChange={(e) => setEscalateReason(e.target.value)}
             placeholder="Why does System Admin need to step in?"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-2.5 py-2 text-sm outline-2 outline-offset-1 focus:border-transparent"
+            className="focus:outline-brand bg-surface-2 text-ink appearance-none rounded-[9px] border-[1.5px] border-ink/15 px-2.5 py-2 text-sm outline-2 outline-offset-1 focus:border-transparent"
           />
           <div className="flex gap-2">
             <Button

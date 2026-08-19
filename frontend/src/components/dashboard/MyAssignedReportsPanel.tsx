@@ -1,9 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { ClipboardList } from 'lucide-react';
 import { fetchReportQueue } from '../../lib/reports-api';
 import { useAuth } from '../../hooks/useAuth';
 import { StatusBadge } from '../ui/StatusBadge';
 import { Button } from '../ui/Button';
+import { EmptyState } from '../ui/EmptyState';
+import { ErrorState } from '../ui/ErrorState';
 import { Status } from '../../types/domain';
 
 const OPEN_STATUSES = new Set<Status>([Status.NEW, Status.ACKNOWLEDGED, Status.IN_PROGRESS]);
@@ -43,7 +46,10 @@ export function MyAssignedReportsPanel() {
   return (
     <div className="mb-6 rounded-xl border border-ink/10 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-ink-secondary text-[12.5px] font-semibold">My assigned reports</h2>
+        <h2 className="text-ink-secondary flex items-center gap-1.5 text-[12.5px] font-semibold">
+          <ClipboardList className="h-4 w-4" aria-hidden />
+          My assigned reports
+        </h2>
         <Link to="/admin">
           <Button type="button" variant="ghost" size="sm">
             View queue
@@ -52,10 +58,14 @@ export function MyAssignedReportsPanel() {
       </div>
 
       {isLoading && <p className="text-ink-muted text-sm">Loading…</p>}
-      {isError && <p className="text-status-critical text-sm">Couldn't load your reports.</p>}
+      {isError && <ErrorState description="Couldn't load your reports." className="bg-transparent p-0" />}
 
       {data && openReports.length === 0 && (
-        <p className="text-ink-muted text-sm">No open reports assigned to you right now.</p>
+        <EmptyState
+          title="Nothing assigned"
+          description="No open reports assigned to you right now."
+          className="items-start p-0 text-left"
+        />
       )}
 
       {openReports.length > 0 && (

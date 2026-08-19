@@ -137,7 +137,7 @@ export function ReportChat({
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder={canSend ? 'Write a message…' : 'Connecting…'}
             disabled={!canSend}
-            className="flex-1 rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm disabled:opacity-50"
+            className="bg-surface-2 text-ink flex-1 appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm disabled:opacity-50"
           />
           <Button size="sm" variant="secondary" onClick={() => setRecordingVoice(true)} disabled={!canSend}>
             Voice note

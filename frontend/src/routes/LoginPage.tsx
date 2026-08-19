@@ -6,6 +6,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { Logo } from '../components/layout/Logo';
 import type { ApiError } from '../lib/api-client';
 import i18n from '../lib/i18n';
@@ -76,23 +77,17 @@ export function LoginPage() {
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="username" className="text-ink-secondary text-[12.5px] font-semibold">
-            {t('login.username')}
-          </label>
-          <input
-            id="username"
-            type="text"
-            autoComplete="username"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.username)}
-            {...register('username')}
-          />
-          {errors.username && <p className="text-status-critical text-xs">{errors.username.message}</p>}
-        </div>
+        <Input
+          id="username"
+          type="text"
+          label={t('login.username')}
+          autoComplete="username"
+          error={errors.username?.message}
+          {...register('username')}
+        />
 
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
             <label htmlFor="password" className="text-ink-secondary text-[12.5px] font-semibold">
               {t('login.password')}
             </label>
@@ -100,15 +95,13 @@ export function LoginPage() {
               {t('login.forgotPassword')}
             </Link>
           </div>
-          <input
+          <Input
             id="password"
             type="password"
             autoComplete="current-password"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.password)}
+            error={errors.password?.message}
             {...register('password')}
           />
-          {errors.password && <p className="text-status-critical text-xs">{errors.password.message}</p>}
         </div>
 
         {serverError && (

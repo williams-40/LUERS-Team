@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { Logo } from '../components/layout/Logo';
 import { confirmPasswordReset } from '../lib/auth-api';
 import type { ApiError } from '../lib/api-client';
@@ -66,37 +67,23 @@ export function ResetPasswordPage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="newPassword" className="text-ink-secondary text-[12.5px] font-semibold">
-            New password
-          </label>
-          <input
-            id="newPassword"
-            type="password"
-            autoComplete="new-password"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.newPassword)}
-            {...register('newPassword')}
-          />
-          {errors.newPassword && <p className="text-status-critical text-xs">{errors.newPassword.message}</p>}
-        </div>
+        <Input
+          id="newPassword"
+          type="password"
+          label="New password"
+          autoComplete="new-password"
+          error={errors.newPassword?.message}
+          {...register('newPassword')}
+        />
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="confirmPassword" className="text-ink-secondary text-[12.5px] font-semibold">
-            Confirm password
-          </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.confirmPassword)}
-            {...register('confirmPassword')}
-          />
-          {errors.confirmPassword && (
-            <p className="text-status-critical text-xs">{errors.confirmPassword.message}</p>
-          )}
-        </div>
+        <Input
+          id="confirmPassword"
+          type="password"
+          label="Confirm password"
+          autoComplete="new-password"
+          error={errors.confirmPassword?.message}
+          {...register('confirmPassword')}
+        />
 
         {serverError && (
           <p role="alert" className="bg-status-critical/10 text-status-critical rounded-lg px-3 py-2 text-sm">

@@ -1,13 +1,14 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Card } from '../components/ui/Card';
 import { updateMe } from '../lib/auth-api';
 import type { ApiError } from '../lib/api-client';
-import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { ChangePasswordForm } from '../components/auth/ChangePasswordForm';
 
 const profileSchema = z.object({
@@ -56,58 +57,26 @@ function ProfileForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="first_name" className="text-ink-secondary text-[12.5px] font-semibold">
-            First name
-          </label>
-          <input
-            id="first_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.first_name)}
-            {...register('first_name')}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="last_name" className="text-ink-secondary text-[12.5px] font-semibold">
-            Last name
-          </label>
-          <input
-            id="last_name"
-            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            aria-invalid={Boolean(errors.last_name)}
-            {...register('last_name')}
-          />
-        </div>
+        <Input id="first_name" label="First name" error={errors.first_name?.message} {...register('first_name')} />
+        <Input id="last_name" label="Last name" error={errors.last_name?.message} {...register('last_name')} />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="phone_number" className="text-ink-secondary text-[12.5px] font-semibold">
-          Phone number
-        </label>
-        <input
-          id="phone_number"
-          type="tel"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          aria-invalid={Boolean(errors.phone_number)}
-          {...register('phone_number')}
-        />
-        {errors.phone_number && <p className="text-status-critical text-xs">{errors.phone_number.message}</p>}
-      </div>
+      <Input
+        id="phone_number"
+        type="tel"
+        label="Phone number"
+        error={errors.phone_number?.message}
+        {...register('phone_number')}
+      />
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="email" className="text-ink-secondary text-[12.5px] font-semibold">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-          aria-invalid={Boolean(errors.email)}
-          {...register('email')}
-        />
-        {errors.email && <p className="text-status-critical text-xs">{errors.email.message}</p>}
-      </div>
+      <Input
+        id="email"
+        type="email"
+        label="Email"
+        autoComplete="email"
+        error={errors.email?.message}
+        {...register('email')}
+      />
 
       {serverError && (
         <p role="alert" className="bg-status-critical/10 text-status-critical rounded-lg px-3 py-2 text-sm">
@@ -137,19 +106,18 @@ export function ProfilePage() {
         Signed in as {user ? user.role.label : '…'}.
       </p>
 
-      <section className="mb-8">
+      <section className="mb-6">
         <h2 className="mb-3 text-base font-semibold">Profile details</h2>
-        <ProfileForm />
-      </section>
-
-      <section className="mb-8">
-        <h2 className="mb-3 text-base font-semibold">Change password</h2>
-        <ChangePasswordForm />
+        <Card>
+          <ProfileForm />
+        </Card>
       </section>
 
       <section>
-        <h2 className="mb-3 text-base font-semibold">Preferences</h2>
-        <ThemeToggle />
+        <h2 className="mb-3 text-base font-semibold">Change password</h2>
+        <Card>
+          <ChangePasswordForm />
+        </Card>
       </section>
     </div>
   );

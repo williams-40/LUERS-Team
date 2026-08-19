@@ -8,6 +8,7 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../lib/toast-context';
 import { cn } from '../../lib/utils';
+import { handleRadiogroupKeyDown, radioTabIndex } from '../../lib/roving-radiogroup';
 
 const STAR_VALUES = [1, 2, 3, 4, 5];
 
@@ -68,14 +69,15 @@ export function FeedbackModal({
         </p>
       )}
 
-      <div className="mb-3 flex items-center gap-1.5" role="radiogroup" aria-label="Rating">
-        {STAR_VALUES.map((value) => (
+      <div className="mb-3 flex items-center gap-1.5" role="radiogroup" aria-label="Rating" onKeyDown={handleRadiogroupKeyDown}>
+        {STAR_VALUES.map((value, index) => (
           <button
             key={value}
             type="button"
             role="radio"
             aria-checked={rating === value}
             aria-label={`${value} star${value === 1 ? '' : 's'}`}
+            tabIndex={radioTabIndex(rating === value, index === 0, rating > 0)}
             onClick={() => setRating(value)}
             className={cn(
               'text-3xl leading-none transition',
@@ -92,7 +94,7 @@ export function FeedbackModal({
         onChange={(e) => setComments(e.target.value)}
         placeholder="Tell us about your experience (optional)"
         rows={3}
-        className="focus:outline-brand w-full rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm outline-2 outline-offset-1 focus:border-transparent"
+        className="focus:outline-brand bg-surface-2 text-ink w-full appearance-none rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2 text-sm outline-2 outline-offset-1 focus:border-transparent"
       />
 
       <div className="mt-4 flex items-center justify-end gap-2">

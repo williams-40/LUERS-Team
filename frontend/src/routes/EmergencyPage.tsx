@@ -9,8 +9,10 @@ import type { ApiError } from '../lib/api-client';
 import { enqueueReport, OFFLINE_QUEUE_KEY } from '../lib/offline-queue';
 import { useQueryClient } from '@tanstack/react-query';
 import { PanicButton } from '../components/ui/PanicButton';
+import { Textarea } from '../components/ui/Textarea';
 import { PhotoCaptureControl } from '../components/reports/PhotoCaptureControl';
 import { useToast } from '../lib/toast-context';
+import { handleRadiogroupKeyDown, radioTabIndex } from '../lib/roving-radiogroup';
 
 const EMERGENCY_TYPE_OPTIONS: { value: EmergencyType; label: string }[] = [
   { value: EmergencyType.SECURITY, label: 'Security / Threat' },
@@ -148,8 +150,13 @@ export function EmergencyPage() {
         What's happening? We'll route this immediately, no department to pick.
       </p>
 
-      <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2" role="radiogroup" aria-label="Emergency type">
-        {EMERGENCY_TYPE_OPTIONS.map((option) => {
+      <div
+        className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+        role="radiogroup"
+        aria-label="Emergency type"
+        onKeyDown={handleRadiogroupKeyDown}
+      >
+        {EMERGENCY_TYPE_OPTIONS.map((option, index) => {
           const active = emergencyType === option.value;
           return (
             <button
@@ -157,6 +164,7 @@ export function EmergencyPage() {
               type="button"
               role="radio"
               aria-checked={active}
+              tabIndex={radioTabIndex(active, index === 0, emergencyType !== null)}
               onClick={() => {
                 setEmergencyType(option.value);
                 setSubmitError(null);
@@ -188,18 +196,13 @@ export function EmergencyPage() {
         </button>
       ) : (
         <div className="mb-6 flex flex-col gap-4 rounded-xl border border-ink/10 p-4">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="emergency-description" className="text-ink-secondary text-[12.5px] font-semibold">
-              Anything else responders should know? (optional)
-            </label>
-            <textarea
-              id="emergency-description"
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-3 py-2.5 text-sm outline-2 outline-offset-1 focus:border-transparent"
-            />
-          </div>
+          <Textarea
+            id="emergency-description"
+            label="Anything else responders should know? (optional)"
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
           <div className="flex flex-col gap-1.5">
             <span className="text-ink-secondary text-[12.5px] font-semibold">Photo (optional)</span>
             <PhotoCaptureControl onCapture={setPhotoFile} />

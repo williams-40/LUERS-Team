@@ -80,7 +80,7 @@ export function AdminUsersPage() {
               setPage(1);
             }}
             placeholder="Username or email"
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+            className="bg-surface-2 text-ink select-chevron appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-[12.5px]">
@@ -88,7 +88,7 @@ export function AdminUsersPage() {
           <select
             value={filters.role ?? ''}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+            className="bg-surface-2 text-ink select-chevron appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">All</option>
             {(roles ?? []).map((role) => (
@@ -103,7 +103,7 @@ export function AdminUsersPage() {
           <select
             value={filters.is_active === undefined ? '' : String(filters.is_active)}
             onChange={(e) => setActiveFilter(e.target.value)}
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+            className="bg-surface-2 text-ink select-chevron appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">All</option>
             <option value="true">Active</option>

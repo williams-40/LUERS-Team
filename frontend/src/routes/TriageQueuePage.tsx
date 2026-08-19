@@ -7,8 +7,14 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { SelectableReportRow } from '../components/reports/SelectableReportRow';
 import { ActiveEmergenciesMap } from '../components/reports/ActiveEmergenciesMap';
 import { BulkActionToolbar } from '../components/reports/BulkActionToolbar';
+import { FilterBar } from '../components/reports/FilterBar';
+import type { FilterChip } from '../components/reports/FilterBar';
 import { ReportCardSkeleton } from '../components/reports/ReportCardSkeleton';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { EmptyState } from '../components/ui/EmptyState';
+import { ErrorState } from '../components/ui/ErrorState';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
 import { Category, Status, Urgency } from '../types/domain';
 import type { BulkActionResponse } from '../lib/reports-api';
@@ -36,21 +42,19 @@ function FilterSelect<T extends string>({
   labelFor: (option: T) => string;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-[12.5px]">
-      <span className="text-ink-secondary font-semibold">{label}</span>
-      <select
-        value={value ?? ''}
-        onChange={(e) => onChange((e.target.value || undefined) as T | undefined)}
-        className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
-      >
-        <option value="">All</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {labelFor(option)}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select
+      label={label}
+      value={value ?? ''}
+      onChange={(e) => onChange((e.target.value || undefined) as T | undefined)}
+      className="min-w-[140px]"
+    >
+      <option value="">All</option>
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {labelFor(option)}
+        </option>
+      ))}
+    </Select>
   );
 }
 
@@ -106,6 +110,29 @@ export function TriageQueuePage() {
 
   function clearSelection() {
     setSelectedIds(new Set());
+  }
+
+  const chips: FilterChip[] = [];
+  if (filters.status) {
+    chips.push({ key: 'status', label: `Status: ${filters.status.replace('_', ' ')}`, onRemove: () => setFilter('status', undefined) });
+  }
+  if (filters.category) {
+    chips.push({ key: 'category', label: `Category: ${CATEGORY_LABELS[filters.category]}`, onRemove: () => setFilter('category', undefined) });
+  }
+  if (filters.urgency) {
+    chips.push({ key: 'urgency', label: `Urgency: ${filters.urgency}`, onRemove: () => setFilter('urgency', undefined) });
+  }
+  if (filters.department) {
+    const name = departments?.results.find((d) => d.id === filters.department)?.name ?? filters.department;
+    chips.push({ key: 'department', label: `Department: ${name}`, onRemove: () => setFilter('department', undefined) });
+  }
+  if (searchInput) {
+    chips.push({ key: 'search', label: `Search: "${searchInput}"`, onRemove: () => setSearchInput('') });
+  }
+
+  function clearAllFilters() {
+    setFilters({});
+    setSearchInput('');
   }
 
   async function handleExport(exportFormat: 'csv' | 'pdf') {
@@ -175,17 +202,15 @@ export function TriageQueuePage() {
 
       <ActiveEmergenciesMap />
 
-      <div className="mb-6 flex flex-wrap gap-3">
-        <label className="flex flex-col gap-1 text-[12.5px]">
-          <span className="text-ink-secondary font-semibold">Search</span>
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Description, department, officer…"
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
-          />
-        </label>
+      <FilterBar chips={chips} onClearAll={chips.length > 0 ? clearAllFilters : undefined}>
+        <Input
+          type="search"
+          label="Search"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Description, department, officer…"
+          className="min-w-[220px]"
+        />
         <FilterSelect
           label="Status"
           value={filters.status}
@@ -214,7 +239,7 @@ export function TriageQueuePage() {
           options={(departments?.results ?? []).map((d) => d.id)}
           labelFor={(id) => departments?.results.find((d) => d.id === id)?.name ?? id}
         />
-      </div>
+      </FilterBar>
 
       <BulkActionToolbar
         count={selectedIds.size}
@@ -232,14 +257,14 @@ export function TriageQueuePage() {
         </div>
       )}
 
-      {isError && (
-        <p className="bg-status-critical/10 text-status-critical rounded-lg px-3 py-2 text-sm">
-          Couldn't load the queue. Please try again.
-        </p>
-      )}
+      {isError && <ErrorState description="Couldn't load the queue. Please try again." />}
 
       {data && data.results.length === 0 && (
-        <p className="text-ink-secondary text-sm">No reports match these filters.</p>
+        <EmptyState
+          title="No matching reports"
+          description="No reports match these filters."
+          action={chips.length > 0 ? <Button size="sm" variant="secondary" onClick={clearAllFilters}>Clear filters</Button> : undefined}
+        />
       )}
 
       {data && data.results.length > 0 && (

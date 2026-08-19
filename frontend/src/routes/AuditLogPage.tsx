@@ -112,7 +112,7 @@ export function AuditLogPage() {
           <select
             value={filters.action ?? ''}
             onChange={(e) => setFilter('action', (e.target.value || undefined) as Action | undefined)}
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+            className="bg-surface-2 text-ink select-chevron appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           >
             <option value="">All</option>
             {ACTION_OPTIONS.map((action) => (
@@ -128,7 +128,7 @@ export function AuditLogPage() {
             type="date"
             value={filters.date_from?.slice(0, 10) ?? ''}
             onChange={(e) => setFilter('date_from', e.target.value || undefined)}
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+            className="bg-surface-2 text-ink appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-[12.5px]">
@@ -137,7 +137,7 @@ export function AuditLogPage() {
             type="date"
             value={filters.date_to?.slice(0, 10) ?? ''}
             onChange={(e) => setFilter('date_to', e.target.value || undefined)}
-            className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+            className="bg-surface-2 text-ink appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
           />
         </label>
       </div>

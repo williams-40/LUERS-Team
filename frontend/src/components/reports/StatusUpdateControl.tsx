@@ -78,7 +78,7 @@ export function StatusUpdateControl({
         <select
           value={selected}
           onChange={(e) => setSelected(e.target.value as Status)}
-          className="rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+          className="bg-surface-2 text-ink select-chevron appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
         >
           {STATUS_OPTIONS.map((status) => (
             <option key={status} value={status}>
