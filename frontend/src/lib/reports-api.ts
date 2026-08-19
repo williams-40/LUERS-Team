@@ -48,6 +48,8 @@ export interface ReportQueueFilters {
   assigned_to?: string;
   /** Excludes resolved/closed/cancelled/false_alarm — used by ActiveEmergenciesMap. */
   active?: boolean;
+  /** Reports a department head manually escalated to System Admin (not the automatic SLA path) — used by EscalatedReportsPanel/Page. */
+  escalated_to_admin?: boolean;
 }
 
 export interface ReportQueueResult {
@@ -110,8 +112,8 @@ export async function cancelEmergency(
   return data;
 }
 
-export async function escalateEmergency(reportId: string): Promise<{ escalation_level: number }> {
-  const { data } = await apiClient.post(`/reports/${reportId}/escalate/`);
+export async function escalateEmergency(reportId: string, reason: string): Promise<{ escalation_level: number }> {
+  const { data } = await apiClient.post(`/reports/${reportId}/escalate/`, { reason });
   return data;
 }
 

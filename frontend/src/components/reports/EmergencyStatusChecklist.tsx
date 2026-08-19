@@ -7,7 +7,7 @@ const STEPS = [
   { key: 'notified', label: 'Response team notified' },
   { key: 'acknowledged', label: 'Responder acknowledged' },
   { key: 'responding', label: 'Responder on the way' },
-  { key: 'arrived', label: 'Responder arrived' },
+  { key: 'in_progress', label: 'In progress' },
   { key: 'resolved', label: 'Emergency resolved' },
 ] as const;
 
@@ -25,15 +25,22 @@ export function EmergencyStatusChecklist({ report }: { report: ReportDetail }) {
   const isFalseAlarm = report.status === Status.FALSE_ALARM;
   const isClosed = isCancelled || isFalseAlarm;
 
+  const isResolved =
+    Boolean(dispatch.resolved_at) || report.status === Status.RESOLVED || report.status === Status.CLOSED;
+
   const done: Record<(typeof STEPS)[number]['key'], boolean> = {
     received: true,
     // Multi-channel dispatch (WebSocket + SMS + email) always fires on
-    // panic creation — see ReportService.create_report.
+    // panic creation, see ReportService.create_report.
     notified: true,
     acknowledged: Boolean(dispatch.acknowledged_at),
     responding: Boolean(dispatch.responding_at),
-    arrived: Boolean(dispatch.arrived_at),
-    resolved: Boolean(dispatch.resolved_at) || report.status === Status.RESOLVED || report.status === Status.CLOSED,
+    // Driven by status reaching IN_PROGRESS rather than the optional
+    // arrived_at timestamp (set by a separate "Mark arrived" action a
+    // responder can freely skip on the way to resolving), so this step
+    // reliably completes instead of staying unchecked after resolution.
+    in_progress: report.status === Status.IN_PROGRESS || isResolved,
+    resolved: isResolved,
   };
 
   return (
@@ -42,11 +49,6 @@ export function EmergencyStatusChecklist({ report }: { report: ReportDetail }) {
         <span className="text-status-critical font-heading text-[13px] font-extrabold tracking-wide uppercase">
           {isCancelled ? 'Emergency cancelled' : isFalseAlarm ? 'Marked as false alarm' : 'Emergency active'}
         </span>
-        {dispatch.escalation_level > 0 && (
-          <span className="bg-status-critical rounded-full px-2 py-0.5 text-[11px] font-bold text-white">
-            Escalated ×{dispatch.escalation_level}
-          </span>
-        )}
       </div>
 
       {!isClosed && (

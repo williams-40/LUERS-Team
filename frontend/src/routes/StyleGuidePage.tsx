@@ -85,7 +85,7 @@ export function StyleGuidePage() {
       <section>
         <h1 className="mb-1 text-2xl">LUERS Foundations</h1>
         <p className="text-ink-secondary text-sm">
-          Design tokens and component primitives — a living reference, not a real screen. Real screens start
+          Design tokens and component primitives, a living reference, not a real screen. Real screens start
           at <code className="font-data">/login</code> and <code className="font-data">/</code>.
         </p>
       </section>

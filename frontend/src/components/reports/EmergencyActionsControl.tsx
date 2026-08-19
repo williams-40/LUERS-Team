@@ -31,6 +31,8 @@ export function EmergencyActionsControl({
   const { user } = useAuth();
   const { show } = useToast();
   const [error, setError] = useState<string | null>(null);
+  const [showEscalateForm, setShowEscalateForm] = useState(false);
+  const [escalateReason, setEscalateReason] = useState('');
 
   const acknowledgeMutation = useMutation({ mutationFn: () => acknowledgeEmergency(report.id) });
   const respondMutation = useMutation({ mutationFn: () => respondToEmergency(report.id) });
@@ -38,7 +40,9 @@ export function EmergencyActionsControl({
   const cancelMutation = useMutation({
     mutationFn: (reason: 'cancelled' | 'false_alarm') => cancelEmergency(report.id, reason),
   });
-  const escalateMutation = useMutation({ mutationFn: () => escalateEmergency(report.id) });
+  const escalateMutation = useMutation({
+    mutationFn: (reason: string) => escalateEmergency(report.id, reason),
+  });
 
   const anyPending =
     acknowledgeMutation.isPending ||
@@ -58,7 +62,7 @@ export function EmergencyActionsControl({
     setError(null);
     try {
       await acknowledgeMutation.mutateAsync();
-      show('Acknowledged — you are now the assigned responder.', 'success');
+      show('Acknowledged. You are now the assigned responder.', 'success');
       await onUpdated();
     } catch (err) {
       await handleError(err);
@@ -99,10 +103,13 @@ export function EmergencyActionsControl({
   }
 
   async function handleEscalate() {
+    if (!escalateReason.trim()) return;
     setError(null);
     try {
-      await escalateMutation.mutateAsync();
-      show('Escalated.', 'success');
+      await escalateMutation.mutateAsync(escalateReason.trim());
+      show('Escalated to System Admin.', 'success');
+      setShowEscalateForm(false);
+      setEscalateReason('');
       await onUpdated();
     } catch (err) {
       await handleError(err);
@@ -120,12 +127,19 @@ export function EmergencyActionsControl({
 
   const isActive =
     report.status === Status.NEW || report.status === Status.ACKNOWLEDGED || report.status === Status.IN_PROGRESS;
-  const canAcknowledge = isActive && !dispatch.acknowledged_at;
+  // The reporter isn't a department member/responder and can't actually
+  // acknowledge their own emergency (the backend rejects it) — keep their
+  // available actions limited to cancel/false alarm rather than showing a
+  // button that only errors for them.
+  const canAcknowledge = isActive && !dispatch.acknowledged_at && !isReporter;
   const canRespond = isAssignedResponder && report.status === Status.ACKNOWLEDGED && !dispatch.responding_at;
   const canArrive = isAssignedResponder && report.status === Status.IN_PROGRESS && !dispatch.arrived_at;
   const canCancel =
     isHeadOrAdmin || (isReporter && (report.status === Status.NEW || report.status === Status.ACKNOWLEDGED));
-  const canEscalate = isHeadOrAdmin && isActive;
+  // System Admin is the top of the chain — there's nowhere for them to
+  // escalate to, so only the department head gets this action, and never
+  // the reporter (who isn't part of the response at all).
+  const canEscalate = isDepartmentHead && !isReporter && isActive;
 
   if (!canAcknowledge && !canRespond && !canArrive && !canCancel && !canEscalate) return null;
 
@@ -170,12 +184,49 @@ export function EmergencyActionsControl({
             </Button>
           </>
         )}
-        {canEscalate && (
-          <Button size="sm" variant="secondary" disabled={anyPending} onClick={() => void handleEscalate()}>
-            Escalate
+        {canEscalate && !showEscalateForm && (
+          <Button size="sm" variant="secondary" disabled={anyPending} onClick={() => setShowEscalateForm(true)}>
+            Escalate to System Admin
           </Button>
         )}
       </div>
+
+      {canEscalate && showEscalateForm && (
+        <div className="mt-3 flex flex-col gap-2 rounded-lg border border-ink/10 p-2.5">
+          <label htmlFor="escalate-reason" className="text-ink-secondary text-[12px] font-semibold">
+            Reason for escalating to System Admin
+          </label>
+          <textarea
+            id="escalate-reason"
+            rows={2}
+            value={escalateReason}
+            onChange={(e) => setEscalateReason(e.target.value)}
+            placeholder="Why does System Admin need to step in?"
+            className="focus:outline-brand rounded-[9px] border-[1.5px] border-ink/15 px-2.5 py-2 text-sm outline-2 outline-offset-1 focus:border-transparent"
+          />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={anyPending || !escalateReason.trim()}
+              onClick={() => void handleEscalate()}
+            >
+              {escalateMutation.isPending ? 'Escalating…' : 'Confirm escalation'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={anyPending}
+              onClick={() => {
+                setShowEscalateForm(false);
+                setEscalateReason('');
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

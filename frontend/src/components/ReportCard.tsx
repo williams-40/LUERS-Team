@@ -44,7 +44,9 @@ export function ReportCard({ report }: { report: ReportListItem }) {
           <StatusBadge status={report.status} />
         </div>
 
-        <p className="text-ink-secondary mb-2 line-clamp-2 text-[13.5px] leading-relaxed">{report.description}</p>
+        <p className="text-ink-secondary mb-2 line-clamp-2 text-[13.5px] leading-relaxed">
+          {report.description || report.emergency_dispatch?.emergency_type_display || 'No description provided.'}
+        </p>
 
         <div className="text-ink-muted flex items-center gap-2.5 font-mono text-[11px]">
           <span>{report.id.slice(0, 8).toUpperCase()}</span>

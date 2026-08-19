@@ -32,7 +32,12 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-5"
+      // Leaflet's own stylesheet gives its controls z-index up to 1000
+      // (.leaflet-top/.leaflet-bottom) and its container's position:relative
+      // alone doesn't establish a new stacking context, so a map on the
+      // page underneath (e.g. ReportLocationMap) can render above a modal
+      // at the more typical z-50 — stay comfortably clear of that.
+      className="fixed inset-0 z-[1200] flex items-center justify-center bg-ink/40 px-5"
       onClick={dismissible ? onClose : undefined}
     >
       <div

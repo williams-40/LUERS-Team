@@ -121,7 +121,7 @@ export function EmergencyPage() {
       <div className="mx-auto max-w-xl px-5 py-16 text-center">
         <h1 className="mb-2 text-xl">Emergency queued</h1>
         <p className="text-status-warning mb-2 text-sm font-semibold">
-          You're offline right now. The institutional emergency system has not received this yet — it will send
+          You're offline right now. The institutional emergency system has not received this yet, it will send
           automatically the moment you're back online. If this is a real emergency, also use your campus's usual
           offline emergency procedure now.
         </p>
@@ -145,7 +145,7 @@ export function EmergencyPage() {
     <div className="mx-auto max-w-xl px-5 py-8">
       <h1 className="text-status-critical font-heading mb-1 text-2xl font-extrabold">🚨 Report an emergency</h1>
       <p className="text-ink-secondary mb-6 text-sm">
-        What's happening? We'll route this immediately — no department to pick.
+        What's happening? We'll route this immediately, no department to pick.
       </p>
 
       <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2" role="radiogroup" aria-label="Emergency type">
@@ -175,7 +175,7 @@ export function EmergencyPage() {
       </div>
 
       <p className="text-ink-muted mb-6 text-xs">
-        {locating ? 'Detecting your location…' : locationRef.current ? 'Location ready.' : 'Location unavailable — sending without it.'}
+        {locating ? 'Detecting your location…' : locationRef.current ? 'Location ready.' : 'Location unavailable, sending without it.'}
       </p>
 
       {!showDetails ? (

@@ -141,11 +141,18 @@ export function DepartmentFormPage() {
   // Phase 14: Department Head/Responder is decoupled from the account
   // Role — any active user is eligible (Finance/HR/Library etc. have no
   // corresponding Role at all), so this is no longer filtered to
-  // admin-tier roles.
-  const { data: eligibleUsers } = useQuery({
+  // admin-tier roles. system_admin is excluded (below) rather than
+  // allow-listing everyone else: an admin is oversight-only and shouldn't
+  // be assignable as a responder, matching the backend's own
+  // validate_members/validate_head rejection.
+  const { data: allEligibleUsers } = useQuery({
     queryKey: ['admin', 'users', 'all'],
     queryFn: () => fetchUsers({}),
   });
+  const eligibleUsers = allEligibleUsers && {
+    ...allEligibleUsers,
+    results: allEligibleUsers.results.filter((u) => u.role.slug !== 'system_admin'),
+  };
 
   const { data: department, isLoading: isLoadingDepartment } = useQuery({
     queryKey: ['departments', id],

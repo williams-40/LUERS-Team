@@ -77,7 +77,14 @@ export function ReportCreatePage() {
     formState: { errors, isSubmitting },
   } = useForm<ReportFormValues>({
     resolver: zodResolver(buildReportSchema(phoneRequired)),
-    defaultValues: { phone_number: user?.phone_number ?? '' },
+    // department starts out '' rather than undefined: DepartmentPicker isn't
+    // a registered DOM input (it drives its value entirely through
+    // setValue/watch), so without an explicit default, submitting before
+    // picking anything hands zod `undefined` for a z.string() field — that
+    // fails the base type check before the friendly .min(1, ...) message
+    // ever runs, surfacing zod's raw "Invalid input: expected string,
+    // received undefined" instead.
+    defaultValues: { department: '', description: '', phone_number: user?.phone_number ?? '' },
   });
 
   const department = watch('department');
@@ -209,7 +216,7 @@ export function ReportCreatePage() {
     <div className="mx-auto max-w-xl px-5 py-8">
       <h1 className="mb-1 text-2xl">Report an incident</h1>
       <p className="text-ink-secondary mb-6 text-sm">
-        In immediate danger? Use the emergency button below — it's a separate, faster flow with no department to
+        In immediate danger? Use the emergency button below, it's a separate, faster flow with no department to
         pick.
       </p>
 

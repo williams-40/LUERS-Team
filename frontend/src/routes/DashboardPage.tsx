@@ -7,6 +7,7 @@ import { DashboardTrendsPanel } from '../components/dashboard/DashboardTrendsPan
 import { DashboardAnalyticsPanel } from '../components/dashboard/DashboardAnalyticsPanel';
 import { MyDepartmentResponders } from '../components/dashboard/MyDepartmentResponders';
 import { MyAssignedReportsPanel } from '../components/dashboard/MyAssignedReportsPanel';
+import { EscalatedReportsPanel } from '../components/dashboard/EscalatedReportsPanel';
 import { fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../lib/departments-api';
 
 export function DashboardPage() {
@@ -89,6 +90,7 @@ export function DashboardPage() {
         </div>
       )}
 
+      {isSystemAdmin && <EscalatedReportsPanel />}
       {canSeeSummary && <DashboardSummaryPanel />}
       {canSeeSummary && isDepartmentHead && <MyDepartmentResponders />}
       {canSeeSummary && !isManagerTier && <MyAssignedReportsPanel />}
