@@ -277,7 +277,7 @@ def test_cancel_by_head_at_any_stage_succeeds(security_department):
 
 
 @pytest.mark.django_db
-def test_escalate_requires_head_or_admin(security_department):
+def test_escalate_requires_department_head_with_reason(security_department):
     student = UserFactory(role='student')
     head = DepartmentHeadFactory()
     security_department.head = head
@@ -291,18 +291,41 @@ def test_escalate_requires_head_or_admin(security_department):
 
     member_client = APIClient()
     member_client.force_authenticate(user=member)
-    denied = member_client.post(f'/api/v1/reports/{report.id}/escalate/')
+    denied = member_client.post(f'/api/v1/reports/{report.id}/escalate/', {'reason': 'need help'})
     # Same convention as ReportAssignView: a non-head member doesn't pass
     # get_accessible_reports at all for this head-only action, so it 404s.
     assert denied.status_code == 404
 
     head_client = APIClient()
     head_client.force_authenticate(user=head)
-    response = head_client.post(f'/api/v1/reports/{report.id}/escalate/')
+    missing_reason = head_client.post(f'/api/v1/reports/{report.id}/escalate/')
+    assert missing_reason.status_code == 400
+
+    response = head_client.post(f'/api/v1/reports/{report.id}/escalate/', {'reason': 'need admin eyes on this'})
     assert response.status_code == 200, response.data
     dispatch = EmergencyDispatch.objects.get(report=report)
     assert dispatch.escalation_level == 1
-    assert AuditLog.objects.filter(report=report, action=Action.EMERGENCY_ESCALATED).exists()
+    entry = AuditLog.objects.get(report=report, action=Action.EMERGENCY_ESCALATED)
+    assert entry.after_state['reason'] == 'need admin eyes on this'
+
+
+@pytest.mark.django_db
+def test_escalate_rejects_system_admin(security_department):
+    """System Admin is the top of the chain and has nowhere to escalate to — only the department head gets this action."""
+    student = UserFactory(role='student')
+    head = DepartmentHeadFactory()
+    security_department.head = head
+    security_department.save(update_fields=['head'])
+    admin = UserFactory(role='system_admin')
+
+    client = APIClient()
+    client.force_authenticate(user=student)
+    report = _create_panic_report(client, student)
+
+    admin_client = APIClient()
+    admin_client.force_authenticate(user=admin)
+    response = admin_client.post(f'/api/v1/reports/{report.id}/escalate/', {'reason': 'anything'})
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db

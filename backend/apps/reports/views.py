@@ -19,7 +19,7 @@ from apps.reports.serializers import (
 )
 from apps.reports.services import (
     ReportService, MessageService, EmergencyDispatchService, get_accessible_reports, filter_reports,
-    is_department_head_or_system_admin, is_department_member_or_head, can_upload_evidence,
+    is_department_head_or_system_admin, is_report_department_head, is_department_member_or_head, can_upload_evidence,
     can_view_panic_report, get_open_report_counts,
 )
 from apps.notifications.services import NotificationService
@@ -421,19 +421,27 @@ class EmergencyCancelView(APIView):
 
 class EmergencyEscalateView(APIView):
     """
-    POST /api/v1/reports/{id}/escalate/
-    Manual escalation by the department head or System Admin. The same
+    POST /api/v1/reports/{id}/escalate/  { "reason": "..." }
+    Manual escalation by the report's own department head only — System
+    Admin is the top of the chain and has nowhere to escalate *to*, so
+    they don't get this action. Always goes straight to System Admin and
+    always requires a reason (validated in the service layer). The same
     underlying action also fires automatically from the Celery Beat SLA
     scanner (apps.reports.tasks.check_emergency_escalations) when nobody
-    escalates it manually in time.
+    escalates it manually in time — that automatic path is unaffected.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, id):
         report = get_object_or_404(get_accessible_reports(request.user), id=id)
-        if not is_department_head_or_system_admin(request.user, report):
-            raise PermissionDenied("Only this report's department head or a System Admin can escalate it.")
-        dispatch = EmergencyDispatchService.escalate(report, actor=request.user, ip_address=get_client_ip(request))
+        if not is_report_department_head(request.user, report):
+            raise PermissionDenied("Only this report's department head can escalate it.")
+        reason = request.data.get('reason')
+        if not isinstance(reason, str) or not reason.strip():
+            raise DRFValidationError({'reason': 'A reason is required to escalate to System Admin.'})
+        dispatch = EmergencyDispatchService.escalate(
+            report, actor=request.user, reason=reason, ip_address=get_client_ip(request),
+        )
         return Response({'escalation_level': dispatch.escalation_level})
 
 
@@ -463,8 +471,12 @@ class ReportAssignableOfficersView(APIView):
         if department is None:
             return Response([])
 
-        candidates = list(department.members.all())
-        if department.head and department.head not in candidates:
+        # A system admin is oversight-only and is never eligible to be
+        # assigned as a responder, even if stale data somehow still lists
+        # one as a member/head (see serializers_department.py's own
+        # rejection of this on write).
+        candidates = list(department.members.exclude(role__slug='system_admin'))
+        if department.head and department.head.role.slug != 'system_admin' and department.head not in candidates:
             candidates.append(department.head)
 
         open_counts = get_open_report_counts(

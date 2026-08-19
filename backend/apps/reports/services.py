@@ -1,7 +1,7 @@
 ﻿from datetime import timedelta
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Exists, OuterRef
 from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from asgiref.sync import async_to_sync
@@ -247,12 +247,12 @@ class ReportService:
         return recipients
 
     @staticmethod
-    def _dispatch_panic_alerts(report, recipients):
+    def _dispatch_panic_alerts(report, recipients, event_type='panic_created', **kwargs):
         for recipient in recipients:
             if recipient.phone_number:
-                NotificationService.dispatch(report, Channel.SMS, recipient=recipient, event_type='panic_created')
+                NotificationService.dispatch(report, Channel.SMS, recipient=recipient, event_type=event_type, **kwargs)
             if recipient.email:
-                NotificationService.dispatch(report, Channel.EMAIL, recipient=recipient, event_type='panic_created')
+                NotificationService.dispatch(report, Channel.EMAIL, recipient=recipient, event_type=event_type, **kwargs)
 
     @staticmethod
     def _notify_department(report, department):
@@ -578,24 +578,47 @@ class EmergencyDispatchService:
 
     @staticmethod
     @transaction.atomic
-    def escalate(report, actor=None, ip_address=None):
-        """`actor=None` marks an automatic escalation (Celery Beat SLA scan) —
-        same nullable-actor pattern AuditLog already uses for system actions."""
+    def escalate(report, actor=None, reason=None, ip_address=None):
+        """
+        `actor=None` marks an automatic escalation (Celery Beat SLA scan) —
+        same nullable-actor pattern AuditLog already uses for system
+        actions; that path keeps notifying the department (plus every
+        system_admin once escalation_level >= 2), unchanged.
+
+        `actor` set means a department head manually escalated (System
+        Admin can't — there's nothing above them to escalate to). A manual
+        escalation always requires a reason and always goes straight to
+        System Admin, not back to the department that's already handling
+        it.
+        """
         dispatch = EmergencyDispatchService._require_dispatch(report)
         if report.status not in ACTIVE_PANIC_STATUSES:
             raise ValidationError({'error': 'This emergency is no longer active.'})
+
+        reason = (reason or '').strip()
+        if actor is not None and not reason:
+            raise ValidationError({'reason': 'A reason is required to escalate to System Admin.'})
 
         dispatch.escalation_level = dispatch.escalation_level + 1
         dispatch.last_escalated_at = timezone.now()
         dispatch.save(update_fields=['escalation_level', 'last_escalated_at', 'updated_at'])
 
+        after_state = {'escalation_level': dispatch.escalation_level}
+        if reason:
+            after_state['reason'] = reason
         AuditLog.objects.create(
             report=report, actor=actor, action=Action.EMERGENCY_ESCALATED,
-            after_state={'escalation_level': dispatch.escalation_level},
+            after_state=after_state,
             ip_address=ip_address,
         )
 
-        if report.department:
+        if actor is not None:
+            from apps.accounts.models import User
+            recipients = set(User.objects.filter(role__slug='system_admin', is_active=True))
+            transaction.on_commit(
+                lambda: ReportService._dispatch_panic_alerts(report, recipients, event_type='escalated', reason=reason)
+            )
+        elif report.department:
             recipients = set(ReportService._department_recipients(report.department))
             # Level 2+ also pulls in every system_admin — a department that
             # still hasn't responded after a second SLA miss needs eyes
@@ -639,6 +662,7 @@ def filter_reports(queryset, params):
     search = params.get('search')
     assigned_to = params.get('assigned_to')
     active = params.get('active')
+    escalated_to_admin = params.get('escalated_to_admin')
     if status:
         queryset = queryset.filter(status=status)
     if category:
@@ -653,6 +677,16 @@ def filter_reports(queryset, params):
         # Convenience filter for the active-emergencies map — "still
         # needs attention", not yet resolved/closed/cancelled/false_alarm.
         queryset = queryset.exclude(status__in=['resolved', 'closed', 'cancelled', 'false_alarm'])
+    if escalated_to_admin in ('true', '1'):
+        # A department head manually escalated this report to System Admin
+        # (actor set — the automatic Celery Beat SLA path always uses
+        # actor=None and doesn't count here, even at escalation_level 2+
+        # where it also cc's admins). Combine with active=true from the
+        # caller to get "still needs System Admin's attention" specifically.
+        manual_escalations = AuditLog.objects.filter(
+            report=OuterRef('pk'), action=Action.EMERGENCY_ESCALATED, actor__isnull=False,
+        )
+        queryset = queryset.filter(Exists(manual_escalations))
     if search:
         queryset = queryset.filter(
             Q(description__icontains=search)
@@ -757,6 +791,17 @@ def is_department_head_or_system_admin(user, report):
     """
     if user.has_permission('view_all_reports'):
         return True
+    return bool(report.department_id and report.department.head_id == user.id)
+
+
+def is_report_department_head(user, report):
+    """
+    Just the department-head half of is_department_head_or_system_admin —
+    used where System Admin deliberately isn't included, e.g. manual
+    escalation: System Admin is the top of the chain, so there's nowhere
+    for them to escalate *to*, only a head escalating up to admin makes
+    sense.
+    """
     return bool(report.department_id and report.department.head_id == user.id)
 
 

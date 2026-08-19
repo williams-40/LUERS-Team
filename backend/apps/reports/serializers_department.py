@@ -38,6 +38,8 @@ class DepartmentWriteSerializer(serializers.ModelSerializer):
     def validate_head(self, value):
         if value is not None and not value.is_active:
             raise serializers.ValidationError(f"{value.username} is not an active account.")
+        if value is not None and value.role.slug == 'system_admin':
+            raise serializers.ValidationError("A system admin cannot be set as a department head.")
         return value
 
     def validate_members(self, value):
@@ -45,5 +47,10 @@ class DepartmentWriteSerializer(serializers.ModelSerializer):
         if inactive:
             raise serializers.ValidationError(
                 f"These users are not active accounts and cannot be department members: {', '.join(inactive)}"
+            )
+        admins = [u.username for u in value if u.role.slug == 'system_admin']
+        if admins:
+            raise serializers.ValidationError(
+                f"System admins cannot be department members/responders: {', '.join(admins)}"
             )
         return value

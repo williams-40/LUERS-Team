@@ -71,5 +71,5 @@ class RoleDetailView(generics.RetrieveUpdateDestroyAPIView):
         except ProtectedError:
             count = instance.users.count()
             raise ValidationError(
-                f'Cannot delete this role — it is currently assigned to {count} user(s).'
+                f'Cannot delete this role, it is currently assigned to {count} user(s).'
             )

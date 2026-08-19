@@ -49,6 +49,12 @@ class NotificationService:
                 f"{f' ({report.department.name})' if report.department else ''}"
                 f" at {report.created_at.strftime('%H:%M')}. Respond in LUERS now."
             )
+        elif kwargs.get('event_type') == 'escalated':
+            dept_name = report.department.name if report.department else 'a department'
+            message = (
+                f"LUERS ESCALATION #{short_id}: {dept_name} head escalated this emergency. "
+                f"Reason: {kwargs.get('reason') or 'not given'}. Review in LUERS now."
+            )
         else:
             message = f"LUERS Alert: New report #{short_id} - {report.category} at {report.created_at.strftime('%H:%M')}"
 
@@ -92,6 +98,18 @@ Description: {(report.description or '(none provided)')[:200]}
 Filed: {report.created_at}
 
 Please login to LUERS immediately to acknowledge and respond.
+"""
+        elif kwargs.get('event_type') == 'escalated':
+            subject = f"LUERS ESCALATION: Report #{short_id} escalated to System Admin"
+            message = f"""
+A department head has escalated an active emergency to System Admin.
+
+Report ID: {report.id}
+Department: {report.department.name if report.department else 'Unassigned'}
+Reason: {kwargs.get('reason') or '(none given)'}
+Filed: {report.created_at}
+
+Please login to LUERS immediately to review.
 """
         else:
             subject = f"LUERS Alert: New Report #{short_id}"
