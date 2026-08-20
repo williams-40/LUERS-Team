@@ -44,7 +44,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-invalid={Boolean(error)}
             aria-describedby={cn(errorId, helperId) || undefined}
             className={cn(
-              'border-[1.5px] border-ink/15 bg-surface-2 text-ink appearance-none rounded-lg px-3.5 py-2.5 text-sm outline-none transition',
+              // w-full is load-bearing: wrapping the input in the `relative`
+              // div below for the password toggle took it out of being a
+              // direct flex child of the flex-col field wrapper, which is
+              // what previously stretched it to full width for free. Without
+              // this it shrinks to its intrinsic size, leaving the toggle
+              // button anchored to the (still full-width) wrapper and
+              // floating off past the visibly-narrower input box.
+              'border-[1.5px] border-ink/15 bg-surface-2 text-ink w-full appearance-none rounded-lg px-3.5 py-2.5 text-sm outline-none transition',
               // Native form controls can pick up the OS/browser's own dark-mode
               // widget theme (driven by the page's color-scheme) and ignore an
               // author background-color unless appearance is reset — without
