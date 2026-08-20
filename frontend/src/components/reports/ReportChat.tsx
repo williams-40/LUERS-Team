@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Mic, Send as SendIcon } from 'lucide-react';
 import { fetchMessages, sendVoiceMessage } from '../../lib/notifications-api';
 import type { ChatMessagePayload } from '../../lib/ws-client';
 import { useAuth } from '../../hooks/useAuth';
@@ -130,20 +131,30 @@ export function ReportChat({
           </div>
         </div>
       ) : (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder={canSend ? 'Write a message…' : 'Connecting…'}
             disabled={!canSend}
-            className="bg-surface-2 text-ink flex-1 appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm disabled:opacity-50"
+            // min-w-0 lets the input actually shrink inside the flex row —
+            // without it, the mic + Send buttons could get squeezed off
+            // narrower phone screens instead of the input giving up space.
+            className="bg-surface-2 text-ink min-w-0 flex-1 appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-2 text-sm disabled:opacity-50"
           />
-          <Button size="sm" variant="secondary" onClick={() => setRecordingVoice(true)} disabled={!canSend}>
-            Voice note
+          <Button
+            size="icon"
+            variant="secondary"
+            onClick={() => setRecordingVoice(true)}
+            disabled={!canSend}
+            aria-label="Record a voice note"
+            className="shrink-0"
+          >
+            <Mic className="h-[18px] w-[18px]" aria-hidden />
           </Button>
-          <Button size="sm" onClick={handleSend} disabled={!canSend || !draft.trim()}>
-            Send
+          <Button size="icon" onClick={handleSend} disabled={!canSend || !draft.trim()} aria-label="Send message" className="shrink-0">
+            <SendIcon className="h-[18px] w-[18px]" aria-hidden />
           </Button>
         </div>
       )}

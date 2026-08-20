@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import fixWebmDuration from 'fix-webm-duration';
 import { Button } from '../ui/Button';
+import { CameraOverlay, ShutterButton } from './CameraOverlay';
 import { MAX_EVIDENCE_FILE_SIZE } from '../../lib/evidence-constraints';
 
 type RecordingMode = 'audio' | 'video';
-type RecorderState = 'idle' | 'requesting' | 'recording' | 'recorded' | 'unsupported' | 'denied';
+type RecorderState = 'idle' | 'requesting' | 'recording' | 'recorded' | 'too_large' | 'unsupported' | 'denied';
 
 // MediaRecorder's default output container in Chrome/Firefox — used for both
 // audio-only and video capture, no MP4 support without extra codec work.
@@ -93,12 +94,11 @@ export function MediaRecorderControl({
       if (event.data.size === 0) return;
       bytesRef.current += event.data.size;
       chunksRef.current.push(event.data);
-      // Enforce the same 5MB evidence cap recordings are subject to once
-      // uploaded — stop automatically rather than let the user record past
-      // it and then discover the failure at submit time.
-      if (bytesRef.current >= MAX_EVIDENCE_FILE_SIZE) {
-        recorder.stop();
-      }
+      // Recording length/stop is entirely the user's call — no automatic
+      // cutoff here. The 5MB evidence cap is still enforced, just after the
+      // fact in onstop below, where an oversized recording gets a clear
+      // "too long, re-record" message instead of being silently truncated
+      // mid-recording.
     };
 
     recorder.onstop = async () => {
@@ -122,6 +122,13 @@ export function MediaRecorderControl({
       // Duration section using our own measured wall-clock elapsed time.
       const duration = Date.now() - startedAtRef.current;
       const blob = await fixWebmDuration(rawBlob, duration, { logger: false });
+
+      if (blob.size > MAX_EVIDENCE_FILE_SIZE) {
+        setState('too_large');
+        onRecordingChange(null);
+        return;
+      }
+
       const file = new File([blob], `recording${EXTENSION[mode]}`, { type: FILE_TYPE[mode] });
       setPreviewUrl(URL.createObjectURL(blob));
       setState('recorded');
@@ -168,6 +175,20 @@ export function MediaRecorderControl({
     );
   }
 
+  if (state === 'too_large') {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-status-critical text-xs">
+          That recording is too long ({formatSeconds(seconds)}, over the 5MB limit). Please re-record a shorter
+          clip.
+        </p>
+        <Button type="button" variant="secondary" size="sm" onClick={reRecord} className="self-start">
+          Re-record
+        </Button>
+      </div>
+    );
+  }
+
   if (state === 'recorded' && previewUrl) {
     return (
       <div className="flex flex-col gap-2">
@@ -188,27 +209,33 @@ export function MediaRecorderControl({
     );
   }
 
+  if (state === 'recording' && mode === 'video') {
+    return (
+      <CameraOverlay
+        onClose={stopRecording}
+        closeLabel="Stop recording"
+        topRight={
+          <div className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5 backdrop-blur-sm">
+            <span className="bg-status-critical h-2 w-2 shrink-0 animate-pulse rounded-full motion-reduce:animate-none" aria-hidden />
+            <span className="text-sm tabular-nums text-white">{formatSeconds(seconds)}</span>
+          </div>
+        }
+        bottomControls={<ShutterButton onClick={stopRecording} variant="stop" label="Stop recording" />}
+      >
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video key="live" ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+      </CameraOverlay>
+    );
+  }
+
   if (state === 'recording') {
     return (
-      <div className="flex flex-col gap-2">
-        {mode === 'video' && (
-          // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video
-            key="live"
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="bg-ink max-h-64 w-full rounded-[9px] object-contain"
-          />
-        )}
-        <div className="flex items-center gap-3">
-          <span className="bg-status-critical h-2.5 w-2.5 shrink-0 animate-pulse rounded-full" aria-hidden />
-          <span className="text-ink-secondary text-sm tabular-nums">{formatSeconds(seconds)}</span>
-          <Button type="button" variant="destructive" size="sm" onClick={stopRecording}>
-            Stop recording
-          </Button>
-        </div>
+      <div className="flex items-center gap-3">
+        <span className="bg-status-critical h-2.5 w-2.5 shrink-0 animate-pulse rounded-full motion-reduce:animate-none" aria-hidden />
+        <span className="text-ink-secondary text-sm tabular-nums">{formatSeconds(seconds)}</span>
+        <Button type="button" variant="destructive" size="sm" onClick={stopRecording}>
+          Stop recording
+        </Button>
       </div>
     );
   }

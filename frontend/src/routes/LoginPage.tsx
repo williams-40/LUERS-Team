@@ -36,8 +36,7 @@ export function LoginPage() {
   });
 
   if (isAuthenticated) {
-    const from = (location.state as { from?: Location })?.from ?? '/';
-    return <Navigate to={from as unknown as string} replace />;
+    return <Navigate to="/" replace />;
   }
 
   const passwordReset = Boolean((location.state as { passwordReset?: boolean } | null)?.passwordReset);
@@ -47,8 +46,9 @@ export function LoginPage() {
     setServerError(null);
     try {
       await login(values);
-      const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/';
-      navigate(from, { replace: true });
+      // Always land on the dashboard after signing in, rather than
+      // wherever the user happened to get redirected from.
+      navigate('/', { replace: true });
     } catch (err) {
       const apiError = err as ApiError;
       setServerError(

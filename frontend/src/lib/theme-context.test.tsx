@@ -32,18 +32,30 @@ describe('ThemeProvider / useTheme', () => {
     document.documentElement.classList.remove('dark');
   });
 
-  it('defaults to system and resolves dark when the OS prefers dark', () => {
+  it('defaults to light regardless of OS preference', () => {
     mockMatchMedia(true);
     const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
 
-    expect(result.current.theme).toBe('system');
+    expect(result.current.theme).toBe('light');
+    expect(result.current.resolvedTheme).toBe('light');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+  });
+
+  it('setTheme("system") resolves dark when the OS prefers dark', () => {
+    mockMatchMedia(true);
+    const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
+
+    act(() => result.current.setTheme('system'));
+
     expect(result.current.resolvedTheme).toBe('dark');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 
-  it('defaults to system and resolves light when the OS prefers light', () => {
+  it('setTheme("system") resolves light when the OS prefers light', () => {
     mockMatchMedia(false);
     const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
+
+    act(() => result.current.setTheme('system'));
 
     expect(result.current.resolvedTheme).toBe('light');
     expect(document.documentElement.classList.contains('dark')).toBe(false);
@@ -85,6 +97,7 @@ describe('ThemeProvider / useTheme', () => {
     const media = mockMatchMedia(false);
     const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
 
+    act(() => result.current.setTheme('system'));
     expect(result.current.resolvedTheme).toBe('light');
 
     act(() => media.trigger(true));

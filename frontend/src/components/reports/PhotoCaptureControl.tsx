@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
+import { CameraOverlay, ShutterButton } from './CameraOverlay';
 
 type CaptureState = 'idle' | 'requesting' | 'previewing' | 'captured' | 'unsupported' | 'denied';
 
@@ -126,24 +127,14 @@ export function PhotoCaptureControl({ onCapture }: { onCapture: (file: File | nu
 
   if (state === 'previewing') {
     return (
-      <div className="flex flex-col gap-2">
+      <CameraOverlay
+        onClose={cancelPreview}
+        closeLabel="Cancel"
+        bottomControls={<ShutterButton onClick={capture} variant="photo" label="Take photo" />}
+      >
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="bg-ink max-h-64 w-full rounded-[9px] object-contain"
-        />
-        <div className="flex gap-2">
-          <Button type="button" size="sm" onClick={capture}>
-            Capture
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={cancelPreview}>
-            Cancel
-          </Button>
-        </div>
-      </div>
+        <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+      </CameraOverlay>
     );
   }
 

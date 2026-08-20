@@ -17,7 +17,9 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readStoredTheme(): Theme {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+  // Light by default for a first-time visitor — 'system' remains an
+  // explicit opt-in choice via ThemeToggle, not the initial state.
+  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'light';
 }
 
 function systemPrefersDark(): boolean {
