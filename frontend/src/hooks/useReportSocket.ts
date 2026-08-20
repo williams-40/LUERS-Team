@@ -4,7 +4,14 @@ import { ReportSocket, type ChatMessagePayload, type SocketStatus } from '../lib
 import type { ReportListItem, Status } from '../types/domain';
 import { useAuth } from './useAuth';
 
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000';
+// A relative env value can't carry a ws:/wss: scheme (URL resolution would
+// just inherit http:/https: from the page instead), so unless it's set
+// explicitly, derive it from the page's own origin — this keeps ws vs wss
+// correct automatically whether the dev server is plain http (localhost)
+// or https (mkcert, see vite.config.ts), on any host/IP.
+const WS_BASE_URL =
+  import.meta.env.VITE_WS_BASE_URL ??
+  `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
 export interface UseReportSocketOptions {
   /** Subscribe to a single report's group in addition to (or instead of) the general one. */
