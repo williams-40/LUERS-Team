@@ -2,7 +2,7 @@ import os
 from apps.core.file_validation import EXTENSION_CATEGORY, content_matches_extension
 
 ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mp3', '.wav', '.pdf', '.webm', '.weba']
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 
 def validate_evidence_file(file) -> str:

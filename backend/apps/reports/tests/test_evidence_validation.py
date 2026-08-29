@@ -2,6 +2,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 from apps.core.factories import SecurityFactory, StaffFactory, ReportFactory, DepartmentFactory
+from apps.reports.validators import validate_evidence_file, MAX_FILE_SIZE
 
 VALID_JPEG_BYTES = b'\xff\xd8\xff\xe0' + b'\x00' * 32
 SPOOFED_PDF_AS_JPEG = b'%PDF-1.4\n' + b'\x00' * 32
@@ -155,3 +156,25 @@ def test_report_create_rejects_spoofed_inline_evidence():
 
     assert resp.status_code == 400
     assert 'evidence' in resp.data
+
+
+def test_max_file_size_is_50mb():
+    # No test previously covered the size limit at all — this pins the
+    # actual constant so a future accidental change doesn't go unnoticed.
+    assert MAX_FILE_SIZE == 50 * 1024 * 1024
+
+
+class _FakeOversizedFile:
+    """A minimal stand-in for an oversized upload — avoids allocating a
+    real 50MB+ payload just to exercise the size check, which runs (and
+    raises) before validate_evidence_file ever needs to read real content."""
+
+    def __init__(self, name, size):
+        self.name = name
+        self.size = size
+
+
+def test_validate_evidence_file_rejects_file_over_size_limit():
+    fake = _FakeOversizedFile('evidence.jpg', MAX_FILE_SIZE + 1)
+    with pytest.raises(ValueError, match='too large'):
+        validate_evidence_file(fake)
