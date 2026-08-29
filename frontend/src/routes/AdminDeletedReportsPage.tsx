@@ -65,7 +65,7 @@ function DeletedReportRow({ report }: { report: ReportListItem }) {
       {confirmingPermanentDelete && (
         <ConfirmDialog
           title="Permanently delete this report?"
-          description="This erases the report and its evidence for good — it can't be undone or restored afterward. The audit log will still show that it happened."
+          description="This erases the report and its evidence for good. It can't be undone or restored afterward. The audit log will still show that it happened."
           confirmLabel="Delete permanently"
           destructive
           onConfirm={() => {

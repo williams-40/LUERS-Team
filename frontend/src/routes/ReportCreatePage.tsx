@@ -115,6 +115,15 @@ export function ReportCreatePage() {
     setRecordingError(null);
   }
 
+  function onInvalid(formErrors: typeof errors) {
+    // The inline error text below the picker is easy to miss, especially if
+    // it's scrolled out of view — a toast makes it unmistakable what still
+    // needs doing.
+    if (formErrors.department) {
+      show(formErrors.department.message ?? 'Please select a department.', 'error');
+    }
+  }
+
   async function onSubmit(values: ReportFormValues) {
     setSubmitError(null);
 
@@ -228,7 +237,7 @@ export function ReportCreatePage() {
       </PanicButton>
 
       <form
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={handleSubmit(onSubmit, onInvalid)}
         noValidate
         className="bg-surface-2 flex flex-col gap-5 rounded-xl border border-ink/10 p-4"
       >

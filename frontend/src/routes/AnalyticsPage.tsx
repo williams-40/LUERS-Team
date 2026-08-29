@@ -48,23 +48,23 @@ export function AnalyticsPage() {
         <KPIStatCard
           label="Avg. time to resolve"
           icon={Clock}
-          value={analytics?.average_resolution_time_hours != null ? `${analytics.average_resolution_time_hours.toFixed(1)}h` : '—'}
+          value={analytics?.average_resolution_time_hours != null ? `${analytics.average_resolution_time_hours.toFixed(1)}h` : 'N/A'}
         />
         <KPIStatCard
           label="Avg. time to assign"
           icon={UserCheck}
-          value={analytics?.average_assignment_time_hours != null ? `${analytics.average_assignment_time_hours.toFixed(1)}h` : '—'}
+          value={analytics?.average_assignment_time_hours != null ? `${analytics.average_assignment_time_hours.toFixed(1)}h` : 'N/A'}
         />
         <KPIStatCard
           label="Overdue emergencies"
           icon={AlertTriangle}
-          value={analytics?.overdue.panic ?? '—'}
+          value={analytics?.overdue.panic ?? 'N/A'}
           tone={analytics && analytics.overdue.panic > 0 ? 'critical' : 'neutral'}
         />
         <KPIStatCard
           label="Overdue reports"
           icon={AlertTriangle}
-          value={analytics?.overdue.normal ?? '—'}
+          value={analytics?.overdue.normal ?? 'N/A'}
           tone={analytics && analytics.overdue.normal > 0 ? 'warning' : 'neutral'}
         />
       </div>
@@ -74,7 +74,7 @@ export function AnalyticsPage() {
           <KPIStatCard
             label="Feedback rating"
             icon={Star}
-            value={`${analytics.feedback.average_rating?.toFixed(1) ?? '—'} / 5`}
+            value={`${analytics.feedback.average_rating?.toFixed(1) ?? 'N/A'} / 5`}
             tone="good"
           />
         </div>
