@@ -1,7 +1,8 @@
 ﻿import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchDeletedReports, restoreReport } from '../lib/reports-api';
+import { fetchDeletedReports, restoreReport, permanentlyDeleteReport } from '../lib/reports-api';
 import { Button } from '../components/ui/Button';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { CATEGORY_LABELS } from '../lib/labels';
 import { useToast } from '../lib/toast-context';
 import type { ReportListItem } from '../types/domain';
@@ -9,6 +10,8 @@ import type { ReportListItem } from '../types/domain';
 function DeletedReportRow({ report }: { report: ReportListItem }) {
   const queryClient = useQueryClient();
   const { show } = useToast();
+  const [confirmingPermanentDelete, setConfirmingPermanentDelete] = useState(false);
+
   const restoreMutation = useMutation({
     mutationFn: () => restoreReport(report.id),
     onSuccess: () => {
@@ -16,6 +19,15 @@ function DeletedReportRow({ report }: { report: ReportListItem }) {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'deleted-reports'] });
     },
     onError: () => show("Couldn't restore this report. Please try again.", 'error'),
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: () => permanentlyDeleteReport(report.id),
+    onSuccess: () => {
+      show('Report permanently deleted.', 'success');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'deleted-reports'] });
+    },
+    onError: () => show("Couldn't permanently delete this report. Please try again.", 'error'),
   });
 
   return (
@@ -31,14 +43,38 @@ function DeletedReportRow({ report }: { report: ReportListItem }) {
         </div>
         <p className="text-ink-secondary truncate text-[12.5px]">{report.description}</p>
       </div>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => restoreMutation.mutate()}
-        disabled={restoreMutation.isPending}
-      >
-        {restoreMutation.isPending ? 'Restoring…' : 'Restore'}
-      </Button>
+      <div className="flex shrink-0 gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => restoreMutation.mutate()}
+          disabled={restoreMutation.isPending || permanentDeleteMutation.isPending}
+        >
+          {restoreMutation.isPending ? 'Restoring…' : 'Restore'}
+        </Button>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => setConfirmingPermanentDelete(true)}
+          disabled={restoreMutation.isPending || permanentDeleteMutation.isPending}
+        >
+          {permanentDeleteMutation.isPending ? 'Deleting…' : 'Delete permanently'}
+        </Button>
+      </div>
+
+      {confirmingPermanentDelete && (
+        <ConfirmDialog
+          title="Permanently delete this report?"
+          description="This erases the report and its evidence for good — it can't be undone or restored afterward. The audit log will still show that it happened."
+          confirmLabel="Delete permanently"
+          destructive
+          onConfirm={() => {
+            setConfirmingPermanentDelete(false);
+            permanentDeleteMutation.mutate();
+          }}
+          onCancel={() => setConfirmingPermanentDelete(false)}
+        />
+      )}
     </div>
   );
 }

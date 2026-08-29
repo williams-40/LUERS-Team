@@ -182,6 +182,13 @@ export async function restoreReport(reportId: string): Promise<{ id: string; del
   return data;
 }
 
+// Irreversible — only ever call this after explicit user confirmation. Only
+// works on a report that's already been soft-deleted (the backend 404s
+// otherwise), so it can't be used to skip that step.
+export async function permanentlyDeleteReport(reportId: string): Promise<void> {
+  await apiClient.post(`/reports/${reportId}/delete/permanent/`);
+}
+
 export async function fetchDeletedReports(
   filters: Pick<ReportQueueFilters, 'page' | 'search'> = {},
 ): Promise<Paginated<ReportListItem>> {

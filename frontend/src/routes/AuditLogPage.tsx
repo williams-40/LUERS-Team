@@ -10,9 +10,40 @@ import { ACTION_LABELS } from '../lib/labels';
 
 const ACTION_OPTIONS = Object.values(Action);
 
+// True geolocation isn't reliable here — most access in practice is over a
+// LAN/private IP, which has no meaningful city/country to look up. IP +
+// browser/OS is real, always-available "where this came from" context
+// instead of a lookup that would just say "Unknown" during local testing.
+function summarizeUserAgent(userAgent: string | null): string | null {
+  if (!userAgent) return null;
+  const browser = /Edg\//.test(userAgent)
+    ? 'Edge'
+    : /Chrome\//.test(userAgent)
+      ? 'Chrome'
+      : /Firefox\//.test(userAgent)
+        ? 'Firefox'
+        : /Safari\//.test(userAgent)
+          ? 'Safari'
+          : 'Unknown browser';
+  const os = /Windows/.test(userAgent)
+    ? 'Windows'
+    : /Android/.test(userAgent)
+      ? 'Android'
+      : /iPhone|iPad|iOS/.test(userAgent)
+        ? 'iOS'
+        : /Mac OS X/.test(userAgent)
+          ? 'macOS'
+          : /Linux/.test(userAgent)
+            ? 'Linux'
+            : 'Unknown OS';
+  return `${browser} on ${os}`;
+}
+
 function AuditLogEntryRow({ entry }: { entry: AuditLogEntry }) {
   const [expanded, setExpanded] = useState(false);
   const hasState = entry.before_state || entry.after_state;
+  const deviceSummary = summarizeUserAgent(entry.user_agent);
+  const accessedFrom = [entry.ip_address, deviceSummary].filter(Boolean).join(' · ');
 
   return (
     <div className="rounded-xl border border-ink/10 px-4 py-3">
@@ -35,7 +66,7 @@ function AuditLogEntryRow({ entry }: { entry: AuditLogEntry }) {
       </div>
 
       <div className="text-ink-muted mt-1.5 flex flex-wrap items-center gap-2.5 text-[11px]">
-        {entry.ip_address && <span>{entry.ip_address}</span>}
+        {accessedFrom && <span>Accessed from {accessedFrom}</span>}
         <span>{entry.sync_origin_display}</span>
         {hasState && (
           <button type="button" onClick={() => setExpanded((e) => !e)} className="text-brand font-semibold">

@@ -280,6 +280,7 @@ export interface AuditLogEntry {
   before_state: Record<string, unknown> | null;
   after_state: Record<string, unknown> | null;
   ip_address: string | null;
+  user_agent: string | null;
   client_timestamp: string | null;
   sync_origin: 'live' | 'sync';
   sync_origin_display: string;

@@ -36,9 +36,16 @@ export function EmergencyPage() {
   const [emergencyType, setEmergencyType] = useState<EmergencyType | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [description, setDescription] = useState('');
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [queuedOffline, setQueuedOffline] = useState(false);
+
+  // "Other" doesn't tell a responder anything on its own — unlike the fixed
+  // types (Security, Medical, Fire, Accident), there's nothing to route on
+  // without a description, so it's the one case where the normally-optional
+  // details section is mandatory.
+  const descriptionRequired = emergencyType === EmergencyType.OTHER;
 
   const locationRef = useRef<Coordinates | null>(null);
   const [locating, setLocating] = useState(true);
@@ -67,7 +74,12 @@ export function EmergencyPage() {
       setSubmitError('Select what kind of emergency this is.');
       return;
     }
+    if (descriptionRequired && !description.trim()) {
+      setDescriptionError('Please describe the emergency so responders know what to expect.');
+      return;
+    }
     setSubmitError(null);
+    setDescriptionError(null);
 
     const coords = locationRef.current;
     const payload: CreateReportInput = {
@@ -168,6 +180,7 @@ export function EmergencyPage() {
               onClick={() => {
                 setEmergencyType(option.value);
                 setSubmitError(null);
+                setDescriptionError(null);
               }}
               className={
                 'rounded-xl border-2 px-4 py-4 text-left text-[15px] font-bold transition active:scale-[0.98] ' +
@@ -186,7 +199,7 @@ export function EmergencyPage() {
         {locating ? 'Detecting your location…' : locationRef.current ? 'Location ready.' : 'Location unavailable, sending without it.'}
       </p>
 
-      {!showDetails ? (
+      {!showDetails && !descriptionRequired ? (
         <button
           type="button"
           onClick={() => setShowDetails(true)}
@@ -198,10 +211,15 @@ export function EmergencyPage() {
         <div className="mb-6 flex flex-col gap-4 rounded-xl border border-ink/10 p-4">
           <Textarea
             id="emergency-description"
-            label="Anything else responders should know? (optional)"
+            label={descriptionRequired ? 'Describe the emergency' : 'Anything else responders should know? (optional)'}
+            required={descriptionRequired}
+            error={descriptionError ?? undefined}
             rows={3}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              if (descriptionError) setDescriptionError(null);
+            }}
           />
           <div className="flex flex-col gap-1.5">
             <span className="text-ink-secondary text-[12.5px] font-semibold">Photo (optional)</span>
