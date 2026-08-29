@@ -75,7 +75,7 @@ class MessageService:
 class ReportService:
     @staticmethod
     @transaction.atomic
-    def create_report(validated_data, user, ip_address=None, sync_origin=SyncOrigin.LIVE):
+    def create_report(validated_data, user, ip_address=None, user_agent=None, sync_origin=SyncOrigin.LIVE):
         # Idempotency
         idempotency_key = validated_data.pop('idempotency_key', None)
         client_created_at = validated_data.pop('client_created_at', None)
@@ -160,7 +160,7 @@ class ReportService:
                 'status': report.status,
                 **({'emergency_type': emergency_type} if urgency == Urgency.PANIC else {}),
             },
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             client_timestamp=client_created_at,
             sync_origin=sync_origin,
         )
@@ -177,7 +177,7 @@ class ReportService:
                     'strategy': routing_result.strategy,
                     'matched_keywords': routing_result.matched_keywords,
                 },
-                ip_address=ip_address,
+                ip_address=ip_address, user_agent=user_agent,
                 sync_origin=sync_origin,
             )
         elif routing_result is not None and tier == 'medium':
@@ -196,7 +196,7 @@ class ReportService:
                     'strategy': routing_result.strategy,
                     'matched_keywords': routing_result.matched_keywords,
                 },
-                ip_address=ip_address,
+                ip_address=ip_address, user_agent=user_agent,
                 sync_origin=sync_origin,
             )
 
@@ -272,7 +272,7 @@ class ReportService:
 
     @staticmethod
     @transaction.atomic
-    def update_status(report, new_status, user, ip_address=None, expected_updated_at=None,
+    def update_status(report, new_status, user, ip_address=None, user_agent=None, expected_updated_at=None,
                       client_timestamp=None, sync_origin=SyncOrigin.LIVE):
         ReportService._check_version(report, expected_updated_at)
 
@@ -299,7 +299,7 @@ class ReportService:
             action=Action.STATUS_UPDATE,
             before_state={'status': old_status},
             after_state={'status': new_status},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             client_timestamp=client_timestamp,
             sync_origin=sync_origin,
         )
@@ -312,7 +312,7 @@ class ReportService:
                 report=report,
                 actor=user,
                 action=Action.FEEDBACK_REQUESTED,
-                ip_address=ip_address,
+                ip_address=ip_address, user_agent=user_agent,
                 client_timestamp=client_timestamp,
                 sync_origin=sync_origin,
             )
@@ -328,7 +328,7 @@ class ReportService:
 
     @staticmethod
     @transaction.atomic
-    def assign_report(report, assigned_to, user, ip_address=None, expected_updated_at=None,
+    def assign_report(report, assigned_to, user, ip_address=None, user_agent=None, expected_updated_at=None,
                       client_timestamp=None, sync_origin=SyncOrigin.LIVE):
         ReportService._check_version(report, expected_updated_at)
 
@@ -342,7 +342,7 @@ class ReportService:
             action=Action.ASSIGN,
             before_state={'assigned_to': str(old_assigned.id) if old_assigned else None},
             after_state={'assigned_to': str(assigned_to.id)},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             client_timestamp=client_timestamp,
             sync_origin=sync_origin,
         )
@@ -361,7 +361,7 @@ class ReportService:
 
     @staticmethod
     @transaction.atomic
-    def submit_feedback(report, user, rating, comments='', ip_address=None, sync_origin=SyncOrigin.LIVE):
+    def submit_feedback(report, user, rating, comments='', ip_address=None, user_agent=None, sync_origin=SyncOrigin.LIVE):
         """
         Only the report's own reporter may submit feedback, only once, and
         only once the report is Resolved. Auto-closes through the existing
@@ -385,16 +385,16 @@ class ReportService:
             actor=user,
             action=Action.SUBMIT_FEEDBACK,
             after_state={'rating': rating},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             sync_origin=sync_origin,
         )
 
-        ReportService.update_status(report, Status.CLOSED, user, ip_address=ip_address, sync_origin=sync_origin)
+        ReportService.update_status(report, Status.CLOSED, user, ip_address=ip_address, user_agent=user_agent, sync_origin=sync_origin)
         return feedback
 
     @staticmethod
     @transaction.atomic
-    def add_evidence(report, file, file_type, user, ip_address=None,
+    def add_evidence(report, file, file_type, user, ip_address=None, user_agent=None,
                      client_timestamp=None, sync_origin=SyncOrigin.LIVE):
         evidence = Evidence.objects.create(
             report=report,
@@ -406,7 +406,7 @@ class ReportService:
             actor=user,
             action=Action.EVIDENCE_UPLOAD,
             after_state={'evidence_id': str(evidence.id)},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             client_timestamp=client_timestamp,
             sync_origin=sync_origin,
         )
@@ -414,7 +414,7 @@ class ReportService:
 
     @staticmethod
     @transaction.atomic
-    def soft_delete(report, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
+    def soft_delete(report, actor, ip_address=None, user_agent=None, sync_origin=SyncOrigin.LIVE):
         report.deleted_at = timezone.now()
         report.save(update_fields=['deleted_at', 'updated_at'])
 
@@ -424,14 +424,14 @@ class ReportService:
             action=Action.SOFT_DELETE,
             before_state={'deleted_at': None},
             after_state={'deleted_at': report.deleted_at.isoformat()},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             sync_origin=sync_origin,
         )
         return report
 
     @staticmethod
     @transaction.atomic
-    def restore(report, actor, ip_address=None, sync_origin=SyncOrigin.LIVE):
+    def restore(report, actor, ip_address=None, user_agent=None, sync_origin=SyncOrigin.LIVE):
         old_deleted_at = report.deleted_at
         report.deleted_at = None
         report.save(update_fields=['deleted_at', 'updated_at'])
@@ -442,10 +442,41 @@ class ReportService:
             action=Action.RESTORE,
             before_state={'deleted_at': old_deleted_at.isoformat() if old_deleted_at else None},
             after_state={'deleted_at': None},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             sync_origin=sync_origin,
         )
         return report
+
+    @staticmethod
+    @transaction.atomic
+    def permanent_delete(report, actor, ip_address=None, user_agent=None):
+        """
+        Irreversibly deletes an already-soft-deleted report. Evidence rows
+        cascade with it; the AuditLog entry created here — and every
+        earlier entry for this report — survives with report set to None
+        (AuditLog.report is SET_NULL, not CASCADE), since the whole point
+        of logging a permanent delete is for the record to outlive the row
+        it describes. before_state is the report's own last-known content,
+        since after this there's nothing left in the reports table to look
+        it up by.
+        """
+        snapshot = {
+            'id': str(report.id),
+            'department': report.department.name if report.department else None,
+            'description': report.description,
+            'status': report.status,
+            'urgency': report.urgency,
+            'deleted_at': report.deleted_at.isoformat() if report.deleted_at else None,
+            'created_at': report.created_at.isoformat(),
+        }
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.PERMANENT_DELETE,
+            before_state=snapshot,
+            ip_address=ip_address, user_agent=user_agent,
+        )
+        report.delete()
 
     @staticmethod
     def _check_version(report, expected_updated_at):
@@ -489,12 +520,12 @@ class EmergencyDispatchService:
 
     @staticmethod
     @transaction.atomic
-    def acknowledge(report, user, ip_address=None):
+    def acknowledge(report, user, ip_address=None, user_agent=None):
         dispatch = EmergencyDispatchService._require_dispatch(report)
         if dispatch.acknowledged_at is not None:
             raise ValidationError({'error': 'This emergency has already been acknowledged.'})
 
-        result = ReportService.update_status(report, Status.ACKNOWLEDGED, user, ip_address=ip_address)
+        result = ReportService.update_status(report, Status.ACKNOWLEDGED, user, ip_address=ip_address, user_agent=user_agent)
         if 'error' in result:
             raise ValidationError(result)
 
@@ -512,18 +543,18 @@ class EmergencyDispatchService:
         AuditLog.objects.create(
             report=report, actor=user, action=Action.EMERGENCY_ACKNOWLEDGED,
             after_state={'acknowledged_by': user.username, 'assigned_to': user.username},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
         )
         return dispatch
 
     @staticmethod
     @transaction.atomic
-    def respond(report, user, ip_address=None):
+    def respond(report, user, ip_address=None, user_agent=None):
         dispatch = EmergencyDispatchService._require_dispatch(report)
         if dispatch.responding_at is not None:
             raise ValidationError({'error': 'This emergency is already marked as being responded to.'})
 
-        result = ReportService.update_status(report, Status.IN_PROGRESS, user, ip_address=ip_address)
+        result = ReportService.update_status(report, Status.IN_PROGRESS, user, ip_address=ip_address, user_agent=user_agent)
         if 'error' in result:
             raise ValidationError(result)
 
@@ -531,13 +562,13 @@ class EmergencyDispatchService:
         dispatch.save(update_fields=['responding_at', 'updated_at'])
 
         AuditLog.objects.create(
-            report=report, actor=user, action=Action.EMERGENCY_RESPONDING, ip_address=ip_address,
+            report=report, actor=user, action=Action.EMERGENCY_RESPONDING, ip_address=ip_address, user_agent=user_agent,
         )
         return dispatch
 
     @staticmethod
     @transaction.atomic
-    def arrive(report, user, ip_address=None):
+    def arrive(report, user, ip_address=None, user_agent=None):
         dispatch = EmergencyDispatchService._require_dispatch(report)
         if dispatch.arrived_at is not None:
             raise ValidationError({'error': 'This emergency is already marked as arrived.'})
@@ -546,7 +577,7 @@ class EmergencyDispatchService:
         dispatch.save(update_fields=['arrived_at', 'updated_at'])
 
         AuditLog.objects.create(
-            report=report, actor=user, action=Action.EMERGENCY_ARRIVED, ip_address=ip_address,
+            report=report, actor=user, action=Action.EMERGENCY_ARRIVED, ip_address=ip_address, user_agent=user_agent,
         )
 
         Notification.objects.create(recipient=None, report=report, channel=Channel.WEBSOCKET)
@@ -555,13 +586,13 @@ class EmergencyDispatchService:
 
     @staticmethod
     @transaction.atomic
-    def cancel(report, user, reason, ip_address=None):
+    def cancel(report, user, reason, ip_address=None, user_agent=None):
         """`reason` is 'cancelled' or 'false_alarm' — picks the Status the
         report ends up in; both are terminal, soft (never deletes the row)."""
         dispatch = EmergencyDispatchService._require_dispatch(report)
         new_status = Status.CANCELLED if reason == 'cancelled' else Status.FALSE_ALARM
 
-        result = ReportService.update_status(report, new_status, user, ip_address=ip_address)
+        result = ReportService.update_status(report, new_status, user, ip_address=ip_address, user_agent=user_agent)
         if 'error' in result:
             raise ValidationError(result)
 
@@ -572,13 +603,13 @@ class EmergencyDispatchService:
         action = Action.EMERGENCY_CANCELLED if reason == 'cancelled' else Action.EMERGENCY_FALSE_ALARM
         AuditLog.objects.create(
             report=report, actor=user, action=action,
-            after_state={'status': new_status}, ip_address=ip_address,
+            after_state={'status': new_status}, ip_address=ip_address, user_agent=user_agent,
         )
         return dispatch
 
     @staticmethod
     @transaction.atomic
-    def escalate(report, actor=None, reason=None, ip_address=None):
+    def escalate(report, actor=None, reason=None, ip_address=None, user_agent=None):
         """
         `actor=None` marks an automatic escalation (Celery Beat SLA scan) —
         same nullable-actor pattern AuditLog already uses for system
@@ -609,7 +640,7 @@ class EmergencyDispatchService:
         AuditLog.objects.create(
             report=report, actor=actor, action=Action.EMERGENCY_ESCALATED,
             after_state=after_state,
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
         )
 
         if actor is not None:

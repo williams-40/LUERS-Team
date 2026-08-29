@@ -25,6 +25,7 @@ from apps.accounts.permissions import CanManageUsers, IsAdminTier
 from apps.audit.models import AuditLog
 from apps.core.choices import Action
 from apps.core.pagination import StandardPagination
+from apps.core.request_utils import get_client_ip, get_user_agent
 
 User = get_user_model()
 
@@ -246,6 +247,7 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
         AuditLog.objects.create(
             actor=request.user, action=Action.ACCOUNT_CREATED,
             after_state={'user_id': str(user.id), 'username': user.username, 'role': user.role.slug},
+            ip_address=get_client_ip(request), user_agent=get_user_agent(request),
         )
         headers = self.get_success_headers(serializer.data)
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED, headers=headers)
@@ -270,17 +272,21 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
         was_active = serializer.instance.is_active
         was_role_slug = serializer.instance.role.slug
         user = serializer.save()
+        ip = get_client_ip(self.request)
+        ua = get_user_agent(self.request)
 
         if was_active and not user.is_active:
             blacklist_all_tokens_for(user)
             AuditLog.objects.create(
                 actor=self.request.user, action=Action.ACCOUNT_DEACTIVATED,
                 before_state={'is_active': True}, after_state={'is_active': False, 'user_id': str(user.id), 'username': user.username},
+                ip_address=ip, user_agent=ua,
             )
         elif not was_active and user.is_active:
             AuditLog.objects.create(
                 actor=self.request.user, action=Action.ACCOUNT_ACTIVATED,
                 before_state={'is_active': False}, after_state={'is_active': True, 'user_id': str(user.id), 'username': user.username},
+                ip_address=ip, user_agent=ua,
             )
 
         if was_role_slug != user.role.slug:
@@ -288,6 +294,7 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
                 actor=self.request.user, action=Action.ROLE_CHANGED,
                 before_state={'role': was_role_slug},
                 after_state={'role': user.role.slug, 'user_id': str(user.id), 'username': user.username},
+                ip_address=ip, user_agent=ua,
             )
 
     def update(self, request, *args, **kwargs):

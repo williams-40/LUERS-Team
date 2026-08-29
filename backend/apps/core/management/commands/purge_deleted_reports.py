@@ -7,16 +7,13 @@ from apps.reports.models import Report
 class Command(BaseCommand):
     help = (
         'Hard-deletes reports that have been soft-deleted (deleted_at set) '
-        'for longer than the retention window. Evidence AND AuditLog rows '
-        'for that report all cascade-delete with it (confirmed live: '
-        'purging 1 report also removed every AuditLog entry that '
-        'referenced it) — so a purge is a genuine, total erasure, '
-        'including the report\'s own history, not just its content. '
-        'If audit-trail permanence across purges is ever required, that '
-        'needs a deliberate follow-up (e.g. AuditLog.report changed to '
-        'SET_NULL) — not assumed here. Intended to be run manually or via an '
-        'external scheduler (cron) — see docs/postgres-backup-runbook.md for '
-        'how this ties into backup and retention policy.'
+        'for longer than the retention window. Evidence rows cascade-delete '
+        'with the report, but AuditLog rows for it do not (AuditLog.report '
+        'is SET_NULL) — a purge erases the report and its files, but the '
+        'audit trail of what happened to it survives, with report=None. '
+        'Intended to be run manually or via an external scheduler (cron) — '
+        'see docs/postgres-backup-runbook.md for how this ties into backup '
+        'and retention policy.'
     )
 
     def add_arguments(self, parser):

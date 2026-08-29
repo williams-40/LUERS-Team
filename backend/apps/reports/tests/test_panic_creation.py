@@ -68,14 +68,49 @@ def test_panic_emergency_type_routes_deterministically(emergency_type, departmen
 
     client = APIClient()
     client.force_authenticate(user=student)
-    response = client.post('/api/v1/reports/create/', {
-        'urgency': 'panic',
-        'emergency_type': emergency_type,
-    })
+    payload = {'urgency': 'panic', 'emergency_type': emergency_type}
+    # 'other' is the one type that requires a description (see
+    # test_panic_other_type_requires_description below) — the rest are
+    # self-explanatory and stay description-less here on purpose.
+    if emergency_type == 'other':
+        payload['description'] = 'Someone collapsed near the library entrance'
+    response = client.post('/api/v1/reports/create/', payload)
 
     assert response.status_code == 201, response.data
     report = Report.objects.get(id=response.data['id'])
     assert report.department.name == department_name
+
+
+@pytest.mark.django_db
+def test_panic_other_type_requires_description():
+    student = UserFactory(role='student')
+    DepartmentFactory(name='Security')
+
+    client = APIClient()
+    client.force_authenticate(user=student)
+    response = client.post('/api/v1/reports/create/', {
+        'urgency': 'panic',
+        'emergency_type': 'other',
+    })
+
+    assert response.status_code == 400
+    assert 'description' in response.data
+
+
+@pytest.mark.django_db
+def test_panic_other_type_with_description_succeeds():
+    student = UserFactory(role='student')
+    DepartmentFactory(name='Security')
+
+    client = APIClient()
+    client.force_authenticate(user=student)
+    response = client.post('/api/v1/reports/create/', {
+        'urgency': 'panic',
+        'emergency_type': 'other',
+        'description': 'A stray dog is chasing students near the gate',
+    })
+
+    assert response.status_code == 201, response.data
 
 
 @pytest.mark.django_db

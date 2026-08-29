@@ -75,22 +75,30 @@ class AuditLogExportView(APIView):
 
     HEADER = [
         'Timestamp', 'Action', 'Report ID', 'Report Category', 'Actor',
-        'IP Address', 'Sync Origin', 'Before State', 'After State',
+        'IP Address', 'Device', 'Sync Origin', 'Before State', 'After State',
     ]
 
     # Proportioned to fit the ~9.6in usable width of a landscape-letter PDF
     # page (see apps.core.export.pdf_response) so columns don't get cropped.
     PDF_COL_WIDTHS = [
-        1.0 * inch, 1.1 * inch, 0.7 * inch, 1.0 * inch, 0.9 * inch,
-        0.9 * inch, 0.9 * inch, 1.55 * inch, 1.55 * inch,
+        1.0 * inch, 1.1 * inch, 0.7 * inch, 0.9 * inch, 0.8 * inch,
+        0.8 * inch, 1.0 * inch, 0.8 * inch, 1.25 * inch, 1.25 * inch,
     ]
     PDF_STATE_MAX_CHARS = 150
+    PDF_USER_AGENT_MAX_CHARS = 120
 
     @classmethod
     def _truncate_state(cls, state):
         text = str(state) if state else ''
         if len(text) > cls.PDF_STATE_MAX_CHARS:
             return text[:cls.PDF_STATE_MAX_CHARS] + '…'
+        return text
+
+    @classmethod
+    def _truncate_user_agent(cls, user_agent):
+        text = user_agent or ''
+        if len(text) > cls.PDF_USER_AGENT_MAX_CHARS:
+            return text[:cls.PDF_USER_AGENT_MAX_CHARS] + '…'
         return text
 
     def get(self, request):
@@ -111,6 +119,7 @@ class AuditLogExportView(APIView):
                     entry.report.category if entry.report else '',
                     entry.actor.username if entry.actor else '',
                     entry.ip_address or '',
+                    self._truncate_user_agent(entry.user_agent),
                     entry.get_sync_origin_display(),
                     self._truncate_state(entry.before_state),
                     self._truncate_state(entry.after_state),
@@ -127,6 +136,7 @@ class AuditLogExportView(APIView):
                 entry.report.category if entry.report else '',
                 entry.actor.username if entry.actor else '',
                 entry.ip_address or '',
+                entry.user_agent or '',
                 entry.get_sync_origin_display(),
                 entry.before_state or '',
                 entry.after_state or '',

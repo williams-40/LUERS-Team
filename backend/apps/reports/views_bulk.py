@@ -6,13 +6,7 @@ from apps.reports.services import (
     ReportService, get_accessible_reports, is_department_head_or_system_admin, is_department_member_or_head,
 )
 from apps.core.choices import SyncOrigin
-
-
-def get_client_ip(request):
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', '0.0.0.0')
+from apps.core.request_utils import get_client_ip, get_user_agent
 
 
 class BulkStatusUpdateView(APIView):
@@ -40,6 +34,7 @@ class BulkStatusUpdateView(APIView):
         new_status = serializer.validated_data['status']
         accessible = get_accessible_reports(request.user)
         ip = get_client_ip(request)
+        ua = get_user_agent(request)
 
         results = []
         for report_id in report_ids:
@@ -58,7 +53,7 @@ class BulkStatusUpdateView(APIView):
                 continue
             try:
                 result = ReportService.update_status(
-                    report, new_status, request.user, ip_address=ip, sync_origin=SyncOrigin.LIVE,
+                    report, new_status, request.user, ip_address=ip, user_agent=ua, sync_origin=SyncOrigin.LIVE,
                 )
                 if 'error' in result:
                     results.append({'report_id': str(report_id), 'status': 'error', 'error': result['error']})
@@ -90,6 +85,7 @@ class BulkAssignView(APIView):
         assigned_to = serializer.validated_data['assigned_to']
         accessible = get_accessible_reports(request.user)
         ip = get_client_ip(request)
+        ua = get_user_agent(request)
 
         results = []
         for report_id in report_ids:
@@ -114,7 +110,7 @@ class BulkAssignView(APIView):
                 continue
             try:
                 ReportService.assign_report(
-                    report, assigned_to, request.user, ip_address=ip, sync_origin=SyncOrigin.LIVE,
+                    report, assigned_to, request.user, ip_address=ip, user_agent=ua, sync_origin=SyncOrigin.LIVE,
                 )
                 results.append({'report_id': str(report_id), 'status': 'success'})
             except Exception as e:

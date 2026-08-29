@@ -13,6 +13,6 @@ class AuditLogSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'report', 'report_category', 'actor', 'actor_username',
             'action', 'action_display', 'before_state', 'after_state',
-            'ip_address', 'client_timestamp', 'sync_origin', 'sync_origin_display',
+            'ip_address', 'user_agent', 'client_timestamp', 'sync_origin', 'sync_origin_display',
             'created_at',
         ]

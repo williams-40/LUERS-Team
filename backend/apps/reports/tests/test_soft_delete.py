@@ -128,6 +128,89 @@ def test_restore_round_trip():
 
 
 @pytest.mark.django_db
+def test_permanent_delete_requires_system_admin():
+    for role_factory in [lambda: UserFactory(role='student'), lambda: UserFactory(role='staff'),
+                          SecurityFactory, ManagementFactory, ICTAdminFactory]:
+        user = role_factory()
+        report = ReportFactory()
+        report.deleted_at = timezone.now()
+        report.save(update_fields=['deleted_at'])
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.post(f'/api/v1/reports/{report.id}/delete/permanent/')
+        assert response.status_code == 403, f"{user.role} got {response.status_code}"
+
+
+@pytest.mark.django_db
+def test_permanent_delete_requires_report_to_already_be_soft_deleted():
+    """Guards against skipping the soft-delete step entirely — an active
+    report 404s here exactly like ReportRestoreView does for the same
+    reason."""
+    admin = SystemAdminFactory()
+    report = ReportFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    response = client.post(f'/api/v1/reports/{report.id}/delete/permanent/')
+    assert response.status_code == 404
+    assert Report.objects.filter(id=report.id).exists()
+
+
+@pytest.mark.django_db
+def test_permanent_delete_succeeds_and_is_irreversible():
+    admin = SystemAdminFactory()
+    report = ReportFactory()
+    client = APIClient()
+    client.force_authenticate(user=admin)
+
+    client.post(f'/api/v1/reports/{report.id}/delete/')
+    report_id = report.id
+
+    response = client.post(f'/api/v1/reports/{report_id}/delete/permanent/')
+    assert response.status_code == 204
+    assert not Report.objects.filter(id=report_id).exists()
+
+    # Nothing left to restore or delete again — both 404 now.
+    assert client.post(f'/api/v1/reports/{report_id}/restore/').status_code == 404
+    assert client.post(f'/api/v1/reports/{report_id}/delete/permanent/').status_code == 404
+
+
+@pytest.mark.django_db
+def test_permanent_delete_writes_audit_log_that_outlives_the_report():
+    admin = SystemAdminFactory()
+    report = ReportFactory(description='Water leak in the east wing basement')
+    report.deleted_at = timezone.now()
+    report.save(update_fields=['deleted_at'])
+    report_id = report.id
+
+    client = APIClient()
+    client.force_authenticate(user=admin)
+    response = client.post(f'/api/v1/reports/{report_id}/delete/permanent/')
+    assert response.status_code == 204
+
+    entry = AuditLog.objects.get(action=Action.PERMANENT_DELETE, actor=admin)
+    assert entry.report_id is None
+    assert entry.before_state['id'] == str(report_id)
+    assert entry.before_state['description'] == 'Water leak in the east wing basement'
+
+
+@pytest.mark.django_db
+def test_permanent_delete_cascades_evidence():
+    admin = SystemAdminFactory()
+    report = ReportFactory()
+    evidence = Evidence.objects.create(report=report, file='evidence/test.jpg', file_type=FileType.IMAGE)
+    report.deleted_at = timezone.now()
+    report.save(update_fields=['deleted_at'])
+
+    client = APIClient()
+    client.force_authenticate(user=admin)
+    response = client.post(f'/api/v1/reports/{report.id}/delete/permanent/')
+
+    assert response.status_code == 204
+    assert not Evidence.objects.filter(id=evidence.id).exists()
+
+
+@pytest.mark.django_db
 def test_restore_requires_account_admin():
     system_admin = SystemAdminFactory()
     report = ReportFactory()
@@ -223,6 +306,27 @@ def test_purge_deleted_reports_cascades_evidence():
     # reporter is SET_NULL on the Report FK, not CASCADE — purging a
     # report must never delete the User account that filed it.
     student.refresh_from_db()
+
+
+@pytest.mark.django_db
+def test_purge_deleted_reports_preserves_audit_trail():
+    """AuditLog.report is SET_NULL (not CASCADE) — a purge erases the report
+    itself, but its audit history (what happened to it, including this
+    purge never being logged since it's a system action, but any earlier
+    CREATE/SOFT_DELETE entries) survives with report=None instead of being
+    silently wiped alongside it."""
+    admin = ICTAdminFactory()
+    report = ReportFactory()
+    AuditLog.objects.create(report=report, actor=admin, action=Action.CREATE)
+    entry_id = AuditLog.objects.get(report=report, action=Action.CREATE).id
+
+    report.deleted_at = timezone.now() - timedelta(days=200)
+    report.save(update_fields=['deleted_at'])
+    call_command('purge_deleted_reports', '--days', '90')
+
+    assert not Report.objects.filter(id=report.id).exists()
+    entry = AuditLog.objects.get(id=entry_id)
+    assert entry.report_id is None
 
 
 @pytest.mark.django_db

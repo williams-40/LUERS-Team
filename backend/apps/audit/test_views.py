@@ -3,6 +3,7 @@ from rest_framework.test import APIClient
 from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, ReportFactory, DepartmentFactory
 from apps.reports.services import ReportService
 from apps.core.choices import Status, Action
+from apps.audit.models import AuditLog
 
 
 @pytest.mark.django_db
@@ -37,6 +38,31 @@ def test_audit_list_visible_to_admin_tier():
     assert Action.STATUS_UPDATE in actions
     entry = next(e for e in response.data['results'] if e['action'] == Action.STATUS_UPDATE)
     assert str(entry['actor']) == str(security.id)
+
+
+@pytest.mark.django_db
+def test_audit_entry_captures_client_ip_and_user_agent():
+    """
+    "Accessed from" context on the audit log — real, always-available
+    ip_address + user_agent instead of an IP geolocation lookup that would
+    just say "Unknown" for the private/LAN IPs this app is actually used
+    from (see AuditLogPage.tsx's summarizeUserAgent).
+    """
+    student = UserFactory(role='student')
+    DepartmentFactory(name='Security')
+
+    client = APIClient()
+    client.force_authenticate(user=student)
+    response = client.post(
+        '/api/v1/reports/create/',
+        {'urgency': 'panic', 'emergency_type': 'security'},
+        HTTP_USER_AGENT='Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 Safari/537.36',
+    )
+
+    assert response.status_code == 201, response.data
+    entry = AuditLog.objects.get(report_id=response.data['id'], action=Action.CREATE)
+    assert entry.ip_address == '127.0.0.1'
+    assert entry.user_agent == 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 Safari/537.36'
 
 
 @pytest.mark.django_db

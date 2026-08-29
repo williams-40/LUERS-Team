@@ -191,6 +191,12 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         if urgency == Urgency.PANIC:
             if not attrs.get('emergency_type'):
                 errors['emergency_type'] = 'Required for a panic report.'
+            # "Other" doesn't tell a responder anything to route or act on
+            # by itself — unlike the fixed types, there's nothing implied
+            # without a description. Mirrors the frontend requirement in
+            # EmergencyPage.tsx.
+            elif attrs.get('emergency_type') == EmergencyType.OTHER and not (attrs.get('description') or '').strip():
+                errors['description'] = 'Please describe the emergency.'
         else:
             if attrs.get('department') is None:
                 errors['department'] = 'This field is required.'

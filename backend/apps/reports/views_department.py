@@ -12,6 +12,7 @@ from apps.accounts.serializers import ResponderCreateSerializer, HeadCreateSeria
 from apps.audit.models import AuditLog
 from apps.core.choices import Action
 from apps.core.pagination import StandardPagination
+from apps.core.request_utils import get_client_ip, get_user_agent
 
 
 class DepartmentListCreateView(generics.ListCreateAPIView):
@@ -118,6 +119,8 @@ class DepartmentResponderCreateView(GenericAPIView):
                 'department_id': str(department.id),
                 'department_name': department.name,
             },
+            ip_address=get_client_ip(request),
+            user_agent=get_user_agent(request),
         )
 
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
@@ -163,6 +166,8 @@ class DepartmentHeadCreateView(GenericAPIView):
                 'department_id': str(department.id),
                 'department_name': department.name,
             },
+            ip_address=get_client_ip(request),
+            user_agent=get_user_agent(request),
         )
 
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)

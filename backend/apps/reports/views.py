@@ -31,14 +31,7 @@ from reportlab.lib.units import inch
 from apps.reports.serializers import SyncRequestSerializer, SyncResultSerializer
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from apps.core.choices import SyncOrigin, Status
-
-
-def get_client_ip(request):
-    """Utility helper to extract the real IP address from HTTP request metadata."""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', '0.0.0.0')
+from apps.core.request_utils import get_client_ip, get_user_agent
 
 
 class ReportCreateView(generics.CreateAPIView):
@@ -66,10 +59,12 @@ class ReportCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         ip = get_client_ip(self.request)
+        ua = get_user_agent(self.request)
         report = ReportService.create_report(
             validated_data=serializer.validated_data,
             user=self.request.user,
             ip_address=ip,
+            user_agent=ua,
             sync_origin=SyncOrigin.LIVE
         )
         serializer.instance = report
@@ -249,11 +244,13 @@ class ReportStatusUpdateView(APIView):
         client_timestamp = serializer.validated_data.get('client_timestamp')
 
         ip = get_client_ip(request)
+        ua = get_user_agent(request)
         result = ReportService.update_status(
             report,
             new_status,
             request.user,
             ip_address=ip,
+            user_agent=ua,
             expected_updated_at=expected_updated_at,
             client_timestamp=client_timestamp,
             sync_origin=SyncOrigin.LIVE
@@ -324,11 +321,13 @@ class ReportAssignView(APIView):
         client_timestamp = serializer.validated_data.get('client_timestamp')
 
         ip = get_client_ip(request)
+        ua = get_user_agent(request)
         result = ReportService.assign_report(
             report,
             assigned_to,
             request.user,
             ip_address=ip,
+            user_agent=ua,
             expected_updated_at=expected_updated_at,
             client_timestamp=client_timestamp,
             sync_origin=SyncOrigin.LIVE
@@ -355,7 +354,9 @@ class EmergencyAcknowledgeView(APIView):
         report = get_object_or_404(Report.objects.filter(deleted_at__isnull=True), id=id)
         if not is_department_member_or_head(request.user, report.department):
             raise PermissionDenied("Only this report's department can acknowledge it.")
-        dispatch = EmergencyDispatchService.acknowledge(report, request.user, ip_address=get_client_ip(request))
+        dispatch = EmergencyDispatchService.acknowledge(
+            report, request.user, ip_address=get_client_ip(request), user_agent=get_user_agent(request),
+        )
         return Response({'acknowledged_at': dispatch.acknowledged_at, 'assigned_to': str(report.assigned_to_id)})
 
 
@@ -370,7 +371,9 @@ class EmergencyRespondView(APIView):
         report = get_object_or_404(get_accessible_reports(request.user), id=id)
         if report.assigned_to_id != request.user.id:
             raise PermissionDenied("Only this report's assigned responder can mark it as responding.")
-        dispatch = EmergencyDispatchService.respond(report, request.user, ip_address=get_client_ip(request))
+        dispatch = EmergencyDispatchService.respond(
+            report, request.user, ip_address=get_client_ip(request), user_agent=get_user_agent(request),
+        )
         return Response({'responding_at': dispatch.responding_at})
 
 
@@ -385,7 +388,9 @@ class EmergencyArriveView(APIView):
         report = get_object_or_404(get_accessible_reports(request.user), id=id)
         if report.assigned_to_id != request.user.id:
             raise PermissionDenied("Only this report's assigned responder can mark it as arrived.")
-        dispatch = EmergencyDispatchService.arrive(report, request.user, ip_address=get_client_ip(request))
+        dispatch = EmergencyDispatchService.arrive(
+            report, request.user, ip_address=get_client_ip(request), user_agent=get_user_agent(request),
+        )
         return Response({'arrived_at': dispatch.arrived_at})
 
 
@@ -415,7 +420,9 @@ class EmergencyCancelView(APIView):
                 "or a System Admin can cancel it."
             )
 
-        dispatch = EmergencyDispatchService.cancel(report, request.user, reason, ip_address=get_client_ip(request))
+        dispatch = EmergencyDispatchService.cancel(
+            report, request.user, reason, ip_address=get_client_ip(request), user_agent=get_user_agent(request),
+        )
         return Response({'cancelled_at': dispatch.cancelled_at, 'status': report.status})
 
 
@@ -440,7 +447,8 @@ class EmergencyEscalateView(APIView):
         if not isinstance(reason, str) or not reason.strip():
             raise DRFValidationError({'reason': 'A reason is required to escalate to System Admin.'})
         dispatch = EmergencyDispatchService.escalate(
-            report, actor=request.user, reason=reason, ip_address=get_client_ip(request),
+            report, actor=request.user, reason=reason,
+            ip_address=get_client_ip(request), user_agent=get_user_agent(request),
         )
         return Response({'escalation_level': dispatch.escalation_level})
 
@@ -513,12 +521,14 @@ class EvidenceUploadView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         ip = get_client_ip(request)
+        ua = get_user_agent(request)
         evidence = ReportService.add_evidence(
             report,
             file,
             file_type,
             user,
             ip_address=ip,
+            user_agent=ua,
             sync_origin=SyncOrigin.LIVE
         )
         serializer = self.serializer_class(evidence, context={'request': request})
@@ -538,7 +548,8 @@ class ReportDeleteView(APIView):
     def post(self, request, id):
         report = get_object_or_404(get_accessible_reports(request.user), id=id)
         ip = get_client_ip(request)
-        ReportService.soft_delete(report, request.user, ip_address=ip, sync_origin=SyncOrigin.LIVE)
+        ua = get_user_agent(request)
+        ReportService.soft_delete(report, request.user, ip_address=ip, user_agent=ua, sync_origin=SyncOrigin.LIVE)
         return Response({'id': str(report.id), 'deleted_at': report.deleted_at})
 
 
@@ -555,8 +566,32 @@ class ReportRestoreView(APIView):
             id=id,
         )
         ip = get_client_ip(request)
-        ReportService.restore(report, request.user, ip_address=ip, sync_origin=SyncOrigin.LIVE)
+        ua = get_user_agent(request)
+        ReportService.restore(report, request.user, ip_address=ip, user_agent=ua, sync_origin=SyncOrigin.LIVE)
         return Response({'id': str(report.id), 'deleted_at': None})
+
+
+class ReportPermanentDeleteView(APIView):
+    """
+    POST /api/v1/reports/{id}/delete/permanent/
+    Irreversibly deletes a report that's already been soft-deleted — only
+    reachable from the Deleted reports admin view, never straight from an
+    active report. Same System-Admin-only gate as soft-delete/restore
+    (delete_report is already effectively system_admin-only — see
+    test_soft_delete.py). Rejects a report that isn't soft-deleted yet,
+    so this can never be used to skip the soft-delete step.
+    """
+    permission_classes = [permissions.IsAuthenticated, CanDeleteReport]
+
+    def post(self, request, id):
+        report = get_object_or_404(
+            get_accessible_reports(request.user, include_deleted=True).filter(deleted_at__isnull=False),
+            id=id,
+        )
+        ip = get_client_ip(request)
+        ua = get_user_agent(request)
+        ReportService.permanent_delete(report, request.user, ip_address=ip, user_agent=ua)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ReportDeletedListView(generics.ListAPIView):
@@ -613,6 +648,7 @@ class SyncView(APIView):
             data = action_data['data']
             report_id = action_data.get('report_id')
             ip = get_client_ip(request)
+            ua = get_user_agent(request)
 
             try:
                 if action_type == 'create_report':
@@ -632,6 +668,7 @@ class SyncView(APIView):
                         validated_data=report_serializer.validated_data,
                         user=request.user,
                         ip_address=ip,
+                        user_agent=ua,
                         sync_origin=SyncOrigin.SYNC
                     )
                     detail_serializer = ReportDetailSerializer(report, context={'request': request})
@@ -658,6 +695,7 @@ class SyncView(APIView):
                         new_status,
                         request.user,
                         ip_address=ip,
+                        user_agent=ua,
                         expected_updated_at=expected_updated_at,
                         client_timestamp=client_timestamp,
                         sync_origin=SyncOrigin.SYNC

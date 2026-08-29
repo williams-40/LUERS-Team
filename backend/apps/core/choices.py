@@ -58,6 +58,7 @@ class Action(models.TextChoices):
     EVIDENCE_UPLOAD = 'evidence_upload', 'Evidence Upload'
     SOFT_DELETE = 'soft_delete', 'Soft Delete'
     RESTORE = 'restore', 'Restore'
+    PERMANENT_DELETE = 'permanent_delete', 'Permanently Deleted'
     AUTO_ROUTE = 'auto_route', 'Auto Route'
     ROUTING_SUGGESTION = 'routing_suggestion', 'Routing Suggestion'
     FEEDBACK_REQUESTED = 'feedback_requested', 'Feedback Requested'

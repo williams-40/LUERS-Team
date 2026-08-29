@@ -11,13 +11,7 @@ from apps.reports.services import ReportService, get_accessible_reports, get_pen
 from apps.audit.models import AuditLog
 from apps.core.choices import Action, SyncOrigin
 from apps.accounts.permissions import CanViewAllReports
-
-
-def get_client_ip(request):
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', '0.0.0.0')
+from apps.core.request_utils import get_client_ip, get_user_agent
 
 
 class ReportFeedbackView(APIView):
@@ -44,6 +38,7 @@ class ReportFeedbackView(APIView):
             actor=request.user,
             action=Action.VIEW_FEEDBACK,
             ip_address=get_client_ip(request),
+            user_agent=get_user_agent(request),
             sync_origin=SyncOrigin.LIVE,
         )
         return Response(ReportFeedbackSerializer(feedback).data)
@@ -54,12 +49,14 @@ class ReportFeedbackView(APIView):
         serializer.is_valid(raise_exception=True)
 
         ip = get_client_ip(request)
+        ua = get_user_agent(request)
         feedback = ReportService.submit_feedback(
             report,
             request.user,
             rating=serializer.validated_data['rating'],
             comments=serializer.validated_data.get('comments', ''),
             ip_address=ip,
+            user_agent=ua,
             sync_origin=SyncOrigin.LIVE,
         )
         return Response(ReportFeedbackSerializer(feedback).data, status=status.HTTP_201_CREATED)
