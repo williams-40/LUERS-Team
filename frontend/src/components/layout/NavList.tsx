@@ -38,9 +38,14 @@ export function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean
                     cn(
                       'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition',
                       collapsed && 'justify-center',
+                      // Neutral ink/6 hover barely registers against the
+                      // sidebar's own blue tint — brand-tinted states read
+                      // clearly instead, and text-brand-ink (not text-brand)
+                      // is the token built specifically for contrast on top
+                      // of a brand-tinted background, in both themes.
                       isActive
-                        ? 'bg-brand/10 text-brand'
-                        : 'text-ink-secondary hover:bg-ink/6 hover:text-ink',
+                        ? 'bg-brand/25 text-brand-ink font-semibold'
+                        : 'text-ink-secondary hover:bg-brand/10 hover:text-ink',
                     )
                   }
                 >

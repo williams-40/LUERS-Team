@@ -5,7 +5,7 @@
 export const ALLOWED_EVIDENCE_EXTENSIONS = [
   '.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mp3', '.wav', '.pdf', '.webm', '.weba',
 ];
-export const MAX_EVIDENCE_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+export const MAX_EVIDENCE_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 export function validateEvidenceFile(file: File): string | null {
   const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();

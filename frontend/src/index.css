@@ -66,6 +66,12 @@
   --color-ink-muted: #898781;
   --color-surface: #fcfcfb;
   --color-surface-2: #ffffff;
+
+  /* A soft brand-tinted background for Sidebar/MobileDrawer, so navigation
+     reads as its own zone against the near-white surfaces used everywhere
+     else — not a straight tint of --color-brand (too saturated for a large
+     fill), a deliberately desaturated, low-contrast blue instead. */
+  --color-sidebar: #eef3fb;
 }
 
 /*
@@ -95,6 +101,10 @@
   --color-ink-muted: #86837c;
   --color-surface: #0e1116;
   --color-surface-2: #171b22;
+
+  /* A touch more blue-saturated than --color-surface-2, so the sidebar
+     still reads as its own zone against every other dark panel. */
+  --color-sidebar: #121a2c;
 }
 
 @keyframes rail-pulse {

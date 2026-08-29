@@ -1,6 +1,7 @@
-﻿import { useRef } from 'react';
+﻿import { useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { ALLOWED_EVIDENCE_EXTENSIONS, validateEvidenceFile } from '../../lib/evidence-constraints';
+import { ALLOWED_EVIDENCE_EXTENSIONS, MAX_EVIDENCE_FILE_SIZE, validateEvidenceFile } from '../../lib/evidence-constraints';
+import { compressImageFileIfNeeded } from '../../lib/image-compression';
 
 interface EvidencePickerProps {
   files: File[];
@@ -11,21 +12,29 @@ interface EvidencePickerProps {
 
 export function EvidencePicker({ files, onChange, errors, onErrorsChange }: EvidencePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [compressing, setCompressing] = useState(false);
 
-  function handleFiles(selected: FileList | null) {
+  async function handleFiles(selected: FileList | null) {
     if (!selected) return;
+    setCompressing(true);
     const nextErrors: string[] = [];
     const accepted: File[] = [];
-    for (const file of Array.from(selected)) {
+    for (const original of Array.from(selected)) {
+      // Compress before validating size — a large JPEG that compresses
+      // under the limit should be accepted, not rejected for a size it no
+      // longer has by the time it's uploaded.
+      // eslint-disable-next-line no-await-in-loop
+      const file = await compressImageFileIfNeeded(original);
       const error = validateEvidenceFile(file);
       if (error) {
-        nextErrors.push(`${file.name}: ${error}`);
+        nextErrors.push(`${original.name}: ${error}`);
       } else {
         accepted.push(file);
       }
     }
     onChange([...files, ...accepted]);
     onErrorsChange(nextErrors);
+    setCompressing(false);
     if (inputRef.current) inputRef.current.value = '';
   }
 
@@ -39,12 +48,15 @@ export function EvidencePicker({ files, onChange, errors, onErrorsChange }: Evid
         ref={inputRef}
         type="file"
         multiple
+        disabled={compressing}
         accept={ALLOWED_EVIDENCE_EXTENSIONS.join(',')}
-        onChange={(e) => handleFiles(e.target.files)}
-        className="text-ink-secondary text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-ink/6 file:px-3 file:py-1.5 file:text-sm file:font-semibold"
+        onChange={(e) => void handleFiles(e.target.files)}
+        className="text-ink-secondary text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-ink/6 file:px-3 file:py-1.5 file:text-sm file:font-semibold disabled:opacity-50"
       />
       <p className="text-ink-muted text-xs">
-        Photos, video, or audio up to 5MB each ({ALLOWED_EVIDENCE_EXTENSIONS.join(', ')}).
+        {compressing
+          ? 'Compressing large photos…'
+          : `Photos, video, or audio up to ${MAX_EVIDENCE_FILE_SIZE / (1024 * 1024)}MB each (${ALLOWED_EVIDENCE_EXTENSIONS.join(', ')}). Large photos are compressed automatically.`}
       </p>
 
       {errors.length > 0 && (

@@ -25,7 +25,7 @@ export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => 
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"
-        className="bg-surface-2 relative flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto px-3.5 py-4 shadow-lg"
+        className="bg-sidebar relative flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto px-3.5 py-4 shadow-lg"
       >
         <div className="mb-5 flex items-center justify-between gap-2 px-1">
           <Link to="/" onClick={onClose} className="flex items-center gap-2">

@@ -16,6 +16,21 @@ const MIME_TYPE = 'video/webm';
 const EXTENSION: Record<RecordingMode, string> = { audio: '.weba', video: '.webm' };
 const FILE_TYPE: Record<RecordingMode, string> = { audio: 'audio/webm', video: 'video/webm' };
 
+// A hard 2-minute cap, enforced by stopping the recorder automatically —
+// unlike the byte-based cutoff this replaces, this is generous enough that
+// it's essentially never hit by a normal incident description, so it never
+// feels like the recording was cut short arbitrarily.
+const MAX_RECORDING_SECONDS = 120;
+
+// Explicit (lowish) target bitrates are the actual "automatic compression"
+// here — MediaRecorder has no separate compress-after-the-fact step, so the
+// only lever is asking the browser's own encoder to target a smaller
+// output up front. At these rates a full 2-minute recording lands around
+// 15-20MB, comfortably inside MAX_EVIDENCE_FILE_SIZE even before the
+// too-large fallback below ever needs to kick in.
+const VIDEO_BITS_PER_SECOND = 1_000_000; // 1 Mbps
+const AUDIO_BITS_PER_SECOND = 128_000; // 128 kbps
+
 function formatSeconds(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
@@ -32,6 +47,7 @@ export function MediaRecorderControl({
   const [state, setState] = useState<RecorderState>('idle');
   const [seconds, setSeconds] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [hitTimeLimit, setHitTimeLimit] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -86,19 +102,25 @@ export function MediaRecorderControl({
     chunksRef.current = [];
     bytesRef.current = 0;
     setSeconds(0);
+    setHitTimeLimit(false);
 
-    const recorder = new MediaRecorder(stream, { mimeType: MIME_TYPE });
+    const recorder = new MediaRecorder(stream, {
+      mimeType: MIME_TYPE,
+      audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+      ...(mode === 'video' ? { videoBitsPerSecond: VIDEO_BITS_PER_SECOND } : {}),
+    });
     mediaRecorderRef.current = recorder;
 
     recorder.ondataavailable = (event) => {
       if (event.data.size === 0) return;
       bytesRef.current += event.data.size;
       chunksRef.current.push(event.data);
-      // Recording length/stop is entirely the user's call — no automatic
-      // cutoff here. The 5MB evidence cap is still enforced, just after the
-      // fact in onstop below, where an oversized recording gets a clear
-      // "too long, re-record" message instead of being silently truncated
-      // mid-recording.
+      // Stopping is still the user's call up to the 2-minute cap below — no
+      // premature cutoff before that. The evidence size cap is enforced
+      // after the fact in onstop, where an oversized recording (unlikely at
+      // these bitrates, but possible for a long low-motion video) gets a
+      // clear "too long, re-record" message instead of being silently
+      // truncated mid-recording.
     };
 
     recorder.onstop = async () => {
@@ -138,7 +160,16 @@ export function MediaRecorderControl({
     recorder.start(1000);
     startedAtRef.current = Date.now();
     setState('recording');
-    timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+    timerRef.current = setInterval(() => {
+      setSeconds((s) => {
+        const next = s + 1;
+        if (next >= MAX_RECORDING_SECONDS) {
+          setHitTimeLimit(true);
+          stopRecording();
+        }
+        return next;
+      });
+    }, 1000);
   }
 
   function stopRecording() {
@@ -176,11 +207,12 @@ export function MediaRecorderControl({
   }
 
   if (state === 'too_large') {
+    const maxMb = MAX_EVIDENCE_FILE_SIZE / (1024 * 1024);
     return (
       <div className="flex flex-col gap-2">
         <p className="text-status-critical text-xs">
-          That recording is too long ({formatSeconds(seconds)}, over the 5MB limit). Please re-record a shorter
-          clip.
+          That recording is too large ({formatSeconds(seconds)}, over the {maxMb}MB limit). Please re-record a
+          shorter or lower-motion clip.
         </p>
         <Button type="button" variant="secondary" size="sm" onClick={reRecord} className="self-start">
           Re-record
@@ -202,6 +234,11 @@ export function MediaRecorderControl({
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <audio src={previewUrl} controls className="w-full" />
         )}
+        {hitTimeLimit && (
+          <p className="text-status-warning text-xs">
+            Stopped automatically at the {MAX_RECORDING_SECONDS / 60}-minute recording limit.
+          </p>
+        )}
         <Button type="button" variant="ghost" size="sm" onClick={reRecord} className="self-start">
           Re-record
         </Button>
@@ -217,7 +254,7 @@ export function MediaRecorderControl({
         topRight={
           <div className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5 backdrop-blur-sm">
             <span className="bg-status-critical h-2 w-2 shrink-0 animate-pulse rounded-full motion-reduce:animate-none" aria-hidden />
-            <span className="text-sm tabular-nums text-white">{formatSeconds(seconds)}</span>
+            <span className="text-sm tabular-nums text-white">{formatSeconds(seconds)} / {formatSeconds(MAX_RECORDING_SECONDS)}</span>
           </div>
         }
         bottomControls={<ShutterButton onClick={stopRecording} variant="stop" label="Stop recording" />}
@@ -232,7 +269,7 @@ export function MediaRecorderControl({
     return (
       <div className="flex items-center gap-3">
         <span className="bg-status-critical h-2.5 w-2.5 shrink-0 animate-pulse rounded-full motion-reduce:animate-none" aria-hidden />
-        <span className="text-ink-secondary text-sm tabular-nums">{formatSeconds(seconds)}</span>
+        <span className="text-ink-secondary text-sm tabular-nums">{formatSeconds(seconds)} / {formatSeconds(MAX_RECORDING_SECONDS)}</span>
         <Button type="button" variant="destructive" size="sm" onClick={stopRecording}>
           Stop recording
         </Button>

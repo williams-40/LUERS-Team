@@ -18,7 +18,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'bg-surface-2 sticky top-0 hidden h-screen shrink-0 flex-col border-r border-ink/10 py-4 transition-[width] md:flex',
+        'bg-sidebar sticky top-0 hidden h-screen shrink-0 flex-col border-r border-ink/10 py-4 transition-[width] md:flex',
         collapsed ? 'w-[68px] px-2.5' : 'w-64 px-3.5',
       )}
     >
@@ -36,7 +36,7 @@ export function Sidebar() {
         onClick={() => setCollapsed((prev) => !prev)}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         className={cn(
-          'text-ink-muted hover:bg-ink/6 hover:text-ink mt-3 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm',
+          'text-ink-muted hover:bg-brand/10 hover:text-ink mt-3 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm',
           collapsed && 'justify-center',
         )}
       >
