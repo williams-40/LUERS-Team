@@ -67,11 +67,15 @@
   --color-surface: #fcfcfb;
   --color-surface-2: #ffffff;
 
-  /* A soft brand-tinted background for Sidebar/MobileDrawer, so navigation
-     reads as its own zone against the near-white surfaces used everywhere
-     else — not a straight tint of --color-brand (too saturated for a large
-     fill), a deliberately desaturated, low-contrast blue instead. */
-  --color-sidebar: #eef3fb;
+  /* A confident, fully-saturated brand blue for Sidebar/MobileDrawer — a
+     deliberately dark surface with its own light-on-blue text tokens below,
+     not a tint of the page's own light ink/surface tokens (a pale tint read
+     as too soft to register as "the nav," rather than its own zone). */
+  --color-sidebar: #1c3f8a;
+  --color-sidebar-ink: #ffffff;
+  --color-sidebar-ink-muted: #a9c0ec;
+  --color-sidebar-hover-bg: rgba(255, 255, 255, 0.1);
+  --color-sidebar-active-bg: rgba(255, 255, 255, 0.18);
 }
 
 /*
@@ -102,9 +106,13 @@
   --color-surface: #0e1116;
   --color-surface-2: #171b22;
 
-  /* A touch more blue-saturated than --color-surface-2, so the sidebar
-     still reads as its own zone against every other dark panel. */
-  --color-sidebar: #121a2c;
+  /* Same idea as light, deepened slightly so it still reads as richer than
+     the page's own dark surfaces rather than blending into them. */
+  --color-sidebar: #14336e;
+  --color-sidebar-ink: #ffffff;
+  --color-sidebar-ink-muted: #93add9;
+  --color-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+  --color-sidebar-active-bg: rgba(255, 255, 255, 0.16);
 }
 
 @keyframes rail-pulse {

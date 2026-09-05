@@ -22,7 +22,7 @@ export function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean
         return (
           <div key={group.label} className="flex flex-col gap-1">
             {!collapsed && (
-              <span className="text-ink-muted px-2.5 text-[11px] font-semibold tracking-wide uppercase">
+              <span className="text-sidebar-ink-muted px-2.5 text-[11px] font-semibold tracking-wide uppercase">
                 {group.label}
               </span>
             )}
@@ -38,14 +38,14 @@ export function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean
                     cn(
                       'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition',
                       collapsed && 'justify-center',
-                      // Neutral ink/6 hover barely registers against the
-                      // sidebar's own blue tint — brand-tinted states read
-                      // clearly instead, and text-brand-ink (not text-brand)
-                      // is the token built specifically for contrast on top
-                      // of a brand-tinted background, in both themes.
+                      // The sidebar is now a solid, saturated blue fill in
+                      // both themes (not a page-surface tint), so its text
+                      // comes from the dedicated sidebar-ink tokens rather
+                      // than the general ink/brand tokens tuned for a light
+                      // background.
                       isActive
-                        ? 'bg-brand/25 text-brand-ink font-semibold'
-                        : 'text-ink-secondary hover:bg-brand/10 hover:text-ink',
+                        ? 'bg-sidebar-active-bg text-sidebar-ink font-semibold'
+                        : 'text-sidebar-ink-muted hover:bg-sidebar-hover-bg hover:text-sidebar-ink',
                     )
                   }
                 >

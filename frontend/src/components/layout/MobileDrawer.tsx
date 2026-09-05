@@ -29,14 +29,14 @@ export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => 
       >
         <div className="mb-5 flex items-center justify-between gap-2 px-1">
           <Link to="/" onClick={onClose} className="flex items-center gap-2">
-            <Logo className="h-8 w-auto shrink-0" />
-            <span className="font-heading text-brand-ink text-sm font-bold">LUERS</span>
+            <Logo variant="light" className="h-8 w-auto shrink-0" />
+            <span className="font-heading text-sidebar-ink text-sm font-bold">LUERS</span>
           </Link>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close navigation"
-            className="text-ink-muted hover:text-ink shrink-0 p-1"
+            className="text-sidebar-ink-muted hover:text-sidebar-ink shrink-0 p-1"
           >
             <X className="h-5 w-5" />
           </button>
