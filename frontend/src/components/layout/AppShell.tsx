@@ -60,7 +60,16 @@ export function AppShell() {
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar collapsed={sidebarCollapsed} onOpenDrawer={() => setDrawerOpen(true)} />
-        <main id="main-content" className="flex-1">
+        {/* [transform:translateZ(0)] is a visual no-op, but it establishes a
+            new containing block for `position: fixed` descendants (ActionBar,
+            on the emergency report page) — scoped to *this* box, which
+            already excludes the sidebar's width, instead of the raw
+            viewport. Without it, a fixed child centers itself across the
+            whole screen (sidebar included), landing off-center from the
+            page's own `mx-auto max-w-xl` content column. Portaled overlays
+            (Modal/Toast/MobileDrawer/CameraOverlay) render straight onto
+            document.body and are unaffected either way. */}
+        <main id="main-content" className="flex-1 [transform:translateZ(0)]">
           <Suspense fallback={<RouteLoadingFallback />}>
             <Outlet />
           </Suspense>
