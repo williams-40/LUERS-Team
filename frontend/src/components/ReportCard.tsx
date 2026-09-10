@@ -1,5 +1,5 @@
 ﻿import { Link } from 'react-router-dom';
-import { Urgency } from '../types/domain';
+import { Status } from '../types/domain';
 import type { ReportListItem } from '../types/domain';
 import { StatusBadge } from './ui/StatusBadge';
 import { cn } from '../lib/utils';
@@ -16,13 +16,29 @@ function timeAgo(iso: string): string {
 }
 
 /**
- * The severity rail: urgency, not workflow status, is the one signal a
- * triage officer should read without looking at anything else on the card.
- * It never changes for status — a resolved panic report should still show
- * it *was* urgent when scanning history.
+ * The severity rail used to read urgency (pulsing red for panic vs. static
+ * blue for normal), but every report is panic now — that signal stopped
+ * distinguishing anything. What still varies, and still matters at a
+ * glance, is whether this needs a first response: pulsing red until
+ * acknowledged, settling to amber while being worked, muted once it's
+ * over one way or another.
  */
+const SEVERITY_RAIL: Record<Status, { rail: string; pulse: boolean }> = {
+  [Status.NEW]: { rail: 'bg-status-critical', pulse: true },
+  [Status.ACKNOWLEDGED]: { rail: 'bg-status-warning', pulse: false },
+  [Status.IN_PROGRESS]: { rail: 'bg-status-warning', pulse: false },
+  [Status.RESOLVED]: { rail: 'bg-ink-muted', pulse: false },
+  [Status.CLOSED]: { rail: 'bg-ink-muted', pulse: false },
+  [Status.CANCELLED]: { rail: 'bg-ink-muted', pulse: false },
+  [Status.FALSE_ALARM]: { rail: 'bg-ink-muted', pulse: false },
+};
+
 export function ReportCard({ report }: { report: ReportListItem }) {
-  const isPanic = report.urgency === Urgency.PANIC;
+  const severity = SEVERITY_RAIL[report.status];
+  // The legacy category_display field has been null on every report since
+  // the department-routing rework — emergency_type_display (this report's
+  // category label) and department_name are what's actually populated now.
+  const title = report.emergency_dispatch?.emergency_type_display || report.department_name || report.category_display || 'Report';
 
   return (
     <Link
@@ -30,22 +46,19 @@ export function ReportCard({ report }: { report: ReportListItem }) {
       className={cn(
         'bg-surface-2 relative flex gap-3.5 overflow-hidden rounded-xl border border-ink/10 py-3.5 pr-4 pl-[18px]',
         'transition hover:border-ink/20',
-        isPanic && 'animate-[rail-pulse_2.4s_ease-in-out_infinite] motion-reduce:animate-none',
+        severity.pulse && 'animate-[rail-pulse_2.4s_ease-in-out_infinite] motion-reduce:animate-none',
       )}
     >
-      <span
-        className={cn('absolute inset-y-0 left-0 w-[5px]', isPanic ? 'bg-status-critical' : 'bg-brand')}
-        aria-hidden
-      />
+      <span className={cn('absolute inset-y-0 left-0 w-[5px]', severity.rail)} aria-hidden />
 
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="font-heading truncate text-[14.5px] font-bold">{report.category_display}</span>
+          <span className="font-heading truncate text-[14.5px] font-bold">{title}</span>
           <StatusBadge status={report.status} />
         </div>
 
         <p className="text-ink-secondary mb-2 line-clamp-2 text-[13.5px] leading-relaxed">
-          {report.description || report.emergency_dispatch?.emergency_type_display || 'No description provided.'}
+          {report.description || 'No description provided.'}
         </p>
 
         <div className="text-ink-muted flex items-center gap-2.5 font-mono text-[11px]">

@@ -4,11 +4,11 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useEffect } from 'react';
 import { fetchReportQueue } from '../../lib/reports-api';
-import { Urgency } from '../../types/domain';
 
 // Distinct from ReportLocationMap's single-report pin — red and pulsing,
-// matching ReportCard's urgency treatment, so an active emergency reads as
-// urgent on the map the same way it does in the queue list.
+// matching ReportCard's severity rail for an unacknowledged report, so an
+// active emergency reads as urgent on the map the same way it does in the
+// queue list.
 const emergencyPinIcon = L.divIcon({
   className: '',
   html: `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="animate-pulse motion-reduce:animate-none">
@@ -41,7 +41,11 @@ function FitToMarkers({ positions }: { positions: [number, number][] }) {
 export function ActiveEmergenciesMap() {
   const { data, isLoading } = useQuery({
     queryKey: ['reports', 'active-emergencies-map'],
-    queryFn: () => fetchReportQueue({ urgency: Urgency.PANIC, active: true }),
+    // Every report is urgency='panic' now, so that alone no longer means
+    // "genuine emergency" — active + urgent_only narrows to what actually
+    // needs eyes right now: still open, and either already escalated past
+    // its SLA or still within its acknowledge window.
+    queryFn: () => fetchReportQueue({ active: true, urgent_only: true }),
     refetchInterval: 30_000,
   });
 

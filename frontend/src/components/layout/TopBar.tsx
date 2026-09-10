@@ -5,9 +5,8 @@ import { UserMenu } from './UserMenu';
 
 /**
  * Stays visible regardless of sidebar collapse state or mobile drawer
- * open/closed. The emergency flow itself is still reachable from the report
- * form's own panic button (ReportCreatePage) — this top bar no longer
- * duplicates it.
+ * open/closed. The emergency flow itself is the report form
+ * (EmergencyReportPage) — this top bar doesn't duplicate its panic button.
  */
 export function TopBar({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   return (

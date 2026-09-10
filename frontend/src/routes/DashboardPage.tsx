@@ -38,7 +38,7 @@ export function DashboardPage() {
           this stays as the one primary action a reporter's dashboard needs. */}
       {isReporter && (
         <div className="mb-6 flex flex-wrap gap-3">
-          <Link to="/reports/new">
+          <Link to="/emergency">
             <Button variant="primary">Report an incident</Button>
           </Link>
         </div>

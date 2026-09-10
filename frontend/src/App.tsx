@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './lib/auth-context';
 import { ToastProvider } from './lib/toast-context';
 import { ThemeProvider } from './lib/theme-context';
@@ -20,10 +20,9 @@ const TriageQueuePage = lazy(() =>
   import('./routes/TriageQueuePage').then((m) => ({ default: m.TriageQueuePage })),
 );
 const AuditLogPage = lazy(() => import('./routes/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
-const ReportCreatePage = lazy(() =>
-  import('./routes/ReportCreatePage').then((m) => ({ default: m.ReportCreatePage })),
+const EmergencyReportPage = lazy(() =>
+  import('./routes/EmergencyReportPage').then((m) => ({ default: m.EmergencyReportPage })),
 );
-const EmergencyPage = lazy(() => import('./routes/EmergencyPage').then((m) => ({ default: m.EmergencyPage })));
 const MyReportsPage = lazy(() => import('./routes/MyReportsPage').then((m) => ({ default: m.MyReportsPage })));
 const ReportDetailPage = lazy(() =>
   import('./routes/ReportDetailPage').then((m) => ({ default: m.ReportDetailPage })),
@@ -46,6 +45,12 @@ const DepartmentsPage = lazy(() =>
 );
 const DepartmentFormPage = lazy(() =>
   import('./routes/DepartmentFormPage').then((m) => ({ default: m.DepartmentFormPage })),
+);
+const EmergencyCategoriesPage = lazy(() =>
+  import('./routes/EmergencyCategoriesPage').then((m) => ({ default: m.EmergencyCategoriesPage })),
+);
+const EmergencyCategoryFormPage = lazy(() =>
+  import('./routes/EmergencyCategoryFormPage').then((m) => ({ default: m.EmergencyCategoryFormPage })),
 );
 const AdminDeletedReportsPage = lazy(() =>
   import('./routes/AdminDeletedReportsPage').then((m) => ({ default: m.AdminDeletedReportsPage })),
@@ -98,18 +103,16 @@ const router = createBrowserRouter([
         ),
       },
       {
+        // Old bookmarks/links to the standalone report form now land on
+        // the merged emergency form instead.
         path: 'reports/new',
-        element: (
-          <RequireAuth requirePermission="create_report">
-            <ReportCreatePage />
-          </RequireAuth>
-        ),
+        element: <Navigate to="/emergency" replace />,
       },
       {
         path: 'emergency',
         element: (
           <RequireAuth requirePermission="create_report">
-            <EmergencyPage />
+            <EmergencyReportPage />
           </RequireAuth>
         ),
       },
@@ -190,6 +193,30 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth requirePermission="manage_departments">
             <DepartmentFormPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/emergency-categories',
+        element: (
+          <RequireAuth requirePermission="manage_emergency_categories">
+            <EmergencyCategoriesPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/emergency-categories/new',
+        element: (
+          <RequireAuth requirePermission="manage_emergency_categories">
+            <EmergencyCategoryFormPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'admin/emergency-categories/:id/edit',
+        element: (
+          <RequireAuth requirePermission="manage_emergency_categories">
+            <EmergencyCategoryFormPage />
           </RequireAuth>
         ),
       },

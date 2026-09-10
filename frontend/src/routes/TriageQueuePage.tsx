@@ -16,15 +16,14 @@ import { Select } from '../components/ui/Select';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { LiveIndicator } from '../components/ui/LiveIndicator';
-import { Category, Status, Urgency } from '../types/domain';
+import { Status, Urgency } from '../types/domain';
 import type { BulkActionResponse } from '../lib/reports-api';
-import { CATEGORY_LABELS } from '../lib/labels';
 import { downloadReportsExport, bulkUpdateStatus, bulkAssignReports } from '../lib/reports-api';
 import { fetchDepartments } from '../lib/departments-api';
+import { fetchEmergencyCategories } from '../lib/emergency-categories-api';
 import { useToast } from '../lib/toast-context';
 
 const STATUS_OPTIONS = Object.values(Status);
-const CATEGORY_OPTIONS = Object.values(Category);
 const URGENCY_OPTIONS = Object.values(Urgency);
 const LIVE_REFRESH_DEBOUNCE_MS = 400;
 
@@ -71,6 +70,10 @@ export function TriageQueuePage() {
     queryKey: ['departments', { is_active: true, filter: true }],
     queryFn: () => fetchDepartments({ is_active: true }),
   });
+  const { data: emergencyCategories } = useQuery({
+    queryKey: ['emergency-categories', { is_active: true, filter: true }],
+    queryFn: () => fetchEmergencyCategories({ is_active: true }),
+  });
 
   // Debounced, delta-fetch refresh instead of inserting the raw WS payload
   // directly (that used to bypass department/assignment scoping entirely
@@ -93,7 +96,7 @@ export function TriageQueuePage() {
   useEffect(() => {
     setSelectedIds(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.status, filters.category, filters.urgency, filters.department, debouncedSearch, page]);
+  }, [filters.status, filters.emergencyCategory, filters.urgency, filters.department, debouncedSearch, page]);
 
   function setFilter<K extends keyof QueueFilterState>(key: K, value: QueueFilterState[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -116,8 +119,10 @@ export function TriageQueuePage() {
   if (filters.status) {
     chips.push({ key: 'status', label: `Status: ${filters.status.replace('_', ' ')}`, onRemove: () => setFilter('status', undefined) });
   }
-  if (filters.category) {
-    chips.push({ key: 'category', label: `Category: ${CATEGORY_LABELS[filters.category]}`, onRemove: () => setFilter('category', undefined) });
+  if (filters.emergencyCategory) {
+    const name =
+      emergencyCategories?.results.find((c) => c.slug === filters.emergencyCategory)?.name ?? filters.emergencyCategory;
+    chips.push({ key: 'category', label: `Category: ${name}`, onRemove: () => setFilter('emergencyCategory', undefined) });
   }
   if (filters.urgency) {
     chips.push({ key: 'urgency', label: `Urgency: ${filters.urgency}`, onRemove: () => setFilter('urgency', undefined) });
@@ -220,10 +225,10 @@ export function TriageQueuePage() {
         />
         <FilterSelect
           label="Category"
-          value={filters.category}
-          onChange={(v) => setFilter('category', v)}
-          options={CATEGORY_OPTIONS}
-          labelFor={(c) => CATEGORY_LABELS[c]}
+          value={filters.emergencyCategory}
+          onChange={(v) => setFilter('emergencyCategory', v)}
+          options={(emergencyCategories?.results ?? []).map((c) => c.slug)}
+          labelFor={(slug) => emergencyCategories?.results.find((c) => c.slug === slug)?.name ?? slug}
         />
         <FilterSelect
           label="Urgency"

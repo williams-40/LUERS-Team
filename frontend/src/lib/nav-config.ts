@@ -5,6 +5,7 @@ import {
   BarChart3,
   Users,
   Building2,
+  Siren,
   ShieldCheck,
   ScrollText,
   Trash2,
@@ -52,6 +53,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Users', path: '/admin/users', icon: Users, permission: 'manage_users' },
       { label: 'Departments', path: '/admin/departments', icon: Building2, permission: 'manage_departments' },
+      {
+        label: 'Emergency categories',
+        path: '/admin/emergency-categories',
+        icon: Siren,
+        permission: 'manage_emergency_categories',
+      },
       { label: 'Roles', path: '/admin/roles', icon: ShieldCheck, permission: 'manage_roles' },
     ],
   },

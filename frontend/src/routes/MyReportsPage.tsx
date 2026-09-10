@@ -14,7 +14,7 @@ export function MyReportsPage() {
     <div className="mx-auto max-w-xl px-5 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl">My reports</h1>
-        <Link to="/reports/new">
+        <Link to="/emergency">
           <Button variant="secondary" size="sm">
             New report
           </Button>

@@ -47,15 +47,6 @@ export const Status = {
 } as const;
 export type Status = (typeof Status)[keyof typeof Status];
 
-export const EmergencyType = {
-  SECURITY: 'security',
-  MEDICAL: 'medical',
-  FIRE: 'fire',
-  ACCIDENT: 'accident',
-  OTHER: 'other',
-} as const;
-export type EmergencyType = (typeof EmergencyType)[keyof typeof EmergencyType];
-
 export const FileType = {
   IMAGE: 'image',
   VIDEO: 'video',
@@ -103,6 +94,35 @@ export interface DepartmentInput {
   is_active: boolean;
 }
 
+/**
+ * Admin-manageable emergency category — replaces the old hardcoded
+ * EmergencyType enum. `slug` is what's actually sent as
+ * CreateReportInput.emergency_type and stored on EmergencyDispatch.
+ */
+export interface EmergencyCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  department: string | null;
+  department_name: string | null;
+  requires_description_and_routing: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmergencyCategoryInput {
+  name: string;
+  slug: string;
+  description: string;
+  department: string | null;
+  requires_description_and_routing: boolean;
+  is_active: boolean;
+  sort_order: number;
+}
+
 export interface Officer {
   id: string;
   username: string;
@@ -120,7 +140,12 @@ export interface Evidence {
 }
 
 export interface EmergencyDispatch {
-  emergency_type: EmergencyType;
+  // The EmergencyCategory slug at creation time — a plain string, not an
+  // FK/enum, since admin-managed categories can be added, renamed, or
+  // removed after the fact. emergency_type_display is the stable
+  // snapshot to show; emergency_type itself is mostly useful for
+  // filtering (TriageQueuePage's category filter).
+  emergency_type: string;
   emergency_type_display: string;
   escalation_level: number;
   acknowledged_at: string | null;
@@ -182,11 +207,12 @@ export interface ReportFeedback {
 }
 
 export interface CreateReportInput {
-  // Required for a normal report; omitted for panic, where the backend
-  // routes the department deterministically from emergency_type instead.
+  // Optional even for a panic report — an explicit choice here always
+  // wins the backend's routing priority chain; omitted, it falls back to
+  // the selected category's own default department.
   department?: string;
-  // Required for panic reports only (see emergency_type above).
-  emergency_type?: EmergencyType;
+  // Required for panic reports only — an EmergencyCategory.slug.
+  emergency_type?: string;
   description?: string;
   urgency: Urgency;
   phone_number?: string;

@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchReportQueue } from '../lib/reports-api';
-import type { Category, Paginated, ReportListItem, Status, Urgency } from '../types/domain';
+import type { Paginated, ReportListItem, Status, Urgency } from '../types/domain';
 
 export interface QueueFilterState {
   status?: Status;
-  category?: Category;
+  /** An EmergencyCategory.slug — replaces the old legacy `category` filter. */
+  emergencyCategory?: string;
   urgency?: Urgency;
   department?: string;
   search?: string;
@@ -27,13 +28,18 @@ export function useReportQueue(filters: QueueFilterState) {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const cursorRef = useRef<string | null>(null);
-  const filtersKey = `${filters.status ?? ''}|${filters.category ?? ''}|${filters.urgency ?? ''}|${filters.department ?? ''}|${filters.search ?? ''}`;
+  const filtersKey = `${filters.status ?? ''}|${filters.emergencyCategory ?? ''}|${filters.urgency ?? ''}|${filters.department ?? ''}|${filters.search ?? ''}`;
   const queryKey = ['reports', 'queue', filtersKey, page] as const;
+
+  function toQueryFilters(f: QueueFilterState) {
+    const { emergencyCategory, ...rest } = f;
+    return { ...rest, ...(emergencyCategory ? { emergency_category: emergencyCategory } : {}) };
+  }
 
   const query = useQuery({
     queryKey,
     queryFn: async () => {
-      const result = await fetchReportQueue({ ...filters, page });
+      const result = await fetchReportQueue({ ...toQueryFilters(filters), page });
       cursorRef.current = result.cursor;
       return result.page;
     },
@@ -53,7 +59,7 @@ export function useReportQueue(filters: QueueFilterState) {
       await queryClient.invalidateQueries({ queryKey });
       return;
     }
-    const result = await fetchReportQueue({ ...filters, since: cursorRef.current });
+    const result = await fetchReportQueue({ ...toQueryFilters(filters), since: cursorRef.current });
     cursorRef.current = result.cursor ?? cursorRef.current;
     if (result.page.results.length === 0) return;
 

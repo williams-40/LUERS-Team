@@ -39,7 +39,12 @@ export async function fetchReportDetail(id: string): Promise<ReportDetail> {
 
 export interface ReportQueueFilters {
   status?: Status;
+  // Legacy classifier, retired since the department-routing rework —
+  // kept for callers still filtering historical pre-Phase-14 reports.
   category?: Category;
+  // Live replacement: an EmergencyCategory.slug, filtered against
+  // EmergencyDispatch.emergency_type.
+  emergency_category?: string;
   department?: string;
   urgency?: Urgency;
   search?: string;
@@ -48,6 +53,13 @@ export interface ReportQueueFilters {
   assigned_to?: string;
   /** Excludes resolved/closed/cancelled/false_alarm — used by ActiveEmergenciesMap. */
   active?: boolean;
+  /**
+   * Escalated past its SLA, or still within its acknowledge window — the
+   * "actually needs eyes right now" signal, now that every report is
+   * urgency='panic' and that alone no longer distinguishes a genuine
+   * emergency from routine business. Used by ActiveEmergenciesMap.
+   */
+  urgent_only?: boolean;
   /** Reports a department head manually escalated to System Admin (not the automatic SLA path) — used by EscalatedReportsPanel/Page. */
   escalated_to_admin?: boolean;
 }

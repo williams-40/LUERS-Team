@@ -49,7 +49,7 @@ export function ToastContainer({
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed right-5 bottom-5 z-50 flex flex-col gap-2">
+    <div className="fixed right-5 bottom-[calc(1.25rem+var(--action-bar-offset,0px))] z-50 flex flex-col gap-2">
       {toasts.map((toast) => (
         <Toast
           key={toast.id}
