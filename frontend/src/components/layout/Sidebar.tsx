@@ -60,7 +60,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         </Link>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="scrollbar-hidden flex-1 overflow-y-auto">
         <NavList collapsed={collapsed} />
       </div>
 
