@@ -1,13 +1,14 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, DepartmentFactory
+from apps.core.factories import UserFactory, DepartmentFactory, EmergencyCategoryFactory
 from apps.reports.models import Report
 
 
 @pytest.mark.django_db
 def test_reporter_can_set_location_after_creation_without_one():
     student = UserFactory(role='student')
-    DepartmentFactory(name='Security')
+    security = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='security', department=security)
 
     client = APIClient()
     client.force_authenticate(user=student)
@@ -48,7 +49,8 @@ def test_location_followup_rejects_overwriting_an_existing_location():
 def test_location_followup_requires_reporter():
     student = UserFactory(role='student')
     other_student = UserFactory(role='student')
-    DepartmentFactory(name='Security')
+    security = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='security', department=security)
 
     client = APIClient()
     client.force_authenticate(user=student)

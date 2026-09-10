@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.reports.models import Report, Evidence, Department, EmergencyDispatch
-from apps.core.choices import Urgency, Status, EmergencyType
+from apps.reports.models import Report, Evidence, Department, EmergencyDispatch, EmergencyCategory
+from apps.core.choices import Urgency, Status
 from apps.reports.validators import validate_evidence_file
 
 User = get_user_model()
@@ -22,7 +22,11 @@ class EvidenceSerializer(serializers.ModelSerializer):
 
 
 class EmergencyDispatchSerializer(serializers.ModelSerializer):
-    emergency_type_display = serializers.CharField(source='get_emergency_type_display', read_only=True)
+    # emergency_type_label is a snapshot taken once at creation (see
+    # EmergencyDispatch's own comment) — not a live get_FOO_display()
+    # lookup, since emergency_type no longer has Django choices= (it's
+    # validated dynamically against EmergencyCategory rows instead).
+    emergency_type_display = serializers.CharField(source='emergency_type_label', read_only=True)
     acknowledged_by_username = serializers.CharField(source='acknowledged_by.username', read_only=True, default=None)
 
     class Meta:
@@ -130,11 +134,14 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         queryset=Department.objects.filter(is_active=True), required=False, allow_null=True
     )
 
-    # Panic-only: which kind of emergency this is, used to deterministically
-    # resolve `department` (settings.EMERGENCY_TYPE_DEPARTMENT_MAP) and to
-    # populate the EmergencyDispatch row created alongside the Report. Not a
-    # Report field — popped out in ReportService.create_report.
-    emergency_type = serializers.ChoiceField(choices=EmergencyType.choices, required=False, allow_null=True)
+    # Panic-only: which emergency category this is — an EmergencyCategory.slug,
+    # used to deterministically resolve `department` and to populate the
+    # EmergencyDispatch row created alongside the Report. A plain CharField,
+    # not a ChoiceField: categories are admin-managed rows now, not a fixed
+    # Python enum, so validity is checked dynamically in validate() below
+    # rather than at the field-definition level. Not a Report field — popped
+    # out in ReportService.create_report.
+    emergency_type = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=30)
 
     # Not a Report field — captured here only to optionally persist it onto
     # the reporter's own profile (see ReportService.create_report). Always
@@ -189,14 +196,20 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         urgency = attrs.get('urgency') or Urgency.NORMAL
         errors = {}
         if urgency == Urgency.PANIC:
-            if not attrs.get('emergency_type'):
+            emergency_type = attrs.get('emergency_type')
+            if not emergency_type:
                 errors['emergency_type'] = 'Required for a panic report.'
-            # "Other" doesn't tell a responder anything to route or act on
-            # by itself — unlike the fixed types, there's nothing implied
-            # without a description. Mirrors the frontend requirement in
-            # EmergencyPage.tsx.
-            elif attrs.get('emergency_type') == EmergencyType.OTHER and not (attrs.get('description') or '').strip():
-                errors['description'] = 'Please describe the emergency.'
+            else:
+                category = EmergencyCategory.objects.filter(slug=emergency_type, is_active=True).first()
+                if category is None:
+                    errors['emergency_type'] = 'Not a recognized emergency category.'
+                # Some categories (e.g. "Other") don't tell a responder
+                # anything to route or act on by themselves — unlike a
+                # category with its own default department, there's
+                # nothing implied without a description. Mirrors the
+                # frontend requirement in EmergencyReportPage.tsx.
+                elif category.requires_description_and_routing and not (attrs.get('description') or '').strip():
+                    errors['description'] = 'Please describe the emergency.'
         else:
             if attrs.get('department') is None:
                 errors['department'] = 'This field is required.'

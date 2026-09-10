@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from apps.reports.models import Report, Evidence, Department, ReportFeedback, EmergencyDispatch
+from apps.reports.models import Report, Evidence, Department, ReportFeedback, EmergencyDispatch, EmergencyCategory
 from apps.core.choices import Action, Channel, SyncOrigin, Status, Urgency
 from apps.audit.models import AuditLog
 from apps.notifications.models import Notification, Message
@@ -74,6 +74,43 @@ class MessageService:
 
 class ReportService:
     @staticmethod
+    def _resolve_panic_department(category, explicit_department, description):
+        """
+        The one routing priority chain for every panic report, replacing
+        two previously-separate mechanisms: the old fixed
+        EMERGENCY_TYPE_DEPARTMENT_MAP dict (panic-only, never ran keyword
+        matching) and DepartmentRoutingService's keyword classifier
+        (previously reachable only for a normal report filed under the
+        seeded "Other" department). Returns (department, department_source,
+        routing_result, tier) — routing_result/tier are None unless the
+        classifier actually ran.
+
+        Priority:
+        1. The reporter's own explicit department choice (the merged form's
+           optional DepartmentPicker) always wins — a reporter who took the
+           time to pick one shouldn't have it silently overridden.
+        2. Else, the selected category's own default department.
+        3. Else, if the category is flagged as needing it, run the keyword
+           classifier against the description: high confidence auto-routes
+           there; medium/low confidence stays on the category's own
+           default and (for medium) leaves a suggestion for a human to
+           review — same as the existing normal-report "Other" behavior.
+        """
+        if explicit_department:
+            return explicit_department, 'user_selected_override', None, None
+
+        base_department = category.department if category else None
+
+        if category and category.requires_description_and_routing:
+            routing_result = DepartmentRoutingService().classify(description or '')
+            tier = get_confidence_tier(routing_result.confidence) if routing_result.department else 'low'
+            if tier == 'high':
+                return routing_result.department, 'auto_inferred', routing_result, tier
+            return base_department, 'unclassified_pending_review', routing_result, tier
+
+        return base_department, 'category_default', None, None
+
+    @staticmethod
     @transaction.atomic
     def create_report(validated_data, user, ip_address=None, user_agent=None, sync_origin=SyncOrigin.LIVE):
         # Idempotency
@@ -98,15 +135,13 @@ class ReportService:
         routing_result = None
         tier = None
 
+        category = None
         if urgency == Urgency.PANIC:
-            # A reporter mid-emergency never picks a department — resolved
-            # deterministically from emergency_type instead of the
-            # keyword-matching DepartmentRoutingService used below, which is
-            # tuned for routine-report free text, not a fixed emergency type.
-            department_name = settings.EMERGENCY_TYPE_DEPARTMENT_MAP.get(emergency_type)
-            department = Department.objects.filter(name=department_name, is_active=True).first()
+            category = EmergencyCategory.objects.filter(slug=emergency_type).first()
+            department, department_source, routing_result, tier = ReportService._resolve_panic_department(
+                category, explicit_department=department, description=validated_data.get('description', ''),
+            )
             validated_data['department'] = department
-            department_source = 'emergency_type_routed'
         else:
             department_source = 'user_selected'
             # Department is selected directly by the reporter (Phase 14 —
@@ -145,6 +180,7 @@ class ReportService:
             EmergencyDispatch.objects.create(
                 report=report,
                 emergency_type=emergency_type or 'other',
+                emergency_type_label=category.name if category else 'Other',
                 ack_deadline=now + timedelta(minutes=sla['acknowledge']),
                 response_deadline=now + timedelta(minutes=sla['respond']),
                 resolution_deadline=now + timedelta(minutes=sla['resolve']),
@@ -690,14 +726,23 @@ def filter_reports(queryset, params):
     category = params.get('category')
     department = params.get('department')
     urgency = params.get('urgency')
+    emergency_category = params.get('emergency_category')
     search = params.get('search')
     assigned_to = params.get('assigned_to')
     active = params.get('active')
+    urgent_only = params.get('urgent_only')
     escalated_to_admin = params.get('escalated_to_admin')
     if status:
         queryset = queryset.filter(status=status)
     if category:
+        # Legacy field, retired since the department-routing rework — kept
+        # for any caller still filtering historical pre-Phase-14 reports.
         queryset = queryset.filter(category=category)
+    if emergency_category:
+        # Filters by EmergencyCategory.slug (stored on
+        # EmergencyDispatch.emergency_type) — the live replacement for the
+        # legacy `category` filter above, now that every new report has one.
+        queryset = queryset.filter(emergency_dispatch__emergency_type=emergency_category)
     if department:
         queryset = queryset.filter(department_id=department)
     if urgency:
@@ -708,6 +753,17 @@ def filter_reports(queryset, params):
         # Convenience filter for the active-emergencies map — "still
         # needs attention", not yet resolved/closed/cancelled/false_alarm.
         queryset = queryset.exclude(status__in=['resolved', 'closed', 'cancelled', 'false_alarm'])
+    if urgent_only in ('true', '1'):
+        # Since every report is now urgency='panic' by design, plain
+        # active=true alone (see above) no longer distinguishes a genuine
+        # emergency from routine business — this is the successor signal
+        # for "actually needs eyes right now": already escalated past its
+        # SLA, or still within its acknowledge window (i.e. hasn't had time
+        # to escalate yet but is still fresh). Used by ActiveEmergenciesMap.
+        queryset = queryset.filter(
+            Q(emergency_dispatch__escalation_level__gt=0)
+            | Q(emergency_dispatch__ack_deadline__gte=timezone.now())
+        )
     if escalated_to_admin in ('true', '1'):
         # A department head manually escalated this report to System Admin
         # (actor set — the automatic Celery Beat SLA path always uses

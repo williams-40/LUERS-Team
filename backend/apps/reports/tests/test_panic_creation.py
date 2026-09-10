@@ -2,7 +2,7 @@ import pytest
 from django.core import mail
 from django.test import override_settings
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, DepartmentFactory, DepartmentHeadFactory
+from apps.core.factories import UserFactory, DepartmentFactory, DepartmentHeadFactory, EmergencyCategoryFactory
 from apps.reports.models import Report, EmergencyDispatch
 from apps.notifications.models import Notification
 
@@ -11,6 +11,7 @@ from apps.notifications.models import Notification
 def test_panic_report_creation_without_department_or_description_succeeds():
     student = UserFactory(role='student')
     security = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='security', department=security)
 
     client = APIClient()
     client.force_authenticate(user=student)
@@ -63,8 +64,14 @@ def test_normal_report_still_requires_department_and_description():
 @pytest.mark.django_db
 def test_panic_emergency_type_routes_deterministically(emergency_type, department_name):
     student = UserFactory(role='student')
-    DepartmentFactory(name='Security')
-    DepartmentFactory(name='Health & Safety')
+    security = DepartmentFactory(name='Security')
+    health_safety = DepartmentFactory(name='Health & Safety')
+    departments_by_name = {'Security': security, 'Health & Safety': health_safety}
+    EmergencyCategoryFactory(
+        slug=emergency_type,
+        department=departments_by_name[department_name],
+        requires_description_and_routing=(emergency_type == 'other'),
+    )
 
     client = APIClient()
     client.force_authenticate(user=student)
@@ -84,7 +91,8 @@ def test_panic_emergency_type_routes_deterministically(emergency_type, departmen
 @pytest.mark.django_db
 def test_panic_other_type_requires_description():
     student = UserFactory(role='student')
-    DepartmentFactory(name='Security')
+    security = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='other', department=security, requires_description_and_routing=True)
 
     client = APIClient()
     client.force_authenticate(user=student)
@@ -100,7 +108,8 @@ def test_panic_other_type_requires_description():
 @pytest.mark.django_db
 def test_panic_other_type_with_description_succeeds():
     student = UserFactory(role='student')
-    DepartmentFactory(name='Security')
+    security = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='other', department=security, requires_description_and_routing=True)
 
     client = APIClient()
     client.force_authenticate(user=student)
@@ -116,7 +125,8 @@ def test_panic_other_type_with_description_succeeds():
 @pytest.mark.django_db
 def test_panic_creation_populates_emergency_dispatch_with_sla_deadlines():
     student = UserFactory(role='student')
-    DepartmentFactory(name='Security')
+    security = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='security', name='Security / Threat', department=security)
 
     client = APIClient()
     client.force_authenticate(user=student)
@@ -128,6 +138,7 @@ def test_panic_creation_populates_emergency_dispatch_with_sla_deadlines():
     assert response.status_code == 201, response.data
     dispatch = EmergencyDispatch.objects.get(report_id=response.data['id'])
     assert dispatch.emergency_type == 'security'
+    assert dispatch.emergency_type_label == 'Security / Threat'
     assert dispatch.escalation_level == 0
     assert dispatch.acknowledged_at is None
     assert dispatch.ack_deadline is not None
@@ -156,6 +167,7 @@ def test_normal_report_never_gets_an_emergency_dispatch_row():
 def test_panic_creation_emails_department_head():
     student = UserFactory(role='student')
     security = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='security', department=security)
     # No phone_number set — keeps this test off the real-Twilio-client SMS
     # path (empty credentials in the test environment would raise, not just
     # fail gracefully, since Celery runs tasks eagerly with propagation on).
@@ -183,7 +195,8 @@ def test_panic_creation_emails_department_head():
 def test_exhausting_normal_rate_limit_does_not_block_panic():
     student = UserFactory(role='student')
     department = DepartmentFactory(name='Library')
-    DepartmentFactory(name='Security')
+    security = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='security', department=security)
 
     client = APIClient()
     client.force_authenticate(user=student)

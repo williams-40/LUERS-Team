@@ -272,22 +272,6 @@ EMERGENCY_SLA_MINUTES = {
     "resolve": env.int("EMERGENCY_SLA_RESOLVE_MINUTES", default=240),
 }
 
-# Deterministic emergency_type -> Department.name routing for panic reports
-# (apps.reports.services.create_report), replacing the keyword-based
-# DepartmentRoutingService for this path — a reporter in an emergency should
-# never have to pick a department. Department names must match real seeded
-# Department rows (see apps/reports/routing.py's DEPARTMENT_KEYWORDS for the
-# full department list). No dedicated Fire or "Emergency Coordination"
-# department exists today, so fire/accident/other fall back to the closest
-# existing department (Health & Safety, Health & Safety, Security).
-EMERGENCY_TYPE_DEPARTMENT_MAP = {
-    "security": "Security",
-    "medical": "Health & Safety",
-    "fire": "Health & Safety",
-    "accident": "Health & Safety",
-    "other": "Security",
-}
-
 # Sentry — no-op unless SENTRY_DSN is set, matching how Twilio/Mailtrap
 # already degrade gracefully in this codebase without their own credentials.
 SENTRY_DSN = env("SENTRY_DSN", default="")

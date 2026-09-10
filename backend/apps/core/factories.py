@@ -1,6 +1,6 @@
 import factory
 from faker import Faker
-from apps.reports.models import Report, Evidence, Department
+from apps.reports.models import Report, Evidence, Department, EmergencyCategory
 from apps.core.choices import Category, Urgency, Status, Role
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -90,6 +90,26 @@ class DepartmentFactory(factory.django.DjangoModelFactory):
     name = factory.Sequence(lambda n: f"Test Dept {n}")
     description = factory.LazyAttribute(lambda _: fake.sentence())
     is_active = True
+
+class EmergencyCategoryFactory(factory.django.DjangoModelFactory):
+    """
+    Deliberately per-test, not a global autouse fixture like
+    role_seed_data.seed() — a fixture pre-creating rows for the 5 default
+    slugs would collide with the many existing tests that already create
+    their own Department(name='Security') etc. (unique=True), since
+    pytest.ini's --nomigrations skips the real 0015 seed migration
+    entirely. Each test that needs a category creates its own explicit
+    row, usually right after creating the Department it should route to.
+    """
+    class Meta:
+        model = EmergencyCategory
+
+    name = factory.Sequence(lambda n: f"Test Category {n}")
+    slug = factory.Sequence(lambda n: f"test-category-{n}")
+    department = None
+    requires_description_and_routing = False
+    is_active = True
+    sort_order = 0
 
 class ReportFactory(factory.django.DjangoModelFactory):
     class Meta:

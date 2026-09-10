@@ -1,7 +1,7 @@
 import pytest
 from datetime import timedelta
 from django.utils import timezone
-from apps.core.factories import UserFactory, DepartmentFactory
+from apps.core.factories import UserFactory, DepartmentFactory, EmergencyCategoryFactory
 from apps.reports.models import Report, EmergencyDispatch
 from apps.reports.tasks import check_emergency_escalations
 from apps.reports.services import EmergencyDispatchService
@@ -20,7 +20,9 @@ def _create_panic_report(student, department):
 
 @pytest.fixture
 def security_department():
-    return DepartmentFactory(name='Security')
+    department = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='security', department=department)
+    return department
 
 
 @pytest.mark.django_db

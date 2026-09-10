@@ -14,6 +14,7 @@ PERMISSIONS = [
     ('delete_report', 'Delete Report', "Soft-delete, restore, and view deleted reports.", 'reports'),
     ('manage_roles', 'Manage Roles', "Create, edit, and delete roles and their permission assignments.", 'accounts'),
     ('view_all_reports', 'View All Reports', "Bypass department scoping to see every report and audit log campus-wide.", 'reports'),
+    ('manage_emergency_categories', 'Manage Emergency Categories', "Create, edit, and deactivate the emergency categories reporters choose from.", 'reports'),
 ]
 
 # role slug -> (label, [permission slugs])
@@ -55,7 +56,7 @@ BUILTIN_ROLES = {
     # get_or_creates its own non-builtin, never-seeded test role).
     'system_admin': ('System Admin', [
         'view_admin_dashboard', 'manage_users', 'manage_departments', 'delete_report',
-        'manage_roles', 'view_all_reports',
+        'manage_roles', 'view_all_reports', 'manage_emergency_categories',
     ]),
 }
 

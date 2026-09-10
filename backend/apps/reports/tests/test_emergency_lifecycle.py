@@ -1,6 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, DepartmentFactory, DepartmentHeadFactory
+from apps.core.factories import UserFactory, DepartmentFactory, DepartmentHeadFactory, EmergencyCategoryFactory
 from apps.reports.models import Report, EmergencyDispatch
 from apps.audit.models import AuditLog
 from apps.core.choices import Action, Status
@@ -17,7 +17,9 @@ def _create_panic_report(client, student, emergency_type='security'):
 
 @pytest.fixture
 def security_department():
-    return DepartmentFactory(name='Security')
+    department = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='security', department=department)
+    return department
 
 
 @pytest.mark.django_db

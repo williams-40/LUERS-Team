@@ -1,6 +1,6 @@
 ﻿from django.db import models
 from django.conf import settings
-from apps.core.choices import Category, Urgency, Status, FileType, EmergencyType
+from apps.core.choices import Category, Urgency, Status, FileType
 from apps.core.models import BaseModel
 
 class Report(BaseModel):
@@ -108,6 +108,49 @@ class Department(BaseModel):
         return self.name
 
 
+class EmergencyCategory(BaseModel):
+    """
+    Admin-manageable replacement for the old fixed EmergencyType enum —
+    what used to be a hardcoded Python choice list (security/medical/fire/
+    accident/other) is now real rows a system_admin can add to, edit, or
+    deactivate without a code deploy. `slug` is the stable identifier
+    stored on EmergencyDispatch.emergency_type (a plain string, not an FK —
+    see that field's own comment for why).
+    """
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.CharField(max_length=30, unique=True)
+    description = models.TextField(blank=True)
+    # The category's own deterministic routing default — nullable/SET_NULL
+    # exactly like Report.department, so deleting a department orphans a
+    # category's default rather than erroring or cascading.
+    department = models.ForeignKey(
+        'Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='emergency_categories'
+    )
+    # Explicit, admin-settable — deliberately NOT inferred from whether
+    # `department` is set. Even "Other" has a real fallback department
+    # ("Security") today; this flag is about whether a description is
+    # mandatory and worth running DepartmentRoutingService's keyword
+    # matching against, which is a different question from "does this
+    # category have a default department at all."
+    requires_description_and_routing = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    # Controls picker display order — dict/enum ordering isn't guaranteed
+    # to match admin intent once categories can be added/removed freely.
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'emergency_categories'
+        ordering = ['sort_order', 'name']
+        indexes = [
+            models.Index(fields=['slug']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['sort_order']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class EmergencyDispatch(BaseModel):
     """
     Emergency-only lifecycle state for a panic Report, kept off the base
@@ -117,7 +160,15 @@ class EmergencyDispatch(BaseModel):
     urgency='panic' report — see ReportService.create_report.
     """
     report = models.OneToOneField(Report, on_delete=models.CASCADE, related_name='emergency_dispatch')
-    emergency_type = models.CharField(max_length=10, choices=EmergencyType.choices, default=EmergencyType.OTHER)
+    # A plain string (the matching EmergencyCategory.slug at the time this
+    # was created), not an FK — AuditLog.after_state and the frontend both
+    # already treat this as a bare string on the wire, and `choices=` (fixed
+    # at deploy time) is incompatible with admin-added categories.
+    emergency_type = models.CharField(max_length=30, default='other')
+    # A snapshot of the category's name, taken once at creation — so a
+    # historical report still displays correctly even if that category is
+    # later renamed or deleted. Never updated after creation.
+    emergency_type_label = models.CharField(max_length=100, blank=True, default='')
     escalation_level = models.PositiveSmallIntegerField(default=0)
 
     acknowledged_at = models.DateTimeField(null=True, blank=True)

@@ -1,6 +1,8 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, ReportFactory, DepartmentFactory
+from apps.core.factories import (
+    UserFactory, SecurityFactory, ICTAdminFactory, ReportFactory, DepartmentFactory, EmergencyCategoryFactory,
+)
 from apps.reports.services import ReportService
 from apps.core.choices import Status, Action
 from apps.audit.models import AuditLog
@@ -49,7 +51,8 @@ def test_audit_entry_captures_client_ip_and_user_agent():
     from (see AuditLogPage.tsx's summarizeUserAgent).
     """
     student = UserFactory(role='student')
-    DepartmentFactory(name='Security')
+    security = DepartmentFactory(name='Security')
+    EmergencyCategoryFactory(slug='security', department=security)
 
     client = APIClient()
     client.force_authenticate(user=student)

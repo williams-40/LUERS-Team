@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/v1/dashboard/', include('apps.dashboard.urls')),
     path('api/v1/audit/', include('apps.audit.urls')),
     path('api/v1/departments/', include('apps.reports.urls_departments')),
+    path('api/v1/emergency-categories/', include('apps.reports.urls_emergency_categories')),
     path('api/v1/roles/', include('apps.accounts.urls_roles')),
     path('api/v1/permissions/', PermissionListView.as_view(), name='permission_list'),
     path('api/v1/sync/', SyncView.as_view(), name='sync'), 
