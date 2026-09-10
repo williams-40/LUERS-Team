@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { NAV_GROUPS, isNavItemVisible } from '../../lib/nav-config';
 import { Tooltip } from '../ui/Tooltip';
 import { fetchReportQueue } from '../../lib/reports-api';
+import { fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../../lib/departments-api';
 import { Status } from '../../types/domain';
 import { cn } from '../../lib/utils';
 
@@ -36,16 +37,33 @@ export function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean
   const { user } = useAuth();
   const permissions = user?.permissions ?? [];
 
-  // Responders and department heads (and anyone else who can reach the
-  // queue) get a live count of unactioned reports on "Report queue" —
-  // get_accessible_reports already scopes this per-role server-side (a
-  // responder sees their department's/assigned new reports, a head sees
-  // their department's, system_admin sees all), so one plain status=new
-  // count works for everyone without special-casing a role here.
   const canSeeQueue = permissions.includes('view_admin_dashboard');
+  const isSystemAdmin = permissions.includes('view_all_reports');
+
+  // A plain responder's "new" count on "Report queue" must mean new
+  // reports assigned to *them* specifically (matching MyAssignedReportsPanel's
+  // own badge) — not every new report their queue view happens to be able
+  // to see. Department heads and System Admin, by contrast, want the
+  // department-/system-wide new count, since their job is overseeing
+  // everything unactioned, not just their own assignments. Reuses the
+  // same shared query DashboardPage/DashboardSummaryPanel/
+  // MyDepartmentResponders already fire (see HEAD_DETECTION_DEPARTMENTS_QUERY_KEY),
+  // so this doesn't add a duplicate request for a head/admin.
+  const { data: departmentsForHeadCheck } = useQuery({
+    queryKey: HEAD_DETECTION_DEPARTMENTS_QUERY_KEY,
+    queryFn: () => fetchDepartments({ is_active: true }),
+    enabled: canSeeQueue && !isSystemAdmin,
+  });
+  const isDepartmentHead = Boolean(user && departmentsForHeadCheck?.results.some((d) => d.head === user.id));
+  const scopeToOwnAssignments = canSeeQueue && !isSystemAdmin && !isDepartmentHead;
+
   const { data: newReportsData } = useQuery({
-    queryKey: ['reports', 'queue', 'new-count'],
-    queryFn: () => fetchReportQueue({ status: Status.NEW }),
+    queryKey: ['reports', 'queue', 'new-count', scopeToOwnAssignments ? user?.id : 'queue-wide'],
+    queryFn: () =>
+      fetchReportQueue({
+        status: Status.NEW,
+        ...(scopeToOwnAssignments ? { assigned_to: user!.id } : {}),
+      }),
     enabled: canSeeQueue,
     refetchInterval: 30_000,
   });

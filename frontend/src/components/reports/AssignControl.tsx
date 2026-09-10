@@ -84,7 +84,12 @@ export function AssignControl({
           value={selected}
           onChange={(e) => setSelected(e.target.value)}
           disabled={officersLoading}
-          className="bg-surface-2 text-ink select-chevron appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm"
+          // A responder's option text (username + "(busy, N open)") can run
+          // longer than a plain status word — without min-w-0 a flex item's
+          // default min-width is its own content size, so the select (and
+          // the card around it) would stretch wider than the page to fit
+          // the longest option instead of just truncating its own display.
+          className="bg-surface-2 text-ink select-chevron min-w-0 max-w-full flex-1 truncate appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm sm:max-w-xs sm:flex-none"
         >
           <option value="" disabled>
             {officersLoading ? 'Loading responders…' : 'Select a responder'}

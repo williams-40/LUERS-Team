@@ -19,9 +19,9 @@ const registerSchema = z
   .object({
     username: z.string().trim().min(1, 'Username is required'),
     email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
-    first_name: z.string().optional().or(z.literal('')),
-    last_name: z.string().optional().or(z.literal('')),
-    university_id: z.string().optional().or(z.literal('')),
+    first_name: z.string().trim().min(1, 'First name is required'),
+    last_name: z.string().trim().min(1, 'Last name is required'),
+    university_id: z.string().trim().min(1, 'University ID is required'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string().min(1, 'Please confirm your password'),
     role: z.enum(['student', 'staff']),
@@ -60,10 +60,13 @@ export function RegisterPage() {
   async function onSubmit(values: RegisterFormValues) {
     setServerError(null);
 
-    // Phone number is optional, but if the reporter typed one it must be a
-    // real number for the chosen country — checked here rather than in the
-    // zod schema since it depends on the separately-tracked country picker.
-    if (phoneNational.trim() && !isValidNationalNumber(phoneCountry, phoneNational)) {
+    // Checked here rather than in the zod schema since it depends on the
+    // separately-tracked country picker, not a plain registered field.
+    if (!phoneNational.trim()) {
+      setPhoneError('Phone number is required.');
+      return;
+    }
+    if (!isValidNationalNumber(phoneCountry, phoneNational)) {
       setPhoneError(
         `Enter a valid ${phoneCountry.minDigits === phoneCountry.maxDigits ? phoneCountry.minDigits : `${phoneCountry.minDigits}-${phoneCountry.maxDigits}`}-digit number for ${phoneCountry.name}.`,
       );
@@ -80,7 +83,7 @@ export function RegisterPage() {
         university_id: values.university_id,
         password: values.password,
         role: values.role,
-        phone_number: phoneNational.trim() ? toE164(phoneCountry, phoneNational) : '',
+        phone_number: toE164(phoneCountry, phoneNational),
       });
       navigate('/login', { state: { registered: true } });
     } catch (err) {
@@ -138,13 +141,14 @@ export function RegisterPage() {
         />
 
         <div className="grid grid-cols-2 gap-3">
-          <Input id="first_name" label="First name" {...register('first_name')} />
-          <Input id="last_name" label="Last name" {...register('last_name')} />
+          <Input id="first_name" label="First name" required error={errors.first_name?.message} {...register('first_name')} />
+          <Input id="last_name" label="Last name" required error={errors.last_name?.message} {...register('last_name')} />
         </div>
 
         <PhoneInput
           id="phone_number"
           label="Phone number"
+          required
           country={phoneCountry}
           nationalNumber={phoneNational}
           onCountryChange={setPhoneCountry}
@@ -155,7 +159,13 @@ export function RegisterPage() {
           error={phoneError ?? undefined}
         />
 
-        <Input id="university_id" label="University ID" {...register('university_id')} />
+        <Input
+          id="university_id"
+          label="University ID"
+          required
+          error={errors.university_id?.message}
+          {...register('university_id')}
+        />
 
         <Input
           id="password"

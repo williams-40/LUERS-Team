@@ -1,16 +1,21 @@
 import type { ReactNode } from 'react';
 
 /**
- * Fixed bottom bar for the merged emergency report form — keeps the panic
- * button reachable no matter how far the reporter has scrolled into the
- * optional "Add details" section. Sits at z-[900]: above ordinary page
- * content, below every overlay tier that can legitimately cover it
- * (MobileDrawer 1100, Modal 1200, Toast 1500, CameraOverlay 1400).
+ * Fixed-position wrapper for the emergency send button — keeps it
+ * reachable no matter how far the reporter has scrolled into the
+ * optional "Add details" section, without acting like a separate
+ * opaque toolbar: no background/border/shadow of its own, so it stays
+ * visually part of the page underneath rather than a distinct bar
+ * layered over it. The button itself is a normal centered button, not
+ * stretched edge-to-edge. `pointer-events-none` on the full-width
+ * outer strip (paired with `-auto` on the actual content) means the
+ * transparent margins on either side never swallow a tap meant for
+ * whatever's on the page behind them.
  */
 export function ActionBar({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-surface fixed inset-x-0 bottom-0 z-[900] border-t border-ink/10 px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-      <div className="mx-auto flex max-w-xl flex-col gap-3">{children}</div>
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[900] flex justify-center px-5 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="pointer-events-auto flex w-full max-w-xs flex-col items-center gap-3">{children}</div>
     </div>
   );
 }
