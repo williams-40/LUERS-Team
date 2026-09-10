@@ -148,9 +148,9 @@ export function RoleFormPage() {
 
       <Card>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-        <Input id="slug" label="Slug" disabled={isBuiltin || isEdit} error={errors.slug?.message} {...register('slug')} />
+        <Input id="slug" label="Slug" required disabled={isBuiltin || isEdit} error={errors.slug?.message} {...register('slug')} />
 
-        <Input id="label" label="Label" disabled={isBuiltin} error={errors.label?.message} {...register('label')} />
+        <Input id="label" label="Label" required disabled={isBuiltin} error={errors.label?.message} {...register('label')} />
 
         <Textarea id="description" label="Description" rows={2} disabled={isBuiltin} {...register('description')} />
 

@@ -54,6 +54,7 @@ export function ChangePasswordForm({ onSuccess }: { onSuccess?: () => void }) {
         id="currentPassword"
         type="password"
         label="Current password"
+        required
         autoComplete="current-password"
         error={errors.currentPassword?.message}
         {...register('currentPassword')}
@@ -63,6 +64,7 @@ export function ChangePasswordForm({ onSuccess }: { onSuccess?: () => void }) {
         id="newPassword"
         type="password"
         label="New password"
+        required
         autoComplete="new-password"
         error={errors.newPassword?.message}
         {...register('newPassword')}
@@ -72,6 +74,7 @@ export function ChangePasswordForm({ onSuccess }: { onSuccess?: () => void }) {
         id="confirmPassword"
         type="password"
         label="Confirm new password"
+        required
         autoComplete="new-password"
         error={errors.confirmPassword?.message}
         {...register('confirmPassword')}

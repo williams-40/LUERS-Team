@@ -71,6 +71,7 @@ export function ResetPasswordPage() {
           id="newPassword"
           type="password"
           label="New password"
+          required
           autoComplete="new-password"
           error={errors.newPassword?.message}
           {...register('newPassword')}
@@ -80,6 +81,7 @@ export function ResetPasswordPage() {
           id="confirmPassword"
           type="password"
           label="Confirm password"
+          required
           autoComplete="new-password"
           error={errors.confirmPassword?.message}
           {...register('confirmPassword')}

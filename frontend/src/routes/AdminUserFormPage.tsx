@@ -135,9 +135,9 @@ function CreateUserForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-      <Input id="username" label="Username" error={errors.username?.message} {...register('username')} />
+      <Input id="username" label="Username" required error={errors.username?.message} {...register('username')} />
 
-      <Input id="email" type="email" label="Email" error={errors.email?.message} {...register('email')} />
+      <Input id="email" type="email" label="Email" required error={errors.email?.message} {...register('email')} />
 
       <div className="grid grid-cols-2 gap-3">
         <Input id="first_name" label="First name" {...register('first_name')} />
@@ -151,6 +151,7 @@ function CreateUserForm() {
       <div className="flex flex-col gap-1.5">
         <label htmlFor="role" className="text-ink-secondary text-[12.5px] font-semibold">
           Role
+          <span className="text-status-critical ml-0.5">*</span>
         </label>
         <RoleSelect
           id="role"
@@ -163,7 +164,7 @@ function CreateUserForm() {
 
       {isDepartmentHead && (
         <div className="flex flex-col gap-1.5">
-          <Select id="department" label="Department" error={errors.department?.message} {...register('department')}>
+          <Select id="department" label="Department" required error={errors.department?.message} {...register('department')}>
             <option value="">Select a department</option>
             {(departments?.results ?? []).map((dept) => (
               <option key={dept.id} value={dept.id}>
@@ -182,6 +183,7 @@ function CreateUserForm() {
           id="password"
           type="password"
           label="Password"
+          required
           autoComplete="new-password"
           error={errors.password?.message}
           {...register('password')}
@@ -270,7 +272,7 @@ function EditUserForm({ userId }: { userId: string }) {
         <Input id="last_name" label="Last name" {...register('last_name')} />
       </div>
 
-      <Input id="email" type="email" label="Email" error={errors.email?.message} {...register('email')} />
+      <Input id="email" type="email" label="Email" required error={errors.email?.message} {...register('email')} />
 
       <Input id="phone_number" label="Phone number" {...register('phone_number')} />
 
@@ -279,6 +281,7 @@ function EditUserForm({ userId }: { userId: string }) {
       <div className="flex flex-col gap-1.5">
         <label htmlFor="role" className="text-ink-secondary text-[12.5px] font-semibold">
           Role
+          <span className="text-status-critical ml-0.5">*</span>
         </label>
         <RoleSelect
           id="role"

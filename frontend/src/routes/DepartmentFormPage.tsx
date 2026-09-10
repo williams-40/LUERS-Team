@@ -73,8 +73,8 @@ function AddHeadForm({ departmentId, onCreated }: { departmentId: string; onCrea
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="mt-3 flex flex-col gap-3 rounded-lg border border-ink/10 p-3">
       <div className="grid grid-cols-2 gap-3">
-        <Input id="head-username" label="Username" error={errors.username?.message} {...register('username')} />
-        <Input id="head-email" type="email" label="Email" error={errors.email?.message} {...register('email')} />
+        <Input id="head-username" label="Username" required error={errors.username?.message} {...register('username')} />
+        <Input id="head-email" type="email" label="Email" required error={errors.email?.message} {...register('email')} />
         <Input id="head-first_name" label="First name" {...register('first_name')} />
         <Input id="head-last_name" label="Last name" {...register('last_name')} />
       </div>
@@ -206,7 +206,7 @@ export function DepartmentFormPage() {
 
       <Card>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-        <Input id="name" label="Name" error={errors.name?.message} {...register('name')} />
+        <Input id="name" label="Name" required error={errors.name?.message} {...register('name')} />
 
         <Textarea id="description" label="Description" rows={3} {...register('description')} />
 

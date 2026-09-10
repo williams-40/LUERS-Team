@@ -1,63 +1,82 @@
-import { cva, type VariantProps } from 'class-variance-authority';
+import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { CheckCircle2, Info, XCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { ToastItem, ToastVariant } from '../../lib/toast-context';
 
-const toastVariants = cva('flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm shadow-lg', {
-  variants: {
-    variant: {
-      success: 'bg-status-good/15 text-status-good-ink',
-      error: 'bg-status-critical/15 text-status-critical',
-      info: 'bg-ink-muted/15 text-ink-secondary',
-    },
-  },
-  defaultVariants: { variant: 'info' },
-});
+const VARIANT_ICON: Record<ToastVariant, typeof CheckCircle2> = {
+  success: CheckCircle2,
+  error: XCircle,
+  info: Info,
+};
 
-function roleFor(variant: ToastVariant): 'alert' | 'status' {
-  return variant === 'error' ? 'alert' : 'status';
+const VARIANT_ICON_CLASS: Record<ToastVariant, string> = {
+  success: 'text-status-good',
+  error: 'text-status-critical',
+  info: 'text-ink-secondary',
+};
+
+function roleFor(variant: ToastVariant): 'alertdialog' | 'dialog' {
+  return variant === 'error' ? 'alertdialog' : 'dialog';
 }
 
-interface ToastProps extends VariantProps<typeof toastVariants> {
-  message: string;
-  variant: ToastVariant;
-  onDismiss: () => void;
-}
+/**
+ * A single toast, rendered as a centered popup with a required "OK" —
+ * not an auto-fading corner notification — so the reporter/responder has
+ * unambiguous confirmation their action actually happened. Backdrop +
+ * dialog semantics reuse Modal.tsx's own pattern for visual/behavioral
+ * consistency, but this lives outside Modal itself since it queues
+ * (ToastContainer below) and needs no title bar or close (×) button —
+ * OK is the only way out, on purpose.
+ */
+export function Toast({ message, variant, onDismiss }: { message: string; variant: ToastVariant; onDismiss: () => void }) {
+  const okRef = useRef<HTMLButtonElement>(null);
+  const Icon = VARIANT_ICON[variant];
 
-export function Toast({ message, variant, onDismiss, className }: ToastProps & { className?: string }) {
-  return (
-    <div role={roleFor(variant)} aria-atomic="true" className={cn(toastVariants({ variant }), className)}>
-      <span className="flex-1">{message}</span>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Dismiss"
-        className="shrink-0 font-semibold opacity-70 hover:opacity-100"
+  useEffect(() => {
+    okRef.current?.focus();
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' || e.key === 'Enter') onDismiss();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return createPortal(
+    <div
+      // Above every other overlay tier in the app (Modal 1200, CameraOverlay
+      // 1400) — a toast reports the outcome of whatever the user just did,
+      // including inside those, so it must never end up hidden behind one.
+      className="fixed inset-0 z-[1500] flex items-center justify-center bg-ink/40 px-5"
+    >
+      <div
+        role={roleFor(variant)}
+        aria-modal="true"
+        aria-label={message}
+        className="bg-surface flex w-full max-w-sm flex-col items-center gap-3 rounded-xl p-6 text-center shadow-lg"
       >
-        ×
-      </button>
-    </div>
+        <Icon className={cn('h-10 w-10', VARIANT_ICON_CLASS[variant])} aria-hidden />
+        <p className="text-ink text-sm font-medium">{message}</p>
+        <button
+          ref={okRef}
+          type="button"
+          onClick={onDismiss}
+          className="bg-brand mt-1 w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110"
+        >
+          OK
+        </button>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
-export function ToastContainer({
-  toasts,
-  onDismiss,
-}: {
-  toasts: ToastItem[];
-  onDismiss: (id: string) => void;
-}) {
-  if (toasts.length === 0) return null;
+/** Renders only the head of the queue — see toast-context.tsx for why. */
+export function ToastContainer({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: string) => void }) {
+  const current = toasts[0];
+  if (!current) return null;
 
-  return (
-    <div className="fixed right-5 bottom-[calc(1.25rem+var(--action-bar-offset,0px))] z-50 flex flex-col gap-2">
-      {toasts.map((toast) => (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          variant={toast.variant}
-          onDismiss={() => onDismiss(toast.id)}
-        />
-      ))}
-    </div>
-  );
+  return <Toast key={current.id} message={current.message} variant={current.variant} onDismiss={() => onDismiss(current.id)} />;
 }

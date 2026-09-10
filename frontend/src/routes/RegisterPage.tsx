@@ -5,20 +5,31 @@ import { z } from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Logo } from '../components/layout/Logo';
+import { PhoneInput } from '../components/ui/PhoneInput';
 import { register as registerAccount } from '../lib/auth-api';
 import type { ApiError } from '../lib/api-client';
+import {
+  DEFAULT_PHONE_COUNTRY,
+  isValidNationalNumber,
+  toE164,
+  type PhoneCountry,
+} from '../lib/phone-countries';
 
-const registerSchema = z.object({
-  username: z.string().trim().min(1, 'Username is required'),
-  email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
-  first_name: z.string().optional().or(z.literal('')),
-  last_name: z.string().optional().or(z.literal('')),
-  phone_number: z.string().optional().or(z.literal('')),
-  university_id: z.string().optional().or(z.literal('')),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  role: z.enum(['student', 'staff']),
-});
+const registerSchema = z
+  .object({
+    username: z.string().trim().min(1, 'Username is required'),
+    email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
+    first_name: z.string().optional().or(z.literal('')),
+    last_name: z.string().optional().or(z.literal('')),
+    university_id: z.string().optional().or(z.literal('')),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string().min(1, 'Please confirm your password'),
+    role: z.enum(['student', 'staff']),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
@@ -29,6 +40,9 @@ function fieldErrorFor(err: unknown, field: string): string | undefined {
 export function RegisterPage() {
   const navigate = useNavigate();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [phoneCountry, setPhoneCountry] = useState<PhoneCountry>(DEFAULT_PHONE_COUNTRY);
+  const [phoneNational, setPhoneNational] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const {
     register,
@@ -45,8 +59,29 @@ export function RegisterPage() {
 
   async function onSubmit(values: RegisterFormValues) {
     setServerError(null);
+
+    // Phone number is optional, but if the reporter typed one it must be a
+    // real number for the chosen country — checked here rather than in the
+    // zod schema since it depends on the separately-tracked country picker.
+    if (phoneNational.trim() && !isValidNationalNumber(phoneCountry, phoneNational)) {
+      setPhoneError(
+        `Enter a valid ${phoneCountry.minDigits === phoneCountry.maxDigits ? phoneCountry.minDigits : `${phoneCountry.minDigits}-${phoneCountry.maxDigits}`}-digit number for ${phoneCountry.name}.`,
+      );
+      return;
+    }
+    setPhoneError(null);
+
     try {
-      await registerAccount(values);
+      await registerAccount({
+        username: values.username,
+        email: values.email,
+        first_name: values.first_name,
+        last_name: values.last_name,
+        university_id: values.university_id,
+        password: values.password,
+        role: values.role,
+        phone_number: phoneNational.trim() ? toE164(phoneCountry, phoneNational) : '',
+      });
       navigate('/login', { state: { registered: true } });
     } catch (err) {
       const apiError = err as ApiError;
@@ -58,10 +93,7 @@ export function RegisterPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-5 py-8">
-      <div className="mb-8 flex flex-col items-center gap-3">
-        <Logo className="h-12 w-auto" />
-        <h1 className="text-xl">Create an account</h1>
-      </div>
+      <h1 className="mb-8 text-center text-xl">Create an account</h1>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
@@ -86,16 +118,42 @@ export function RegisterPage() {
           </div>
         </div>
 
-        <Input id="username" label="Username" autoComplete="username" error={errors.username?.message} {...register('username')} />
+        <Input
+          id="username"
+          label="Username"
+          required
+          autoComplete="username"
+          error={errors.username?.message}
+          {...register('username')}
+        />
 
-        <Input id="email" type="email" label="Email" autoComplete="email" error={errors.email?.message} {...register('email')} />
+        <Input
+          id="email"
+          type="email"
+          label="Email"
+          required
+          autoComplete="email"
+          error={errors.email?.message}
+          {...register('email')}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <Input id="first_name" label="First name" {...register('first_name')} />
           <Input id="last_name" label="Last name" {...register('last_name')} />
         </div>
 
-        <Input id="phone_number" type="tel" label="Phone number" {...register('phone_number')} />
+        <PhoneInput
+          id="phone_number"
+          label="Phone number"
+          country={phoneCountry}
+          nationalNumber={phoneNational}
+          onCountryChange={setPhoneCountry}
+          onNationalNumberChange={(value) => {
+            setPhoneNational(value);
+            if (phoneError) setPhoneError(null);
+          }}
+          error={phoneError ?? undefined}
+        />
 
         <Input id="university_id" label="University ID" {...register('university_id')} />
 
@@ -103,9 +161,20 @@ export function RegisterPage() {
           id="password"
           type="password"
           label="Password"
+          required
           autoComplete="new-password"
           error={errors.password?.message}
           {...register('password')}
+        />
+
+        <Input
+          id="confirmPassword"
+          type="password"
+          label="Confirm password"
+          required
+          autoComplete="new-password"
+          error={errors.confirmPassword?.message}
+          {...register('confirmPassword')}
         />
 
         {serverError && (

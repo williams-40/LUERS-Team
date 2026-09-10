@@ -37,7 +37,10 @@ export interface NavGroup {
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Main',
+    // No heading — this is the first, always-visible group (Dashboard/My
+    // reports/Report queue), and "Main" told the reader nothing a plain
+    // reporter didn't already know from its position at the top.
+    label: '',
     items: [
       { label: 'Dashboard', path: '/', icon: LayoutDashboard, exact: true },
       { label: 'My reports', path: '/reports/mine', icon: FileText, permission: 'create_report' },

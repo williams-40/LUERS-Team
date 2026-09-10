@@ -81,6 +81,7 @@ export function LoginPage() {
           id="username"
           type="text"
           label={t('login.username')}
+          required
           autoComplete="username"
           error={errors.username?.message}
           {...register('username')}
@@ -90,6 +91,7 @@ export function LoginPage() {
           <div className="mb-1.5 flex items-center justify-between">
             <label htmlFor="password" className="text-ink-secondary text-[12.5px] font-semibold">
               {t('login.password')}
+              <span className="text-status-critical ml-0.5">*</span>
             </label>
             <Link to="/forgot-password" className="text-brand text-[12.5px] font-semibold hover:underline">
               {t('login.forgotPassword')}

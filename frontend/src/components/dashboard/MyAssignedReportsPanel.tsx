@@ -39,9 +39,9 @@ export function MyAssignedReportsPanel() {
     enabled: Boolean(user),
   });
 
-  const openReports = (data?.page.results ?? [])
-    .filter((r) => OPEN_STATUSES.has(r.status))
-    .slice(0, PREVIEW_LIMIT);
+  const allResults = data?.page.results ?? [];
+  const openReports = allResults.filter((r) => OPEN_STATUSES.has(r.status)).slice(0, PREVIEW_LIMIT);
+  const newCount = allResults.filter((r) => r.status === Status.NEW).length;
 
   return (
     <div className="mb-6 rounded-xl border border-ink/10 p-4">
@@ -49,6 +49,11 @@ export function MyAssignedReportsPanel() {
         <h2 className="text-ink-secondary flex items-center gap-1.5 text-[12.5px] font-semibold">
           <ClipboardList className="h-4 w-4" aria-hidden />
           My assigned reports
+          {newCount > 0 && (
+            <span className="bg-status-critical rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+              {newCount} new
+            </span>
+          )}
         </h2>
         <Link to="/admin">
           <Button type="button" variant="ghost" size="sm">

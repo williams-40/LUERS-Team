@@ -54,7 +54,7 @@ export function ForgotPasswordPage() {
             Enter the email associated with your account and we'll send you a link to reset your password.
           </p>
 
-          <Input id="email" type="email" label="Email" autoComplete="email" error={errors.email?.message} {...register('email')} />
+          <Input id="email" type="email" label="Email" required autoComplete="email" error={errors.email?.message} {...register('email')} />
 
           <Button type="submit" disabled={isSubmitting} className="mt-2">
             {isSubmitting ? 'Sending…' : 'Send reset link'}

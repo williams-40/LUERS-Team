@@ -157,6 +157,11 @@
     background-repeat: no-repeat;
     background-position: right 0.6rem center;
     background-size: 1em;
-    padding-right: 2rem;
+    /* !important: every call site also carries a Tailwind px-2.5 utility
+       for its left padding, and utilities are emitted after @layer
+       components — without this, px-2.5's own padding-right (0.625rem)
+       wins the cascade and the option text (e.g. "acknowledged") runs
+       under the chevron instead of stopping short of it. */
+    padding-right: 2rem !important;
   }
 }

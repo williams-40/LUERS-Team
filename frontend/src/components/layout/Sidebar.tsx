@@ -1,20 +1,17 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Logo } from './Logo';
 import { NavList } from './NavList';
 import { cn } from '../../lib/utils';
 
-const STORAGE_KEY = 'luers-sidebar-collapsed';
-
-/** Desktop collapsible nav rail. Hidden below md; MobileDrawer covers small screens instead. */
-export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(STORAGE_KEY) === 'true');
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, String(collapsed));
-  }, [collapsed]);
-
+/**
+ * Desktop collapsible nav rail. Hidden below md; MobileDrawer covers small
+ * screens instead. Collapse state is owned by AppShell (not local to this
+ * component) — collapsed, the logo/"LUERS" wordmark moves to TopBar
+ * instead of squeezing into this rail's 68px width, so both need to read
+ * the same flag.
+ */
+export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   return (
     <aside
       className={cn(
@@ -22,10 +19,12 @@ export function Sidebar() {
         collapsed ? 'w-[68px] px-2.5' : 'w-64 px-3.5',
       )}
     >
-      <Link to="/" className={cn('mb-5 flex items-center gap-2 px-1', collapsed && 'justify-center')}>
-        <Logo variant="light" className="h-8 w-auto shrink-0" />
-        {!collapsed && <span className="font-heading text-sidebar-ink text-sm font-bold">LUERS</span>}
-      </Link>
+      {!collapsed && (
+        <Link to="/" className="mb-5 flex items-center gap-2 px-1">
+          <Logo variant="light" className="h-8 w-auto shrink-0" />
+          <span className="font-heading text-sidebar-ink text-sm font-bold">LUERS</span>
+        </Link>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         <NavList collapsed={collapsed} />
@@ -33,7 +32,7 @@ export function Sidebar() {
 
       <button
         type="button"
-        onClick={() => setCollapsed((prev) => !prev)}
+        onClick={onToggle}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         className={cn(
           'text-sidebar-ink-muted hover:bg-sidebar-hover-bg hover:text-sidebar-ink mt-3 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm',

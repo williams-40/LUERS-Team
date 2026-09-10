@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ToastProvider, useToast } from '../../lib/toast-context';
 
@@ -18,69 +18,55 @@ function renderWithProvider(ui: ReactNode) {
 }
 
 describe('Toast / ToastProvider', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('renders nothing when there are no toasts', () => {
     renderWithProvider(<div />);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
-  it('shows a success toast with role="status"', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('shows a success toast as a dialog popup', async () => {
+    const user = userEvent.setup();
     renderWithProvider(<Trigger message="Updated 3 reports." variant="success" />);
 
     await user.click(screen.getByRole('button', { name: 'Trigger' }));
 
-    expect(screen.getByRole('status')).toHaveTextContent('Updated 3 reports.');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Updated 3 reports.');
   });
 
-  it('shows an error toast with role="alert"', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('shows an error toast as an alertdialog popup', async () => {
+    const user = userEvent.setup();
     renderWithProvider(<Trigger message="Something failed." variant="error" />);
 
     await user.click(screen.getByRole('button', { name: 'Trigger' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Something failed.');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Something failed.');
   });
 
-  it('auto-dismisses after 5000ms', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderWithProvider(<Trigger message="Bye soon" variant="info" />);
+  it('does not auto-dismiss — stays until OK is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithProvider(<Trigger message="Stay put" variant="info" />);
 
     await user.click(screen.getByRole('button', { name: 'Trigger' }));
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
 
-    act(() => {
-      vi.advanceTimersByTime(5000);
-    });
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'OK' }));
+    expect(screen.queryByText('Stay put')).not.toBeInTheDocument();
   });
 
-  it('dismisses immediately when the dismiss button is clicked', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderWithProvider(<Trigger message="Dismiss me" variant="info" />);
-
-    await user.click(screen.getByRole('button', { name: 'Trigger' }));
-    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
-
-    expect(screen.queryByText('Dismiss me')).not.toBeInTheDocument();
-  });
-
-  it('stacks multiple toasts', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('queues a second toast behind the first instead of showing both at once', async () => {
+    const user = userEvent.setup();
     renderWithProvider(<Trigger message="First" variant="info" />);
 
     await user.click(screen.getByRole('button', { name: 'Trigger' }));
     await user.click(screen.getByRole('button', { name: 'Trigger' }));
 
-    expect(screen.getAllByRole('status')).toHaveLength(2);
+    // Two show() calls queue two toasts with the same message, but only
+    // the head of the queue renders.
+    expect(screen.getAllByText('First')).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'OK' }));
+    // The second, identical-message toast is still queued behind the first.
+    expect(screen.getByText('First')).toBeInTheDocument();
   });
 
   it('throws when useToast is called outside a ToastProvider', () => {

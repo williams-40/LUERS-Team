@@ -41,6 +41,9 @@ export function DashboardPage() {
           <Link to="/emergency">
             <Button variant="primary">Report an incident</Button>
           </Link>
+          <Link to="/reports/mine">
+            <Button variant="secondary">My reports</Button>
+          </Link>
         </div>
       )}
 

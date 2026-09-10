@@ -73,6 +73,7 @@ function ProfileForm() {
         id="email"
         type="email"
         label="Email"
+        required
         autoComplete="email"
         error={errors.email?.message}
         {...register('email')}
