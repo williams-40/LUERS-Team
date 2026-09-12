@@ -1,15 +1,17 @@
-﻿from django.db import transaction
+﻿from datetime import timedelta
+from django.conf import settings
+from django.db import transaction
+from django.db.models import Q, Count, Exists, OuterRef
 from django.utils import timezone
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from apps.reports.models import Report, Evidence, ReportIdentity, Department
-from apps.core.choices import Action, Channel, SyncOrigin, Category
+from apps.reports.models import Report, Evidence, Department, ReportFeedback, EmergencyDispatch, EmergencyCategory
+from apps.core.choices import Action, Channel, SyncOrigin, Status, Urgency
 from apps.audit.models import AuditLog
 from apps.notifications.models import Notification, Message
 from apps.notifications.services import NotificationService
-from apps.core.services import EncryptionService
-from apps.reports.mapping import get_department_for_category
+from apps.reports.routing import DepartmentRoutingService, get_confidence_tier
 
 
 class ConflictError(APIException):
@@ -19,28 +21,18 @@ class ConflictError(APIException):
     default_code = 'conflict'
 
 
-class IdentityService:
-    @staticmethod
-    def create_identity(report, user):
-        encrypted_ref = EncryptionService.generate_placeholder(user.id)
-        return ReportIdentity.objects.create(
-            report=report,
-            encrypted_reporter_ref=encrypted_ref
-        )
-
-    @staticmethod
-    def get_reporter(identity):
-        decrypted = EncryptionService.decrypt(identity.encrypted_reporter_ref)
-        if decrypted:
-            if decrypted.startswith('REF_'):
-                return decrypted.replace('REF_', '')
-            elif decrypted.startswith('PLACEHOLDER_'):
-                return decrypted.replace('PLACEHOLDER_', '')
-        return None
-
-    @staticmethod
-    def identity_exists(report):
-        return hasattr(report, 'identity')
+# Normal reports keep today's free-for-all status transitions (a deliberate
+# existing design choice, not a bug) — this constraint applies to panic
+# reports only, enforced in ReportService.update_status.
+PANIC_STATUS_TRANSITIONS = {
+    Status.NEW: {Status.ACKNOWLEDGED, Status.CANCELLED, Status.FALSE_ALARM},
+    Status.ACKNOWLEDGED: {Status.IN_PROGRESS, Status.CANCELLED, Status.FALSE_ALARM},
+    Status.IN_PROGRESS: {Status.RESOLVED, Status.CANCELLED},
+    Status.RESOLVED: {Status.CLOSED},
+    Status.CLOSED: set(),
+    Status.CANCELLED: set(),
+    Status.FALSE_ALARM: set(),
+}
 
 
 class ReportClassifierService:
@@ -82,32 +74,89 @@ class MessageService:
 
 class ReportService:
     @staticmethod
+    def _resolve_panic_department(category, explicit_department, description):
+        """
+        The one routing priority chain for every panic report, replacing
+        two previously-separate mechanisms: the old fixed
+        EMERGENCY_TYPE_DEPARTMENT_MAP dict (panic-only, never ran keyword
+        matching) and DepartmentRoutingService's keyword classifier
+        (previously reachable only for a normal report filed under the
+        seeded "Other" department). Returns (department, department_source,
+        routing_result, tier) — routing_result/tier are None unless the
+        classifier actually ran.
+
+        Priority:
+        1. The reporter's own explicit department choice (the merged form's
+           optional DepartmentPicker) always wins — a reporter who took the
+           time to pick one shouldn't have it silently overridden.
+        2. Else, the selected category's own default department.
+        3. Else, if the category is flagged as needing it, run the keyword
+           classifier against the description: high confidence auto-routes
+           there; medium/low confidence stays on the category's own
+           default and (for medium) leaves a suggestion for a human to
+           review — same as the existing normal-report "Other" behavior.
+        """
+        if explicit_department:
+            return explicit_department, 'user_selected_override', None, None
+
+        base_department = category.department if category else None
+
+        if category and category.requires_description_and_routing:
+            routing_result = DepartmentRoutingService().classify(description or '')
+            tier = get_confidence_tier(routing_result.confidence) if routing_result.department else 'low'
+            if tier == 'high':
+                return routing_result.department, 'auto_inferred', routing_result, tier
+            return base_department, 'unclassified_pending_review', routing_result, tier
+
+        return base_department, 'category_default', None, None
+
+    @staticmethod
     @transaction.atomic
-    def create_report(validated_data, user, ip_address=None, sync_origin=SyncOrigin.LIVE):
+    def create_report(validated_data, user, ip_address=None, user_agent=None, sync_origin=SyncOrigin.LIVE):
         # Idempotency
         idempotency_key = validated_data.pop('idempotency_key', None)
         client_created_at = validated_data.pop('client_created_at', None)
 
-        # Auto-route department based on category
-        category = validated_data.get('category')
-        custom_dept = validated_data.pop('custom_department', None)
+        # Not a Report field — always optional (Phase 2: no longer required
+        # for "non-anonymous" reports, since anonymous reporting itself is
+        # gone and reporter identity now comes from the authenticated user
+        # directly, not a per-report flag). Persisted onto the reporter's
+        # own profile so responders can contact them, rather than stored
+        # per-report.
+        phone_number = (validated_data.pop('phone_number', '') or '').strip()
 
-        # Determine department
-        if category == Category.OTHER:
-            # For 'other', assign the 'Other' department (head is system_admin)
-            try:
-                department = Department.objects.get(name='Other')
-            except Department.DoesNotExist:
-                department = None
-            if custom_dept:
-                validated_data['custom_department'] = custom_dept
+        # Panic-only, not a Report field — used below to deterministically
+        # route the department and to populate EmergencyDispatch. Popped
+        # before Report.objects.create() so it never hits the model.
+        emergency_type = validated_data.pop('emergency_type', None)
+        urgency = validated_data.get('urgency') or Urgency.NORMAL
+
+        department = validated_data.get('department')
+        routing_result = None
+        tier = None
+
+        category = None
+        if urgency == Urgency.PANIC:
+            category = EmergencyCategory.objects.filter(slug=emergency_type).first()
+            department, department_source, routing_result, tier = ReportService._resolve_panic_department(
+                category, explicit_department=department, description=validated_data.get('description', ''),
+            )
+            validated_data['department'] = department
         else:
-            department = get_department_for_category(category)
-            # store custom_dept if provided (optional)
-            if custom_dept:
-                validated_data['custom_department'] = custom_dept
-
-        validated_data['department'] = department
+            department_source = 'user_selected'
+            # Department is selected directly by the reporter (Phase 14 —
+            # replaces the old fixed-Category-with-hardcoded-routing
+            # scheme). "Other" gets a shot at keyword-based auto-routing;
+            # everything else is used exactly as chosen.
+            if department and department.name == 'Other':
+                routing_result = DepartmentRoutingService().classify(validated_data.get('description', ''))
+                tier = get_confidence_tier(routing_result.confidence) if routing_result.department else 'low'
+                if tier == 'high':
+                    department = routing_result.department
+                    validated_data['department'] = department
+                    department_source = 'auto_inferred'
+                else:
+                    department_source = 'unclassified_pending_review'
 
         if idempotency_key:
             existing = Report.objects.filter(idempotency_key=idempotency_key).first()
@@ -116,25 +165,78 @@ class ReportService:
 
         report = Report.objects.create(
             **validated_data,
+            reporter=user,
             idempotency_key=idempotency_key,
             client_created_at=client_created_at,
         )
-        IdentityService.create_identity(report, user)
+
+        if phone_number and user.phone_number != phone_number:
+            user.phone_number = phone_number
+            user.save(update_fields=['phone_number'])
+
+        if urgency == Urgency.PANIC:
+            now = timezone.now()
+            sla = settings.EMERGENCY_SLA_MINUTES
+            EmergencyDispatch.objects.create(
+                report=report,
+                emergency_type=emergency_type or 'other',
+                emergency_type_label=category.name if category else 'Other',
+                ack_deadline=now + timedelta(minutes=sla['acknowledge']),
+                response_deadline=now + timedelta(minutes=sla['respond']),
+                resolution_deadline=now + timedelta(minutes=sla['resolve']),
+            )
 
         AuditLog.objects.create(
             report=report,
             actor=user,
             action=Action.CREATE,
-            after_state={'category': report.category, 'status': report.status},
-            ip_address=ip_address,
+            after_state={
+                'department': department.name if department else None,
+                'department_source': department_source,
+                'status': report.status,
+                **({'emergency_type': emergency_type} if urgency == Urgency.PANIC else {}),
+            },
+            ip_address=ip_address, user_agent=user_agent,
             client_timestamp=client_created_at,
             sync_origin=sync_origin,
         )
 
-        classification = ReportClassifierService.classify(report.category, report.description)
-        if report.metadata is None:
-            report.metadata = {}
-        report.metadata['classification'] = classification
+        metadata_updates = {'classification': ReportClassifierService.classify(None, report.description)}
+        if routing_result is not None and tier == 'high':
+            AuditLog.objects.create(
+                report=report,
+                actor=user,
+                action=Action.AUTO_ROUTE,
+                after_state={
+                    'department': routing_result.department.name,
+                    'confidence': routing_result.confidence,
+                    'strategy': routing_result.strategy,
+                    'matched_keywords': routing_result.matched_keywords,
+                },
+                ip_address=ip_address, user_agent=user_agent,
+                sync_origin=sync_origin,
+            )
+        elif routing_result is not None and tier == 'medium':
+            metadata_updates['routing_suggestion'] = {
+                'suggested_department': routing_result.department.name,
+                'confidence': routing_result.confidence,
+                'matched_keywords': routing_result.matched_keywords,
+            }
+            AuditLog.objects.create(
+                report=report,
+                actor=user,
+                action=Action.ROUTING_SUGGESTION,
+                after_state={
+                    'suggested_department': routing_result.department.name,
+                    'confidence': routing_result.confidence,
+                    'strategy': routing_result.strategy,
+                    'matched_keywords': routing_result.matched_keywords,
+                },
+                ip_address=ip_address, user_agent=user_agent,
+                sync_origin=sync_origin,
+            )
+
+        report.metadata = {**(report.metadata or {}), **metadata_updates}
         report.save(update_fields=['metadata'])
 
         Notification.objects.create(
@@ -143,7 +245,12 @@ class ReportService:
             channel=Channel.WEBSOCKET,
             sent_at=timezone.now()
         )
-        NotificationService.broadcast_report_created(report)
+        # Deferred to on_commit: this runs inside @transaction.atomic, and the
+        # in-memory channel layer delivers to listening sockets fast enough
+        # that a client refetching in response to the broadcast can lose the
+        # race against this transaction's own commit and read stale/missing
+        # data. Broadcasting only after commit closes that window.
+        transaction.on_commit(lambda: NotificationService.broadcast_report_created(report))
 
         # Send SMS and Email if assigned
         if report.assigned_to:
@@ -155,7 +262,33 @@ class ReportService:
         # --- Notify department heads/members ---
         ReportService._notify_department(report, department)
 
+        if urgency == Urgency.PANIC and department:
+            # A panic report otherwise reaches nobody until a department
+            # head/member happens to be watching the live queue — SMS/email
+            # give it a real proactive alert. Always .delay()'d (never sent
+            # inline) and deferred to on_commit alongside the WebSocket
+            # broadcast, so a rolled-back transaction never fires an alert
+            # for a report that doesn't actually exist.
+            recipients = ReportService._department_recipients(department)
+            transaction.on_commit(lambda: ReportService._dispatch_panic_alerts(report, recipients))
+
         return report
+
+    @staticmethod
+    def _department_recipients(department):
+        recipients = set()
+        if department.head:
+            recipients.add(department.head)
+        recipients.update(department.members.all())
+        return recipients
+
+    @staticmethod
+    def _dispatch_panic_alerts(report, recipients, event_type='panic_created', **kwargs):
+        for recipient in recipients:
+            if recipient.phone_number:
+                NotificationService.dispatch(report, Channel.SMS, recipient=recipient, event_type=event_type, **kwargs)
+            if recipient.email:
+                NotificationService.dispatch(report, Channel.EMAIL, recipient=recipient, event_type=event_type, **kwargs)
 
     @staticmethod
     def _notify_department(report, department):
@@ -165,13 +298,7 @@ class ReportService:
         if not department:
             return
 
-        recipients = set()
-        if department.head:
-            recipients.add(department.head)
-        for member in department.members.all():
-            recipients.add(member)
-
-        for user in recipients:
+        for user in ReportService._department_recipients(department):
             Notification.objects.create(
                 recipient=user,
                 report=report,
@@ -181,15 +308,26 @@ class ReportService:
 
     @staticmethod
     @transaction.atomic
-    def update_status(report, new_status, user, ip_address=None, expected_updated_at=None,
+    def update_status(report, new_status, user, ip_address=None, user_agent=None, expected_updated_at=None,
                       client_timestamp=None, sync_origin=SyncOrigin.LIVE):
         ReportService._check_version(report, expected_updated_at)
 
         old_status = report.status
         if old_status == new_status:
             return {'error': f'Status already set to {new_status}'}
+
+        if report.urgency == Urgency.PANIC:
+            allowed = PANIC_STATUS_TRANSITIONS.get(old_status, set())
+            if new_status not in allowed:
+                raise ValidationError(
+                    f"A panic report cannot move from '{old_status}' to '{new_status}'."
+                )
+
         report.status = new_status
         report.save(update_fields=['status', 'updated_at'])
+
+        if report.urgency == Urgency.PANIC and new_status == Status.RESOLVED:
+            EmergencyDispatch.objects.filter(report=report).update(resolved_at=timezone.now())
 
         AuditLog.objects.create(
             report=report,
@@ -197,10 +335,23 @@ class ReportService:
             action=Action.STATUS_UPDATE,
             before_state={'status': old_status},
             after_state={'status': new_status},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             client_timestamp=client_timestamp,
             sync_origin=sync_origin,
         )
+
+        if new_status == Status.RESOLVED:
+            # Marks the moment a feedback request is effectively generated
+            # for the reporter — see ReportService.submit_feedback and
+            # get_pending_feedback_reports, which surface it client-side.
+            AuditLog.objects.create(
+                report=report,
+                actor=user,
+                action=Action.FEEDBACK_REQUESTED,
+                ip_address=ip_address, user_agent=user_agent,
+                client_timestamp=client_timestamp,
+                sync_origin=sync_origin,
+            )
 
         Notification.objects.create(
             recipient=None,
@@ -208,12 +359,12 @@ class ReportService:
             channel=Channel.WEBSOCKET,
             sent_at=timezone.now()
         )
-        NotificationService.broadcast_report_updated(report)
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
         return {'status': new_status}
 
     @staticmethod
     @transaction.atomic
-    def assign_report(report, assigned_to, user, ip_address=None, expected_updated_at=None,
+    def assign_report(report, assigned_to, user, ip_address=None, user_agent=None, expected_updated_at=None,
                       client_timestamp=None, sync_origin=SyncOrigin.LIVE):
         ReportService._check_version(report, expected_updated_at)
 
@@ -227,7 +378,7 @@ class ReportService:
             action=Action.ASSIGN,
             before_state={'assigned_to': str(old_assigned.id) if old_assigned else None},
             after_state={'assigned_to': str(assigned_to.id)},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             client_timestamp=client_timestamp,
             sync_origin=sync_origin,
         )
@@ -236,12 +387,50 @@ class ReportService:
             if assigned_to.phone_number:
                 NotificationService.dispatch(report, Channel.SMS, recipient=assigned_to)
             if assigned_to.email:
-                NotificationService.dispatch(report, Channel.EMAIL, recipient=assigned_to)
+                NotificationService.dispatch(report, Channel.EMAIL, recipient=assigned_to, event_type='assigned')
+
+        # Unlike update_status, this broadcast was missing entirely — an
+        # assignment never reached the live queue/dashboard/report-detail
+        # views until a manual refresh.
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
         return {'assigned_to': assigned_to.id}
 
     @staticmethod
     @transaction.atomic
-    def add_evidence(report, file, file_type, user, ip_address=None,
+    def submit_feedback(report, user, rating, comments='', ip_address=None, user_agent=None, sync_origin=SyncOrigin.LIVE):
+        """
+        Only the report's own reporter may submit feedback, only once, and
+        only once the report is Resolved. Auto-closes through the existing
+        update_status path so resolved->closed gets its own STATUS_UPDATE
+        audit entry for free, rather than duplicating that logic here.
+        """
+        if report.status != Status.RESOLVED:
+            raise ValidationError({'error': 'This report is not awaiting feedback.'})
+        if hasattr(report, 'feedback'):
+            raise ValidationError({'error': 'Feedback has already been submitted for this report.'})
+
+        if report.reporter_id != user.id:
+            raise PermissionDenied("Only this report's reporter can submit feedback.")
+
+        feedback = ReportFeedback.objects.create(
+            report=report, submitted_by=user, rating=rating, comments=comments,
+        )
+
+        AuditLog.objects.create(
+            report=report,
+            actor=user,
+            action=Action.SUBMIT_FEEDBACK,
+            after_state={'rating': rating},
+            ip_address=ip_address, user_agent=user_agent,
+            sync_origin=sync_origin,
+        )
+
+        ReportService.update_status(report, Status.CLOSED, user, ip_address=ip_address, user_agent=user_agent, sync_origin=sync_origin)
+        return feedback
+
+    @staticmethod
+    @transaction.atomic
+    def add_evidence(report, file, file_type, user, ip_address=None, user_agent=None,
                      client_timestamp=None, sync_origin=SyncOrigin.LIVE):
         evidence = Evidence.objects.create(
             report=report,
@@ -253,11 +442,77 @@ class ReportService:
             actor=user,
             action=Action.EVIDENCE_UPLOAD,
             after_state={'evidence_id': str(evidence.id)},
-            ip_address=ip_address,
+            ip_address=ip_address, user_agent=user_agent,
             client_timestamp=client_timestamp,
             sync_origin=sync_origin,
         )
         return evidence
+
+    @staticmethod
+    @transaction.atomic
+    def soft_delete(report, actor, ip_address=None, user_agent=None, sync_origin=SyncOrigin.LIVE):
+        report.deleted_at = timezone.now()
+        report.save(update_fields=['deleted_at', 'updated_at'])
+
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.SOFT_DELETE,
+            before_state={'deleted_at': None},
+            after_state={'deleted_at': report.deleted_at.isoformat()},
+            ip_address=ip_address, user_agent=user_agent,
+            sync_origin=sync_origin,
+        )
+        return report
+
+    @staticmethod
+    @transaction.atomic
+    def restore(report, actor, ip_address=None, user_agent=None, sync_origin=SyncOrigin.LIVE):
+        old_deleted_at = report.deleted_at
+        report.deleted_at = None
+        report.save(update_fields=['deleted_at', 'updated_at'])
+
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.RESTORE,
+            before_state={'deleted_at': old_deleted_at.isoformat() if old_deleted_at else None},
+            after_state={'deleted_at': None},
+            ip_address=ip_address, user_agent=user_agent,
+            sync_origin=sync_origin,
+        )
+        return report
+
+    @staticmethod
+    @transaction.atomic
+    def permanent_delete(report, actor, ip_address=None, user_agent=None):
+        """
+        Irreversibly deletes an already-soft-deleted report. Evidence rows
+        cascade with it; the AuditLog entry created here — and every
+        earlier entry for this report — survives with report set to None
+        (AuditLog.report is SET_NULL, not CASCADE), since the whole point
+        of logging a permanent delete is for the record to outlive the row
+        it describes. before_state is the report's own last-known content,
+        since after this there's nothing left in the reports table to look
+        it up by.
+        """
+        snapshot = {
+            'id': str(report.id),
+            'department': report.department.name if report.department else None,
+            'description': report.description,
+            'status': report.status,
+            'urgency': report.urgency,
+            'deleted_at': report.deleted_at.isoformat() if report.deleted_at else None,
+            'created_at': report.created_at.isoformat(),
+        }
+        AuditLog.objects.create(
+            report=report,
+            actor=actor,
+            action=Action.PERMANENT_DELETE,
+            before_state=snapshot,
+            ip_address=ip_address, user_agent=user_agent,
+        )
+        report.delete()
 
     @staticmethod
     def _check_version(report, expected_updated_at):
@@ -273,30 +528,448 @@ class ReportService:
                 )
 
 
+# Panic reports still open — excludes everything a cancellation/resolution
+# can leave a report in. Shared by EmergencyDispatchService.escalate and the
+# Celery Beat scanner (apps.reports.tasks) so both agree on "active".
+ACTIVE_PANIC_STATUSES = {Status.NEW, Status.ACKNOWLEDGED, Status.IN_PROGRESS}
+
+
+class EmergencyDispatchService:
+    """
+    Responder lifecycle actions for a panic report, layered on top of
+    ReportService.update_status (transition validation + AuditLog +
+    broadcast already lives there) plus EmergencyDispatch-specific
+    timestamps and a dedicated Action per step for the emergency timeline.
+    Permission checks live in the calling view, matching every other
+    action in this module (assign_report, update_status, etc.) — these
+    methods trust the caller.
+    """
+
+    @staticmethod
+    def _require_dispatch(report):
+        if report.urgency != Urgency.PANIC:
+            raise ValidationError({'error': 'This action only applies to panic reports.'})
+        try:
+            return report.emergency_dispatch
+        except EmergencyDispatch.DoesNotExist:
+            raise ValidationError({'error': 'This panic report has no dispatch record.'})
+
+    @staticmethod
+    @transaction.atomic
+    def acknowledge(report, user, ip_address=None, user_agent=None):
+        dispatch = EmergencyDispatchService._require_dispatch(report)
+        if dispatch.acknowledged_at is not None:
+            raise ValidationError({'error': 'This emergency has already been acknowledged.'})
+
+        result = ReportService.update_status(report, Status.ACKNOWLEDGED, user, ip_address=ip_address, user_agent=user_agent)
+        if 'error' in result:
+            raise ValidationError(result)
+
+        dispatch.acknowledged_at = timezone.now()
+        dispatch.acknowledged_by = user
+        dispatch.save(update_fields=['acknowledged_at', 'acknowledged_by', 'updated_at'])
+
+        # First to acknowledge claims it — reuses the existing single-FK
+        # assigned_to rather than a separate assignment model. A head can
+        # still reassign afterward via the ordinary ReportAssignView.
+        if report.assigned_to_id is None:
+            report.assigned_to = user
+            report.save(update_fields=['assigned_to', 'updated_at'])
+
+        AuditLog.objects.create(
+            report=report, actor=user, action=Action.EMERGENCY_ACKNOWLEDGED,
+            after_state={'acknowledged_by': user.username, 'assigned_to': user.username},
+            ip_address=ip_address, user_agent=user_agent,
+        )
+        return dispatch
+
+    @staticmethod
+    @transaction.atomic
+    def respond(report, user, ip_address=None, user_agent=None):
+        dispatch = EmergencyDispatchService._require_dispatch(report)
+        if dispatch.responding_at is not None:
+            raise ValidationError({'error': 'This emergency is already marked as being responded to.'})
+
+        result = ReportService.update_status(report, Status.IN_PROGRESS, user, ip_address=ip_address, user_agent=user_agent)
+        if 'error' in result:
+            raise ValidationError(result)
+
+        dispatch.responding_at = timezone.now()
+        dispatch.save(update_fields=['responding_at', 'updated_at'])
+
+        AuditLog.objects.create(
+            report=report, actor=user, action=Action.EMERGENCY_RESPONDING, ip_address=ip_address, user_agent=user_agent,
+        )
+        return dispatch
+
+    @staticmethod
+    @transaction.atomic
+    def arrive(report, user, ip_address=None, user_agent=None):
+        dispatch = EmergencyDispatchService._require_dispatch(report)
+        if dispatch.arrived_at is not None:
+            raise ValidationError({'error': 'This emergency is already marked as arrived.'})
+
+        dispatch.arrived_at = timezone.now()
+        dispatch.save(update_fields=['arrived_at', 'updated_at'])
+
+        AuditLog.objects.create(
+            report=report, actor=user, action=Action.EMERGENCY_ARRIVED, ip_address=ip_address, user_agent=user_agent,
+        )
+
+        Notification.objects.create(recipient=None, report=report, channel=Channel.WEBSOCKET)
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
+        return dispatch
+
+    @staticmethod
+    @transaction.atomic
+    def cancel(report, user, reason, ip_address=None, user_agent=None):
+        """`reason` is 'cancelled' or 'false_alarm' — picks the Status the
+        report ends up in; both are terminal, soft (never deletes the row)."""
+        dispatch = EmergencyDispatchService._require_dispatch(report)
+        new_status = Status.CANCELLED if reason == 'cancelled' else Status.FALSE_ALARM
+
+        result = ReportService.update_status(report, new_status, user, ip_address=ip_address, user_agent=user_agent)
+        if 'error' in result:
+            raise ValidationError(result)
+
+        dispatch.cancelled_at = timezone.now()
+        dispatch.cancelled_by = user
+        dispatch.save(update_fields=['cancelled_at', 'cancelled_by', 'updated_at'])
+
+        action = Action.EMERGENCY_CANCELLED if reason == 'cancelled' else Action.EMERGENCY_FALSE_ALARM
+        AuditLog.objects.create(
+            report=report, actor=user, action=action,
+            after_state={'status': new_status}, ip_address=ip_address, user_agent=user_agent,
+        )
+        return dispatch
+
+    @staticmethod
+    @transaction.atomic
+    def escalate(report, actor=None, reason=None, ip_address=None, user_agent=None):
+        """
+        `actor=None` marks an automatic escalation (Celery Beat SLA scan) —
+        same nullable-actor pattern AuditLog already uses for system
+        actions; that path keeps notifying the department (plus every
+        system_admin once escalation_level >= 2), unchanged.
+
+        `actor` set means a department head manually escalated (System
+        Admin can't — there's nothing above them to escalate to). A manual
+        escalation always requires a reason and always goes straight to
+        System Admin, not back to the department that's already handling
+        it.
+        """
+        dispatch = EmergencyDispatchService._require_dispatch(report)
+        if report.status not in ACTIVE_PANIC_STATUSES:
+            raise ValidationError({'error': 'This emergency is no longer active.'})
+
+        reason = (reason or '').strip()
+        if actor is not None and not reason:
+            raise ValidationError({'reason': 'A reason is required to escalate to System Admin.'})
+
+        dispatch.escalation_level = dispatch.escalation_level + 1
+        dispatch.last_escalated_at = timezone.now()
+        dispatch.save(update_fields=['escalation_level', 'last_escalated_at', 'updated_at'])
+
+        after_state = {'escalation_level': dispatch.escalation_level}
+        if reason:
+            after_state['reason'] = reason
+        AuditLog.objects.create(
+            report=report, actor=actor, action=Action.EMERGENCY_ESCALATED,
+            after_state=after_state,
+            ip_address=ip_address, user_agent=user_agent,
+        )
+
+        if actor is not None:
+            from apps.accounts.models import User
+            recipients = set(User.objects.filter(role__slug='system_admin', is_active=True))
+            transaction.on_commit(
+                lambda: ReportService._dispatch_panic_alerts(report, recipients, event_type='escalated', reason=reason)
+            )
+        elif report.department:
+            recipients = set(ReportService._department_recipients(report.department))
+            # Level 2+ also pulls in every system_admin — a department that
+            # still hasn't responded after a second SLA miss needs eyes
+            # beyond just its own head/members.
+            if dispatch.escalation_level >= 2:
+                from apps.accounts.models import User
+                recipients.update(User.objects.filter(role__slug='system_admin', is_active=True))
+            transaction.on_commit(lambda: ReportService._dispatch_panic_alerts(report, recipients))
+
+        transaction.on_commit(lambda: NotificationService.broadcast_report_updated(report))
+        return dispatch
+
+
 # ============================================================
 # Department Access Helper (Phase 6)
 # ============================================================
 
-def get_accessible_reports(user):
+def filter_reports(queryset, params):
+    """
+    Shared status/category/urgency/assigned_to/search filtering for the
+    queue list and export views. `search` is a plain icontains OR across
+    description, custom_department, department name, and assigned officer
+    username — deliberately excludes reporter identity and
+    category/status/urgency (already exact-match filterable above;
+    substring-matching them too would be redundant and could mislead
+    officers about what search actually does). `assigned_to` is an exact
+    user-id match — used by MyAssignedReportsPanel so a responder's
+    dashboard view is explicitly filtered server-side rather than
+    incidentally correct only because get_accessible_reports already
+    narrows a responder to their own assignments.
+
+    icontains can't use a plain btree index, so this scans on `description`
+    for now — fine at this app's current scale. A pg_trgm GIN index would
+    accelerate it but needs a new Postgres extension + migration; revisit
+    only if EXPLAIN ANALYZE ever shows it matters.
+    """
+    status = params.get('status')
+    category = params.get('category')
+    department = params.get('department')
+    urgency = params.get('urgency')
+    emergency_category = params.get('emergency_category')
+    search = params.get('search')
+    assigned_to = params.get('assigned_to')
+    active = params.get('active')
+    urgent_only = params.get('urgent_only')
+    escalated_to_admin = params.get('escalated_to_admin')
+    if status:
+        queryset = queryset.filter(status=status)
+    if category:
+        # Legacy field, retired since the department-routing rework — kept
+        # for any caller still filtering historical pre-Phase-14 reports.
+        queryset = queryset.filter(category=category)
+    if emergency_category:
+        # Filters by EmergencyCategory.slug (stored on
+        # EmergencyDispatch.emergency_type) — the live replacement for the
+        # legacy `category` filter above, now that every new report has one.
+        queryset = queryset.filter(emergency_dispatch__emergency_type=emergency_category)
+    if department:
+        queryset = queryset.filter(department_id=department)
+    if urgency:
+        queryset = queryset.filter(urgency=urgency)
+    if assigned_to:
+        queryset = queryset.filter(assigned_to_id=assigned_to)
+    if active in ('true', '1'):
+        # Convenience filter for the active-emergencies map — "still
+        # needs attention", not yet resolved/closed/cancelled/false_alarm.
+        queryset = queryset.exclude(status__in=['resolved', 'closed', 'cancelled', 'false_alarm'])
+    if urgent_only in ('true', '1'):
+        # Since every report is now urgency='panic' by design, plain
+        # active=true alone (see above) no longer distinguishes a genuine
+        # emergency from routine business — this is the successor signal
+        # for "actually needs eyes right now": already escalated past its
+        # SLA, or still within its acknowledge window (i.e. hasn't had time
+        # to escalate yet but is still fresh). Used by ActiveEmergenciesMap.
+        queryset = queryset.filter(
+            Q(emergency_dispatch__escalation_level__gt=0)
+            | Q(emergency_dispatch__ack_deadline__gte=timezone.now())
+        )
+    if escalated_to_admin in ('true', '1'):
+        # A department head manually escalated this report to System Admin
+        # (actor set — the automatic Celery Beat SLA path always uses
+        # actor=None and doesn't count here, even at escalation_level 2+
+        # where it also cc's admins). Combine with active=true from the
+        # caller to get "still needs System Admin's attention" specifically.
+        manual_escalations = AuditLog.objects.filter(
+            report=OuterRef('pk'), action=Action.EMERGENCY_ESCALATED, actor__isnull=False,
+        )
+        queryset = queryset.filter(Exists(manual_escalations))
+    if search:
+        queryset = queryset.filter(
+            Q(description__icontains=search)
+            | Q(custom_department__icontains=search)
+            | Q(department__name__icontains=search)
+            | Q(assigned_to__username__icontains=search)
+        ).distinct()
+    return queryset
+
+
+def get_accessible_reports(user, include_deleted=False):
     """
     Return a QuerySet of reports the user is allowed to see.
-    """
-    # Admins see all
-    if user.role in ['security', 'ict_admin', 'management', 'system_admin']:
-        return Report.objects.all()
 
-    # Department head: see reports of their department
+    Phase 5: the redesign's target four-rule model, exactly —
+    - System Admin (view_all_reports): every report, unconditionally.
+    - Reporter: any report they personally filed (Report.reporter).
+    - Responder: any report assigned to them (Report.assigned_to),
+      independent of current department membership — assignment itself
+      is already gated to a department member/head at the time it
+      happens (see ReportAssignView/is_department_member_or_head), so
+      re-checking membership here would only ever remove access, never
+      grant it, and would do so retroactively if someone is later
+      removed from a department after already being assigned a report.
+    - Department Head: every report in the department(s) they head
+      (Department.head), not just ones assigned to them personally.
+
+    These four are independent — a user can qualify through more than
+    one at once (e.g. a department head who is also the reporter on an
+    unrelated report), so this is a single OR across all of them rather
+    than a priority chain. Simplified from an earlier branching
+    implementation that also had to merge in an M2M-backed
+    "assistance-linked" union (removed entirely — see the redesign's
+    Phase 3) and a hand-rolled id-set materialization to work around it;
+    with only FK-based conditions left, a plain Q() OR needs neither.
+
+    Soft-deleted reports (deleted_at set) are excluded by default for
+    everyone, including System Admin — they're only visible via
+    ReportDeletedListView (`include_deleted=True`), which is gated on
+    CanDeleteReport, so a report being soft-deleted doesn't leak into the
+    triage queue, dashboards, or search just because the viewer is an admin.
+    """
+    if user.has_permission('view_all_reports'):
+        queryset = Report.objects.all()
+    else:
+        queryset = Report.objects.filter(
+            Q(reporter=user) | Q(assigned_to=user) | Q(department__head=user)
+        )
+
+    if include_deleted:
+        return queryset
+    return queryset.filter(deleted_at__isnull=True)
+
+
+def get_accessible_audit_logs(user):
+    """
+    Audit-log analog of `get_accessible_reports`, same Department Head /
+    Responder axis: System Admin sees every entry; a Department Head sees
+    every entry for reports in the department(s) they head (full
+    oversight, not just their own actions) *plus* every entry where
+    they're personally the actor, regardless of report linkage (Phase 6:
+    department-head actions like responder creation aren't tied to any
+    report at all — report=None — so without this a head couldn't see
+    their own such entries, the same class of gap Phase 2's "always see
+    reports you personally filed" fix addressed for get_accessible_reports);
+    a Responder (member, non-head) sees only entries where *they* are the
+    actor; everyone else sees nothing (the audit log endpoints are
+    IsAdminTier-ish gated anyway, but this stays safe if ever called for a
+    plain reporter).
+    """
+    if user.has_permission('view_all_reports'):
+        return AuditLog.objects.all()
+
     dept_as_head = Department.objects.filter(head=user)
     if dept_as_head.exists():
-        return Report.objects.filter(department__in=dept_as_head)
+        accessible_reports = Report.objects.filter(department__in=dept_as_head)
+        return AuditLog.objects.filter(Q(report__in=accessible_reports) | Q(actor=user))
 
-    # Department member: see reports of their departments
     dept_as_member = user.department_members.all()
     if dept_as_member.exists():
-        return Report.objects.filter(department__in=dept_as_member)
+        return AuditLog.objects.filter(actor=user)
 
-    # Students/staff: only own non‑anonymous reports
-    pattern = f"PLACEHOLDER_{user.id}"
-    identities = ReportIdentity.objects.filter(encrypted_reporter_ref__icontains=pattern)
-    report_ids = identities.values_list('report_id', flat=True)
-    return Report.objects.filter(id__in=report_ids, is_anonymous=False)
+    return AuditLog.objects.none()
+
+
+def get_pending_feedback_reports(user):
+    """
+    Reports the caller personally reported (deliberately NOT
+    get_accessible_reports, which is role-based and would leak other
+    people's resolved reports into e.g. a department head's own "give
+    feedback" list) that are Resolved and don't have feedback yet.
+    """
+    return Report.objects.filter(
+        reporter=user, status=Status.RESOLVED, feedback__isnull=True, deleted_at__isnull=True,
+    )
+
+
+def is_department_head_or_system_admin(user, report):
+    """
+    Who may assign/reassign a report: the report's own department head,
+    or System Admin (any department).
+    """
+    if user.has_permission('view_all_reports'):
+        return True
+    return bool(report.department_id and report.department.head_id == user.id)
+
+
+def is_report_department_head(user, report):
+    """
+    Just the department-head half of is_department_head_or_system_admin —
+    used where System Admin deliberately isn't included, e.g. manual
+    escalation: System Admin is the top of the chain, so there's nowhere
+    for them to escalate *to*, only a head escalating up to admin makes
+    sense.
+    """
+    return bool(report.department_id and report.department.head_id == user.id)
+
+
+def get_open_report_counts(queryset, user_ids):
+    """
+    How many currently-open (not resolved/closed) reports in `queryset`
+    are assigned to each of `user_ids` — the "busy" signal shown to a
+    department head in the report assignment picker
+    (ReportAssignableOfficersView), for a known set of candidate ids.
+    apps.dashboard.analytics._responder_workload computes a related but
+    shaped-differently metric (discovers every responder with open work
+    rather than looking up specific ids, and also returns usernames) —
+    intentionally left as its own query rather than forced through this
+    helper, since the two have different access patterns. Deliberately
+    scoped to whatever `queryset` the caller already has (e.g.
+    get_accessible_reports(user)) rather than a global count — a head's
+    view of "is this responder busy" is naturally bounded by what that
+    head can already see, mostly their own department's reports, matching
+    this codebase's existing "scope everything through
+    get_accessible_reports" idiom rather than introducing a separate
+    global notion of busy-ness.
+    """
+    counts = (
+        queryset.exclude(status__in=[Status.RESOLVED, Status.CLOSED])
+        .filter(assigned_to_id__in=user_ids)
+        .values('assigned_to_id')
+        .annotate(count=Count('id'))
+    )
+    return {row['assigned_to_id']: row['count'] for row in counts}
+
+
+def is_department_member_or_head(user, department):
+    """Whether `user` is eligible to be assigned a report in `department` — its head or one of its members."""
+    if department is None:
+        return False
+    if department.head_id == user.id:
+        return True
+    return department.members.filter(id=user.id).exists()
+
+
+def can_access_report(user, report, include_deleted=False):
+    """
+    Single authoritative object-level check for "can this user access this
+    report" — delegates to get_accessible_reports() so REST (detail/list/
+    messages), the WebSocket consumer, and any future caller share one
+    definition instead of re-deriving it. Introduced to retire
+    apps.notifications.views.CanAccessReportMixin's independent
+    reimplementation, which had drifted from get_accessible_reports (it
+    granted blanket access on view_admin_dashboard rather than
+    view_all_reports, and never considered department headship at all).
+    """
+    return get_accessible_reports(user, include_deleted=include_deleted).filter(id=report.id).exists()
+
+
+def can_view_panic_report(user, report):
+    """
+    Widens can_access_report specifically for panic reports: an unassigned
+    department member/head has no other reason to be in
+    get_accessible_reports' four-rule set, but needs to see a
+    just-dispatched emergency before deciding whether to acknowledge it —
+    used by ReportDetailView and the WebSocket consumer's per-report group
+    join. Deliberately NOT folded into can_access_report itself, so
+    evidence upload / chat-message visibility for an unassigned panic
+    report stays governed by the narrower existing rule.
+    """
+    if can_access_report(user, report):
+        return True
+    return report.urgency == Urgency.PANIC and is_department_member_or_head(user, report.department)
+
+
+def can_upload_evidence(user, report):
+    """
+    Who may attach evidence to a report: exactly the same population as
+    can view it — reporter, assigned responder, department head, or
+    System Admin (see can_access_report/get_accessible_reports, the
+    single authoritative definition). Originally a hand-rolled
+    duplicate of that same rule (replacing an even older hardcoded
+    `user.role.slug == 'security'` check that predated the
+    department-based responder model); Phase 5 collapsed it into a
+    thin alias once the two definitions turned out to be identical, per
+    the redesign's "one authoritative function, reused everywhere"
+    requirement.
+    """
+    return can_access_report(user, report)

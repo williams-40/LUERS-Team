@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from apps.reports.models import Report, Evidence, ReportIdentity
-from apps.core.choices import Category, Urgency, Status
+from apps.reports.models import Report, Evidence, Department, EmergencyDispatch, EmergencyCategory
+from apps.core.choices import Urgency, Status
+from apps.reports.validators import validate_evidence_file
 
 User = get_user_model()
 
@@ -20,25 +21,54 @@ class EvidenceSerializer(serializers.ModelSerializer):
         return None
 
 
+class EmergencyDispatchSerializer(serializers.ModelSerializer):
+    # emergency_type_label is a snapshot taken once at creation (see
+    # EmergencyDispatch's own comment) — not a live get_FOO_display()
+    # lookup, since emergency_type no longer has Django choices= (it's
+    # validated dynamically against EmergencyCategory rows instead).
+    emergency_type_display = serializers.CharField(source='emergency_type_label', read_only=True)
+    acknowledged_by_username = serializers.CharField(source='acknowledged_by.username', read_only=True, default=None)
+
+    class Meta:
+        model = EmergencyDispatch
+        fields = [
+            'emergency_type', 'emergency_type_display', 'escalation_level',
+            'acknowledged_at', 'acknowledged_by_username', 'responding_at', 'arrived_at',
+            'resolved_at', 'cancelled_at',
+            'ack_deadline', 'response_deadline', 'resolution_deadline',
+        ]
+
+
 class ReportListSerializer(serializers.ModelSerializer):
     """Used for list views (officer dashboard) - hides reporter identity."""
     category_display = serializers.CharField(source='get_category_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     urgency_display = serializers.CharField(source='get_urgency_display', read_only=True)
+    # Explicit UUIDField (not the ModelSerializer-inferred PrimaryKeyRelatedField)
+    # so `.data` holds a plain str — PrimaryKeyRelatedField.to_representation
+    # returns the raw UUID object, which json.dumps() in ReportConsumer can't
+    # serialize (DRF's own renderer would have handled it, but the WS
+    # broadcast path calls json.dumps directly on `.data`).
+    assigned_to = serializers.UUIDField(source='assigned_to_id', read_only=True, default=None)
     assigned_to_username = serializers.CharField(source='assigned_to.username', read_only=True, default=None)
     evidence_count = serializers.IntegerField(source='evidence.count', read_only=True)
     # ✅ Department fields
     department_id = serializers.UUIDField(source='department.id', read_only=True, default=None)
     department_name = serializers.CharField(source='department.name', read_only=True, default=None)
+    # Lets the frontend decide whether the *viewer* is this report's
+    # department head (assign authority) without a separate lookup.
+    department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
+    emergency_dispatch = EmergencyDispatchSerializer(read_only=True, default=None)
 
     class Meta:
         model = Report
         fields = [
             'id', 'category', 'category_display', 'description', 'urgency', 'urgency_display',
             'status', 'status_display', 'latitude', 'longitude', 'location_accuracy',
-            'assigned_to', 'assigned_to_username', 'is_anonymous', 'created_at', 'updated_at',
-            'evidence_count',
-            'department_id', 'department_name',  # ✅ new fields
+            'assigned_to', 'assigned_to_username', 'created_at', 'updated_at',
+            'evidence_count', 'deleted_at',
+            'department_id', 'department_name', 'department_head_id',
+            'emergency_dispatch',
         ]
 
 
@@ -52,16 +82,37 @@ class ReportDetailSerializer(serializers.ModelSerializer):
     # ✅ Department fields
     department_id = serializers.UUIDField(source='department.id', read_only=True, default=None)
     department_name = serializers.CharField(source='department.name', read_only=True, default=None)
+    department_head_id = serializers.UUIDField(source='department.head_id', read_only=True, default=None)
+    # Already implicitly exposed via reporter_name/reporter_phone below to
+    # the same audience — the frontend needs the bare id too, to decide
+    # whether the *viewer themself* is the reporter (e.g. can they cancel
+    # their own just-filed panic report).
+    reporter = serializers.UUIDField(source='reporter_id', read_only=True, default=None)
+    reporter_name = serializers.SerializerMethodField()
+    reporter_phone = serializers.SerializerMethodField()
+    emergency_dispatch = EmergencyDispatchSerializer(read_only=True, default=None)
 
     class Meta:
         model = Report
         fields = [
             'id', 'category', 'category_display', 'description', 'urgency', 'urgency_display',
             'status', 'status_display', 'latitude', 'longitude', 'location_accuracy',
-            'assigned_to', 'assigned_to_username', 'is_anonymous', 'metadata', 'created_at', 'updated_at',
+            'assigned_to', 'assigned_to_username', 'metadata', 'created_at', 'updated_at',
             'evidence',
-            'department_id', 'department_name',  # ✅ new fields
+            'department_id', 'department_name', 'department_head_id',
+            'reporter', 'reporter_name', 'reporter_phone',
+            'emergency_dispatch',
         ]
+
+    def get_reporter_name(self, obj):
+        user = obj.reporter
+        if not user:
+            return None
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        return full_name or user.username
+
+    def get_reporter_phone(self, obj):
+        return obj.reporter.phone_number if obj.reporter else None
 
 
 class ReportCreateSerializer(serializers.ModelSerializer):
@@ -75,14 +126,38 @@ class ReportCreateSerializer(serializers.ModelSerializer):
         write_only=True
     )
 
+    # Required for a normal report; not required for panic (routed
+    # deterministically from emergency_type instead — see validate() and
+    # ReportService.create_report). A reporter mid-emergency should never
+    # have to make a routing decision.
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.filter(is_active=True), required=False, allow_null=True
+    )
+
+    # Panic-only: which emergency category this is — an EmergencyCategory.slug,
+    # used to deterministically resolve `department` and to populate the
+    # EmergencyDispatch row created alongside the Report. A plain CharField,
+    # not a ChoiceField: categories are admin-managed rows now, not a fixed
+    # Python enum, so validity is checked dynamically in validate() below
+    # rather than at the field-definition level. Not a Report field — popped
+    # out in ReportService.create_report.
+    emergency_type = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=30)
+
+    # Not a Report field — captured here only to optionally persist it onto
+    # the reporter's own profile (see ReportService.create_report). Always
+    # optional (Phase 2: no longer required for "non-anonymous" reports —
+    # anonymous reporting itself is gone). Write-only, never echoed back.
+    phone_number = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=15)
+
     class Meta:
         model = Report
         fields = [
             'id',
-            'category',
+            'department',
+            'emergency_type',
             'description',
             'urgency',
-            'is_anonymous',
+            'phone_number',
             'latitude',
             'longitude',
             'location_accuracy',
@@ -93,58 +168,83 @@ class ReportCreateSerializer(serializers.ModelSerializer):
             # Offline support
             'idempotency_key',
             'client_created_at',
-            # Department routing
-            'custom_department',   # only used when category == 'other'
         ]
-        read_only_fields = ['id', 'status', 'created_at']
+        # assigned_to is read-only here (not "required": {} — assignment
+        # only ever happens via the dedicated assign endpoint). Before
+        # Phase 14, `assigned_to`'s model-level limit_choices_to={'role':
+        # 'security'} incidentally restricted what a reporter could set
+        # here too; now that responders are department-membership-based
+        # rather than role-based, that incidental restriction is gone, so
+        # this must be explicit instead of relying on it.
+        read_only_fields = ['id', 'status', 'created_at', 'assigned_to']
         extra_kwargs = {
-            'category': {'required': True},
-            'description': {'required': True},
+            # Required for normal reports only — enforced in validate()
+            # below, since a panic report may have nothing more to say than
+            # the emergency type itself.
+            'description': {'required': False, 'allow_blank': True},
             'idempotency_key': {'required': False, 'allow_blank': True, 'max_length': 64},
             'client_created_at': {'required': False, 'allow_null': True},
-            'custom_department': {'required': False, 'allow_blank': True, 'max_length': 200},
         }
 
     def validate(self, attrs):
-        category = attrs.get('category')
-        custom_dept = attrs.get('custom_department', '').strip()
+        for file in attrs.get('evidence', []):
+            try:
+                validate_evidence_file(file)
+            except ValueError as e:
+                raise serializers.ValidationError({'evidence': str(e)})
 
-        if category == Category.OTHER and not custom_dept:
-            raise serializers.ValidationError({
-                'custom_department': 'Please specify a department when selecting "Other".'
-            })
+        urgency = attrs.get('urgency') or Urgency.NORMAL
+        errors = {}
+        if urgency == Urgency.PANIC:
+            emergency_type = attrs.get('emergency_type')
+            if not emergency_type:
+                errors['emergency_type'] = 'Required for a panic report.'
+            else:
+                category = EmergencyCategory.objects.filter(slug=emergency_type, is_active=True).first()
+                if category is None:
+                    errors['emergency_type'] = 'Not a recognized emergency category.'
+                # Some categories (e.g. "Other") don't tell a responder
+                # anything to route or act on by themselves — unlike a
+                # category with its own default department, there's
+                # nothing implied without a description. Mirrors the
+                # frontend requirement in EmergencyReportPage.tsx.
+                elif category.requires_description_and_routing and not (attrs.get('description') or '').strip():
+                    errors['description'] = 'Please describe the emergency.'
+        else:
+            if attrs.get('department') is None:
+                errors['department'] = 'This field is required.'
+            if not (attrs.get('description') or '').strip():
+                errors['description'] = 'This field is required.'
+        if errors:
+            raise serializers.ValidationError(errors)
+
         return attrs
 
     def create(self, validated_data):
+        # Note: the live create-report endpoint and the offline sync path
+        # both bypass this method entirely — they call
+        # apps.reports.services.ReportService.create_report directly from
+        # validated_data (see ReportCreateView.perform_create / SyncView),
+        # which is where reporter/phone-number handling actually lives.
+        # Kept correct and self-consistent here anyway rather than left
+        # referencing the removed identity system, since a serializer
+        # conventionally needs a working create().
         evidence_files = validated_data.pop('evidence', [])
+        validated_data.pop('phone_number', None)
         validated_data.setdefault('urgency', 'normal')
 
         request = self.context.get('request')
         user = request.user if request else None
 
-        report = Report.objects.create(**validated_data)
-
-        from apps.reports.models import ReportIdentity
-        ReportIdentity.objects.create(
-            report=report,
-            encrypted_reporter_ref=f"PLACEHOLDER_{user.id}" if user else "PLACEHOLDER_ANONYMOUS"
-        )
+        report = Report.objects.create(**validated_data, reporter=user)
 
         for file in evidence_files:
-            file_type = self._get_file_type(file)
+            # Already validated in validate() above; re-running here just to
+            # get the classified file_type back (cheap — reads a few bytes).
+            file_type = validate_evidence_file(file)
             Evidence.objects.create(report=report, file=file, file_type=file_type)
 
         return report
-
-    def _get_file_type(self, file):
-        content_type = getattr(file, 'content_type', '')
-        if content_type.startswith('image/'):
-            return 'image'
-        elif content_type.startswith('video/'):
-            return 'video'
-        elif content_type.startswith('audio/'):
-            return 'audio'
-        return 'other'
 
 
 class ReportUpdateStatusSerializer(serializers.Serializer):
@@ -154,17 +254,54 @@ class ReportUpdateStatusSerializer(serializers.Serializer):
     client_timestamp = serializers.DateTimeField(required=False, allow_null=True)
 
 
+class ReportLocationUpdateSerializer(serializers.Serializer):
+    """Follow-up location for a report created before GPS resolved (the
+    /emergency flow never awaits geolocation before submitting)."""
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6)
+    location_accuracy = serializers.FloatField(required=False, allow_null=True)
+
+
 class ReportAssignSerializer(serializers.Serializer):
-    """Used for assignment by Security/ICT Admin."""
+    """
+    Used for assignment by a department head or System Admin. Only checks
+    the user exists here — whether they're actually eligible (a member or
+    head of the *target report's* department) needs the report instance,
+    which this serializer doesn't have, so that check happens in the view
+    (see ReportAssignView / apps.reports.services.assert_can_assign_to).
+    """
     assigned_to = serializers.UUIDField()
     expected_updated_at = serializers.DateTimeField(required=False, allow_null=True)
     client_timestamp = serializers.DateTimeField(required=False, allow_null=True)
 
     def validate_assigned_to(self, value):
         try:
-            user = User.objects.get(id=value, role='security')
+            user = User.objects.get(id=value, is_active=True)
         except User.DoesNotExist:
-            raise serializers.ValidationError("User not found or not a Security Officer.")
+            raise serializers.ValidationError("User not found.")
+        return user
+
+
+class BulkStatusUpdateSerializer(serializers.Serializer):
+    """Used for bulk status updates from the triage queue's selection toolbar."""
+    report_ids = serializers.ListField(
+        child=serializers.UUIDField(), min_length=1, max_length=100,
+    )
+    status = serializers.ChoiceField(choices=Status.choices)
+
+
+class BulkAssignSerializer(serializers.Serializer):
+    """Used for bulk assignment from the triage queue's selection toolbar."""
+    report_ids = serializers.ListField(
+        child=serializers.UUIDField(), min_length=1, max_length=100,
+    )
+    assigned_to = serializers.UUIDField()
+
+    def validate_assigned_to(self, value):
+        try:
+            user = User.objects.get(id=value, is_active=True)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("User not found.")
         return user
 
 
@@ -183,17 +320,18 @@ class SyncActionSerializer(serializers.Serializer):
         report_id = attrs.get('report_id')
 
         if action == 'create_report':
-            required = ['category', 'description']
-            for field in required:
-                if field not in data:
-                    raise serializers.ValidationError(f"Missing required field '{field}' for create_report")
-            # Optional: validate custom_department if category is 'other'
-            category = data.get('category')
-            custom_dept = data.get('custom_department', '').strip()
-            if category == Category.OTHER and not custom_dept:
-                raise serializers.ValidationError(
-                    "custom_department is required when category is 'other' for create_report"
-                )
+            # Mirrors ReportCreateSerializer.validate()'s urgency-conditional
+            # requirements — this is just an early, cheap pre-check ahead of
+            # the real serializer validation in SyncView; department/
+            # description stay required for normal reports, but a panic
+            # report only needs emergency_type.
+            if data.get('urgency') == Urgency.PANIC:
+                if 'emergency_type' not in data:
+                    raise serializers.ValidationError("Missing required field 'emergency_type' for create_report")
+            else:
+                for field in ['department', 'description']:
+                    if field not in data:
+                        raise serializers.ValidationError(f"Missing required field '{field}' for create_report")
         elif action == 'update_status':
             if not report_id:
                 raise serializers.ValidationError("report_id is required for update_status")

@@ -2,8 +2,9 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from apps.reports.models import Report, ReportIdentity, Evidence, Department
+from apps.reports.models import Report, Evidence, Department
 from apps.core.choices import Category, Urgency, Status, Role
+from apps.accounts.models import Role as RoleModel
 from apps.audit.models import AuditLog
 
 User = get_user_model()
@@ -18,14 +19,20 @@ class Command(BaseCommand):
             help='Force re-creation even if data exists',
         )
 
-    def _create_departments(self, users):
-        """Create default departments and optionally assign heads."""
+    def _create_departments(self):
+        """Create default departments — headless, see note below."""
         dept_data = [
             {'name': 'Security', 'description': 'Handles theft, assault, harassment, and other security-related incidents'},
+            {'name': 'ICT Services', 'description': 'Handles computer, network, and account/access issues'},
             {'name': 'Academic Affairs', 'description': 'Handles academic issues, disputes, and student affairs'},
+            {'name': 'Student Affairs', 'description': 'Handles accommodation, welfare, and student support matters'},
+            {'name': 'Finance', 'description': 'Handles fees, tuition, refunds, and payment issues'},
             {'name': 'Health & Safety', 'description': 'Handles medical emergencies, fire, and safety hazards'},
+            {'name': 'Estates / Maintenance', 'description': 'Handles facilities, plumbing, electrical, and repair issues'},
+            {'name': 'Library', 'description': 'Handles library resources and access issues'},
+            {'name': 'Human Resources', 'description': 'Handles staff conduct, employment, and payroll matters'},
             {'name': 'Administration', 'description': 'Handles general administrative matters'},
-            {'name': 'Other', 'description': 'Uncategorized reports; handled by system admin'},
+            {'name': 'Other', 'description': 'Uncategorized reports; routed automatically where possible, otherwise handled by system admin'},
         ]
 
         departments = []
@@ -38,26 +45,10 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(f"  Created department: {dept.name}")
 
-        # Assign heads
-        if 'security' in users:
-            security_dept = Department.objects.get(name='Security')
-            security_dept.head = users.get('security')
-            security_dept.save()
-            self.stdout.write("  Assigned security_user as head of Security")
-
-        if 'management' in users:
-            admin_dept = Department.objects.get(name='Administration')
-            admin_dept.head = users.get('management')
-            admin_dept.save()
-            self.stdout.write("  Assigned management_user as head of Administration")
-
-        # ✅ Assign system admin as head of the 'Other' department
-        if 'system_admin' in users:
-            other_dept = Department.objects.get(name='Other')
-            other_dept.head = users.get('system_admin')
-            other_dept.save()
-            self.stdout.write("  Assigned system_admin as head of Other department")
-
+        # No seeded heads (2026-08-17): department headship is now a
+        # deliberate system_admin action (DepartmentHeadCreateView), not
+        # leftover seed state — every department starts headless, same as
+        # a fresh production install would.
         return departments
 
     def handle(self, *args, **options):
@@ -67,17 +58,20 @@ class Command(BaseCommand):
 
         self.stdout.write('Seeding database...')
 
-        # 1. Create users
+        # 1. Create users — only the 3 core, always-present roles
+        # (2026-08-17). Responder accounts are no longer seeded: they only
+        # come into existence via DepartmentHeadCreateView (system_admin)
+        # or DepartmentResponderCreateView (a head), matching the real
+        # provisioning chain rather than a shortcut.
         users = {}
-        for role in Role.values:
+        for role in [Role.STUDENT, Role.STAFF, Role.SYSTEM_ADMIN]:
             username = f'{role}_user'
             email = f'{role}@example.com'
             user, created = User.objects.get_or_create(
                 username=username,
                 defaults={
                     'email': email,
-                    'role': role,
-                    'phone_number': f'+2567{random.randint(10000000,99999999)}' if role == Role.SECURITY else None,
+                    'role': RoleModel.objects.get(slug=role),
                 }
             )
             if created:
@@ -87,12 +81,11 @@ class Command(BaseCommand):
 
         self.stdout.write(f'✅ Created {len(users)} users.')
 
-        # 2. Create departments (and assign heads)
-        departments = self._create_departments(users)
+        # 2. Create departments (headless — see _create_departments)
+        departments = self._create_departments()
         self.stdout.write(f'✅ Created {len(departments)} departments.')
 
         # 3. Create reports
-        security_user = users.get(Role.SECURITY)
         student_user = users.get(Role.STUDENT)
         staff_user = users.get(Role.STAFF)
 
@@ -104,27 +97,21 @@ class Command(BaseCommand):
         description_pool = ["Theft", "Assault", "Medical", "Fire", "Harassment", "Academic"]
 
         for i in range(10):
-            is_anonymous = random.choice([True, False])
             # Choose a random department for the report (for future routing)
             department = random.choice(departments) if departments else None
+            reporter = random.choice([student_user, staff_user])
             report = Report.objects.create(
                 category=random.choice(categories),
                 description=f'Seed report {i+1}: {random.choice(description_pool)}',
                 urgency=random.choice([Urgency.NORMAL, Urgency.PANIC]),
                 status=random.choice(statuses),
-                is_anonymous=is_anonymous,
+                reporter=reporter,
                 latitude=round(random.uniform(2.2, 2.3), 6),
                 longitude=round(random.uniform(32.8, 33.0), 6),
-                assigned_to=security_user if random.choice([True, False]) else None,
+                assigned_to=None,  # no responders exist at seed time — see provisioning chain note above
                 metadata={'source': 'seed_data'},
                 department=department,
                 custom_department='' if department and department.name != 'Other' else 'Custom Dept',
-            )
-            # Create identity (even for anonymous)
-            reporter = random.choice([student_user, staff_user])
-            ReportIdentity.objects.create(
-                report=report,
-                encrypted_reporter_ref=f"SEED_{reporter.id}_{random.randint(1000,9999)}"
             )
             reports.append(report)
 

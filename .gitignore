@@ -20,3 +20,10 @@ staticfiles/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Local Docker overrides (machine-specific port remaps, etc.)
+docker-compose.override.yml
+
+# Postgres backup dumps (see backend/docs/postgres-backup-runbook.md) —
+# contain plaintext report data, never commit these
+backend/backups/*.dump

@@ -3,6 +3,11 @@ from django.conf import settings
 from apps.core.choices import Channel
 from apps.core.models import BaseModel
 
+class NotificationStatus(models.TextChoices):
+    CREATED = 'created', 'Created'
+    SENT = 'sent', 'Sent'
+    FAILED = 'failed', 'Failed'
+
 class Notification(BaseModel):
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -13,6 +18,10 @@ class Notification(BaseModel):
     )
     report = models.ForeignKey('reports.Report', on_delete=models.CASCADE, related_name='notifications')
     channel = models.CharField(max_length=10, choices=Channel.choices, default=Channel.WEBSOCKET)
+    # Real delivery bookkeeping for SMS/EMAIL — set by the Celery task itself
+    # on success/failure (apps.notifications.tasks). WEBSOCKET rows stay at
+    # the default 'created' since a group_send has no delivery confirmation.
+    status = models.CharField(max_length=10, choices=NotificationStatus.choices, default=NotificationStatus.CREATED)
     sent_at = models.DateTimeField(auto_now_add=True)
     acknowledged_at = models.DateTimeField(null=True, blank=True)
 
@@ -23,6 +32,7 @@ class Notification(BaseModel):
             models.Index(fields=['report']),
             models.Index(fields=['channel']),
             models.Index(fields=['sent_at']),
+            models.Index(fields=['status']),
         ]
 
     def __str__(self):
@@ -41,9 +51,12 @@ class Message(BaseModel):
         on_delete=models.CASCADE,
         related_name='sent_messages'
     )
-    content = models.TextField()
-    # Optional: message_type = models.CharField(max_length=20, choices=..., default='text')
-    # We'll keep it simple for now.
+    content = models.TextField(blank=True)
+    # Voice notes (see MessageCreateSerializer) — blank content, populated
+    # attachment instead. Mirrors apps.reports.models.Evidence.file; a
+    # dedicated attachment model felt like overkill for a single optional
+    # file per message.
+    attachment = models.FileField(upload_to='messages/%Y/%m/%d/', null=True, blank=True)
 
     class Meta:
         db_table = 'messages'
