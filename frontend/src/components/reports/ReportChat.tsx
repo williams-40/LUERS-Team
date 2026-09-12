@@ -109,7 +109,7 @@ export function ReportChat({
 
       {recordingVoice ? (
         <div className="flex flex-col gap-2 rounded-lg border border-ink/10 p-2.5">
-          <MediaRecorderControl mode="audio" onRecordingChange={setVoiceFile} />
+          <MediaRecorderControl mode="audio" autoStart onRecordingChange={setVoiceFile} />
           <div className="flex gap-2">
             <Button
               size="sm"

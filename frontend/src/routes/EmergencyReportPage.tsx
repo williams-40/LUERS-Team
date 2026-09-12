@@ -331,7 +331,13 @@ export function EmergencyReportPage() {
               />
             ) : (
               <MediaRecorderControl
+                // Forces a fresh mount each time the reporter (re-)selects
+                // Voice or Video, so autoStart's mount-only effect fires
+                // again — e.g. Voice -> Video -> Voice starts recording
+                // immediately both times, not just the first.
+                key={descriptionMode}
                 mode={descriptionMode === 'voice' ? 'audio' : 'video'}
+                autoStart={descriptionMode === 'voice'}
                 onRecordingChange={(file) => {
                   setRecordingFile(file);
                   setRecordingError(null);

@@ -40,9 +40,21 @@ function formatSeconds(totalSeconds: number): string {
 export function MediaRecorderControl({
   mode,
   onRecordingChange,
+  autoStart = false,
 }: {
   mode: RecordingMode;
   onRecordingChange: (file: File | null) => void;
+  /**
+   * Starts recording immediately on mount instead of waiting for a
+   * "Start recording" tap — e.g. picking the Voice tab is itself the
+   * "start" gesture, so a reporter shouldn't need a second click just to
+   * begin. Only fires once, on mount (not on every re-render) — the
+   * caller is expected to force a fresh mount (e.g. a `key` tied to the
+   * mode) when the user re-selects this mode. "Re-record" and "Try
+   * again" after a denied/failed attempt stay manual either way, since
+   * those are deliberate follow-up actions, not the initial pick.
+   */
+  autoStart?: boolean;
 }) {
   const [state, setState] = useState<RecorderState>('idle');
   const [seconds, setSeconds] = useState(0);
@@ -66,6 +78,15 @@ export function MediaRecorderControl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  // Mount-only, deliberately — re-running on every render would restart a
+  // recording already in progress. The caller forces a fresh mount (a
+  // `key` tied to the mode) each time the user re-picks Voice, which is
+  // exactly when this should fire again.
+  useEffect(() => {
+    if (autoStart) void startRecording();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The live <video> preview element only exists once the 'recording' branch
   // renders, so the stream has to be (re)attached here rather than inline.
