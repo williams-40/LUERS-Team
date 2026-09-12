@@ -1,0 +1,59 @@
+{
+  "category": {
+    "theft": "Theft",
+    "assault": "Assault",
+    "medical": "Medical",
+    "fire": "Fire",
+    "harassment_gbv": "Harassment / GBV",
+    "academic": "Academic",
+    "other": "Other"
+  },
+  "action": {
+    "create": "Create",
+    "status_update": "Status Update",
+    "assign": "Assign",
+    "evidence_upload": "Evidence Upload",
+    "soft_delete": "Soft Delete",
+    "restore": "Restore",
+    "auto_route": "Auto Route",
+    "routing_suggestion": "Routing Suggestion",
+    "feedback_requested": "Feedback Requested",
+    "submit_feedback": "Submit Feedback",
+    "view_feedback": "View Feedback",
+    "responder_created": "Responder Created"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "login": {
+    "title": "Sign in to LUERS",
+    "username": "Username",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "usernameRequired": "Username is required",
+    "passwordRequired": "Password is required",
+    "passwordResetNotice": "Password reset. Sign in with your new password.",
+    "incorrectCredentials": "Incorrect username or password.",
+    "genericError": "Something went wrong. Please try again."
+  },
+  "installPrompt": {
+    "promptText": "Install LUERS for quick, offline-ready access.",
+    "iosText": "Add LUERS to your Home Screen: tap Share, then \"Add to Home Screen\".",
+    "install": "Install",
+    "installing": "Installing…",
+    "dismiss": "Dismiss install prompt"
+  },
+  "pendingReports": {
+    "pending_one": "{{count}} report pending",
+    "pending_other": "{{count}} reports pending",
+    "pendingEmergency_one": "Emergency queued, no signal",
+    "pendingEmergency_other": "Emergency queued, no signal ({{count}} pending)",
+    "retryNow": "Retry now",
+    "retrying": "Retrying…"
+  }
+}

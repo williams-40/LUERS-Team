@@ -1,0 +1,116 @@
+﻿import { useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { assignReport, fetchAssignableOfficers } from '../../lib/reports-api';
+import type { ReportDetail } from '../../types/domain';
+import type { ApiError } from '../../lib/api-client';
+import { Button } from '../ui/Button';
+import { useToast } from '../../lib/toast-context';
+
+export function AssignControl({
+  report,
+  onUpdated,
+}: {
+  report: ReportDetail;
+  onUpdated: () => void | Promise<unknown>;
+}) {
+  const [selected, setSelected] = useState<string>(report.assigned_to ?? '');
+  const [conflict, setConflict] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { show } = useToast();
+
+  // Scoped to this report's own department (head + members) — replaces
+  // the old campus-wide "every security officer" list now that
+  // responders are department-scoped, not role-scoped.
+  const { data: officers, isLoading: officersLoading } = useQuery({
+    queryKey: ['reports', report.id, 'assignable-officers'],
+    queryFn: () => fetchAssignableOfficers(report.id),
+  });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      assignReport({ reportId: report.id, assignedTo: selected, expectedUpdatedAt: report.updated_at }),
+  });
+
+  async function handleSubmit() {
+    setError(null);
+    setConflict(false);
+    try {
+      await mutation.mutateAsync();
+      show('Report assigned.', 'success');
+      await onUpdated();
+    } catch (err) {
+      const apiError = err as ApiError;
+      if (apiError.status === 409) {
+        setConflict(true);
+        show('This report changed since you loaded it. Refresh and try again.', 'error');
+      } else {
+        const message = apiError.detail ?? 'Could not assign this report.';
+        setError(message);
+        show(message, 'error');
+      }
+    }
+  }
+
+  async function handleRefresh() {
+    setConflict(false);
+    await onUpdated();
+  }
+
+  return (
+    <div className="mb-5 rounded-xl border border-ink/10 p-4">
+      <h2 className="text-ink-secondary mb-3 text-[12.5px] font-semibold">Assign responder</h2>
+
+      {conflict && (
+        <div role="alert" className="bg-status-warning/15 mb-3 rounded-lg px-3 py-2 text-sm">
+          This report changed since you loaded it.{' '}
+          <button type="button" onClick={handleRefresh} className="font-semibold underline">
+            Refresh
+          </button>{' '}
+          to see the latest, then try again.
+        </div>
+      )}
+
+      {error && (
+        <p
+          role="alert"
+          className="bg-status-critical/10 text-status-critical mb-3 rounded-lg px-3 py-2 text-sm"
+        >
+          {error}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2.5">
+        <select
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          disabled={officersLoading}
+          // A responder's option text (username + "(busy, N open)") can run
+          // longer than a plain status word — without min-w-0 a flex item's
+          // default min-width is its own content size, so the select (and
+          // the card around it) would stretch wider than the page to fit
+          // the longest option instead of just truncating its own display.
+          className="bg-surface-2 text-ink select-chevron min-w-0 max-w-full flex-1 truncate appearance-none rounded-lg border-[1.5px] border-ink/15 px-2.5 py-1.5 text-sm sm:max-w-xs sm:flex-none"
+        >
+          <option value="" disabled>
+            {officersLoading ? 'Loading responders…' : 'Select a responder'}
+          </option>
+          {officers?.map((officer) => (
+            <option key={officer.id} value={officer.id}>
+              {officer.username}
+              {officer.open_report_count > 0
+                ? ` (busy, ${officer.open_report_count} open)`
+                : ' (free)'}
+            </option>
+          ))}
+        </select>
+        <Button
+          size="sm"
+          onClick={handleSubmit}
+          disabled={mutation.isPending || !selected || selected === report.assigned_to}
+        >
+          {mutation.isPending ? 'Assigning…' : 'Assign'}
+        </Button>
+      </div>
+    </div>
+  );
+}
