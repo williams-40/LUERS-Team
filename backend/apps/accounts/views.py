@@ -23,6 +23,7 @@ from django.db.models import Q
 from apps.accounts.services import PasswordResetService, blacklist_all_tokens_for, filter_users
 from apps.accounts.permissions import CanManageUsers, IsAdminTier
 from apps.audit.models import AuditLog
+from apps.reports.models import Department
 from apps.core.choices import Action
 from apps.core.pagination import StandardPagination
 from apps.core.request_utils import get_client_ip, get_user_agent
@@ -311,16 +312,21 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
 class SecurityOfficersView(generics.ListAPIView):
     """
     GET /api/v1/auth/officers/
-    Campus-wide, unscoped candidate list for the triage queue's bulk-assign
-    toolbar (BulkActionToolbar) — the real per-item authorization is
-    enforced separately and correctly in BulkAssignView
+    Candidate list for the triage queue's bulk-assign toolbar
+    (BulkActionToolbar) — the real per-item authorization is enforced
+    separately and correctly in BulkAssignView
     (is_department_head_or_system_admin / is_department_member_or_head),
     so this is only a convenience picker, not a security boundary of its
     own. Superseded for single-report assignment by the department-scoped
-    ReportAssignableOfficersView; kept here specifically because bulk
-    actions can span multiple departments at once, so there's no single
-    department to scope this list to (flagged as a real gap worth a
-    dedicated bulk-assign redesign later, not fixed here).
+    ReportAssignableOfficersView; this one used to be campus-wide and
+    unscoped ("bulk actions can span multiple departments, so there's no
+    single department to scope to") — fixed by scoping to the *viewer's*
+    own department(s) instead of any one selected report's: a department
+    head or responder only ever sees officers from a department they
+    head or belong to, which in practice is exactly the department(s)
+    get_accessible_reports already limits their selectable reports to
+    anyway. System Admin is oversight-only and not scoped to any one
+    department, so keeps the full campus-wide list.
 
     Phase 4: replaced the old role__slug='security' queryset and
     IsSecurity|IsICTAdmin permission gate (both hardcoded-role checks —
@@ -332,8 +338,25 @@ class SecurityOfficersView(generics.ListAPIView):
     serializer_class = OfficerSerializer
     permission_classes = [IsAuthenticated, IsAdminTier]
     pagination_class = None
-    queryset = (
-        User.objects.filter(Q(departments_headed__isnull=False) | Q(department_members__isnull=False), is_active=True)
-        .distinct()
-        .order_by('username')
-    )
+
+    def get_queryset(self):
+        user = self.request.user
+        candidates = User.objects.filter(is_active=True)
+
+        if user.has_permission('view_all_reports'):
+            return (
+                candidates.filter(Q(departments_headed__isnull=False) | Q(department_members__isnull=False))
+                .distinct()
+                .order_by('username')
+            )
+
+        my_department_ids = Department.objects.filter(Q(head=user) | Q(members=user)).values_list('id', flat=True)
+        return (
+            candidates.filter(Q(departments_headed__in=my_department_ids) | Q(department_members__in=my_department_ids))
+            # Same rule as ReportAssignableOfficersView: oversight-only,
+            # never a valid assignment target even if stale data lists one
+            # as a member/head.
+            .exclude(role__slug='system_admin')
+            .distinct()
+            .order_by('username')
+        )
