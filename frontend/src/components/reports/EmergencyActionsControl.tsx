@@ -127,11 +127,19 @@ export function EmergencyActionsControl({
 
   const isActive =
     report.status === Status.NEW || report.status === Status.ACKNOWLEDGED || report.status === Status.IN_PROGRESS;
+  // Gated on status === NEW specifically, not just "acknowledged_at is
+  // still empty" — a responder can jump status straight to ACKNOWLEDGED
+  // or IN_PROGRESS via the generic status dropdown (StatusUpdateControl)
+  // without ever going through this action, which would otherwise leave
+  // acknowledged_at null while Acknowledge kept showing as if nothing had
+  // happened yet on a report that's clearly already moved on — and the
+  // backend's own PANIC_STATUS_TRANSITIONS rejects ACKNOWLEDGED from
+  // anywhere but NEW anyway, so that stale button only ever errored.
   // The reporter isn't a department member/responder and can't actually
   // acknowledge their own emergency (the backend rejects it) — keep their
   // available actions limited to cancel/false alarm rather than showing a
   // button that only errors for them.
-  const canAcknowledge = isActive && !dispatch.acknowledged_at && !isReporter;
+  const canAcknowledge = report.status === Status.NEW && !dispatch.acknowledged_at && !isReporter;
   const canRespond = isAssignedResponder && report.status === Status.ACKNOWLEDGED && !dispatch.responding_at;
   const canArrive = isAssignedResponder && report.status === Status.IN_PROGRESS && !dispatch.arrived_at;
   const canCancel =

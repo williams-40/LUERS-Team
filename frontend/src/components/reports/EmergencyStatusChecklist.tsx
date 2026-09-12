@@ -28,18 +28,30 @@ export function EmergencyStatusChecklist({ report }: { report: ReportDetail }) {
   const isResolved =
     Boolean(dispatch.resolved_at) || report.status === Status.RESOLVED || report.status === Status.CLOSED;
 
+  // A responder can jump status straight to ACKNOWLEDGED or IN_PROGRESS
+  // via the generic status dropdown (StatusUpdateControl) instead of the
+  // dedicated Acknowledge/Mark-responding actions — which set
+  // acknowledged_at/responding_at as a side effect — so those timestamps
+  // alone aren't a reliable "did this step happen" signal. Falling back to
+  // status having already reached (or passed) the step it corresponds to
+  // means a report that's visibly further along never shows an earlier
+  // step as if nothing had happened yet.
+  const statusReachedAcknowledged =
+    report.status === Status.ACKNOWLEDGED || report.status === Status.IN_PROGRESS || isResolved;
+  const statusReachedInProgress = report.status === Status.IN_PROGRESS || isResolved;
+
   const done: Record<(typeof STEPS)[number]['key'], boolean> = {
     received: true,
     // Multi-channel dispatch (WebSocket + SMS + email) always fires on
     // panic creation, see ReportService.create_report.
     notified: true,
-    acknowledged: Boolean(dispatch.acknowledged_at),
-    responding: Boolean(dispatch.responding_at),
+    acknowledged: Boolean(dispatch.acknowledged_at) || statusReachedAcknowledged,
+    responding: Boolean(dispatch.responding_at) || statusReachedInProgress,
     // Driven by status reaching IN_PROGRESS rather than the optional
     // arrived_at timestamp (set by a separate "Mark arrived" action a
     // responder can freely skip on the way to resolving), so this step
     // reliably completes instead of staying unchecked after resolution.
-    in_progress: report.status === Status.IN_PROGRESS || isResolved,
+    in_progress: statusReachedInProgress,
     resolved: isResolved,
   };
 
