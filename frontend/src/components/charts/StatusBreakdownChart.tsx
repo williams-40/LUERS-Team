@@ -3,13 +3,13 @@ import { ChartCard } from './ChartCard';
 import { Status } from '../../types/domain';
 
 const COLORS: Record<string, string> = {
-  [Status.NEW]: 'var(--color-ink-muted)',
+  [Status.NEW]: 'var(--color-accent)',
   [Status.ACKNOWLEDGED]: 'var(--color-status-warning)',
   [Status.IN_PROGRESS]: 'var(--color-status-serious)',
   [Status.RESOLVED]: 'var(--color-status-good)',
   [Status.CLOSED]: 'var(--color-ink-muted)',
-  [Status.CANCELLED]: 'var(--color-ink-muted)',
-  [Status.FALSE_ALARM]: 'var(--color-ink-muted)',
+  [Status.CANCELLED]: 'color-mix(in srgb, var(--color-ink-muted) 70%, transparent)',
+  [Status.FALSE_ALARM]: 'color-mix(in srgb, var(--color-ink-muted) 40%, transparent)',
 };
 
 function labelFor(status: string): string {
@@ -26,7 +26,9 @@ export function StatusBreakdownChart({
   isError?: boolean;
 }) {
   const total = (data ?? []).reduce((sum, d) => sum + d.count, 0);
-  const points = (data ?? []).filter((d) => d.count > 0).map((d) => ({ name: labelFor(d.status), value: d.count, key: d.status }));
+  const points = (data ?? [])
+    .filter((d) => d.count > 0)
+    .map((d) => ({ name: labelFor(d.status), value: d.count, key: d.status }));
 
   return (
     <ChartCard
@@ -42,7 +44,14 @@ export function StatusBreakdownChart({
       >
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={points} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="85%" paddingAngle={2}>
+            <Pie
+              data={points}
+              dataKey="value"
+              nameKey="name"
+              innerRadius="55%"
+              outerRadius="85%"
+              paddingAngle={2}
+            >
               {points.map((p) => (
                 <Cell key={p.key} fill={COLORS[p.key] ?? 'var(--color-ink-muted)'} />
               ))}
@@ -58,7 +67,9 @@ export function StatusBreakdownChart({
             <Legend
               iconType="circle"
               iconSize={8}
-              formatter={(value: string) => <span style={{ color: 'var(--color-ink-secondary)', fontSize: 12 }}>{value}</span>}
+              formatter={(value: string) => (
+                <span style={{ color: 'var(--color-ink-secondary)', fontSize: 12 }}>{value}</span>
+              )}
             />
           </PieChart>
         </ResponsiveContainer>
