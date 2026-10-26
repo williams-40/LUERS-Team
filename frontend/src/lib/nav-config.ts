@@ -44,7 +44,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Dashboard', path: '/', icon: LayoutDashboard, exact: true },
       { label: 'My reports', path: '/reports/mine', icon: FileText, permission: 'create_report' },
-      { label: 'Report queue', path: '/admin', icon: ListChecks, permission: 'view_admin_dashboard' },
+      // exact: every other admin item lives under /admin/*, so a prefix match
+      // would keep "Report queue" lit alongside whichever page is current.
+      { label: 'Report queue', path: '/admin', icon: ListChecks, permission: 'view_admin_dashboard', exact: true },
     ],
   },
   {
