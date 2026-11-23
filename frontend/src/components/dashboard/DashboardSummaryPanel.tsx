@@ -1,0 +1,123 @@
+﻿import { useCallback, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Inbox, Clock, CheckCircle2 } from 'lucide-react';
+import { fetchDashboardSummary } from '../../lib/dashboard-api';
+import { fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../../lib/departments-api';
+import { useReportSocket } from '../../hooks/useReportSocket';
+import { LiveIndicator } from '../ui/LiveIndicator';
+import { useAuth } from '../../hooks/useAuth';
+import { Card } from '../ui/Card';
+import { KPIStatCard } from './KPIStatCard';
+import { Status } from '../../types/domain';
+
+const OPEN_STATUSES = new Set<string>([Status.NEW, Status.ACKNOWLEDGED]);
+
+const SUMMARY_KEY = ['dashboard', 'summary'];
+const REFRESH_DEBOUNCE_MS = 400;
+
+/**
+ * Live counts refetch (debounced) rather than patch aggregate counts
+ * client-side — a report_updated event carries the report's new state but
+ * not its previous one, so there's no reliable way to shift it out of its
+ * old status/category bucket without re-deriving from the server anyway.
+ */
+export function DashboardSummaryPanel() {
+  const queryClient = useQueryClient();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { user } = useAuth();
+  const isSystemAdmin = Boolean(user?.permissions.includes('view_all_reports'));
+  // Heading is a label only — the actual scoping comes from the backend
+  // (get_accessible_reports), this just names what the numbers represent.
+  const { data: departments } = useQuery({
+    queryKey: HEAD_DETECTION_DEPARTMENTS_QUERY_KEY,
+    queryFn: () => fetchDepartments({ is_active: true }),
+    enabled: !isSystemAdmin,
+  });
+  const isDepartmentHead = Boolean(user && departments?.results.some((d) => d.head === user.id));
+  const heading = isSystemAdmin ? 'Campus summary' : isDepartmentHead ? 'Department summary' : 'My reports summary';
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: SUMMARY_KEY,
+    queryFn: fetchDashboardSummary,
+  });
+
+  const scheduleRefresh = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: SUMMARY_KEY });
+    }, REFRESH_DEBOUNCE_MS);
+  }, [queryClient]);
+
+  const { status: socketStatus, reconnect } = useReportSocket({
+    onReportCreated: scheduleRefresh,
+    onReportUpdated: scheduleRefresh,
+  });
+
+  const openCount = data?.status_counts.filter((s) => OPEN_STATUSES.has(s.status)).reduce((sum, s) => sum + s.count, 0) ?? 0;
+  const resolvedCount = data?.status_counts.find((s) => s.status === Status.RESOLVED)?.count ?? 0;
+
+  return (
+    <div className="mb-6 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-ink-secondary text-[12.5px] font-semibold">{heading}</h2>
+        <LiveIndicator status={socketStatus} onReconnect={reconnect} />
+      </div>
+
+      {isLoading && <p className="text-ink-muted text-sm">Loading…</p>}
+      {isError && <p className="text-status-critical text-sm">Couldn't load the summary.</p>}
+
+      {data && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <KPIStatCard label="Total" value={data.total} icon={Inbox} />
+            <KPIStatCard label="Open" value={openCount} icon={Clock} />
+            <KPIStatCard label="Resolved" value={resolvedCount} icon={CheckCircle2} tone="good" />
+          </div>
+
+          <Card className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <h3 className="text-ink-muted mb-1 text-[11px] font-semibold uppercase">By status</h3>
+              <ul className="flex flex-col gap-0.5">
+                {data.status_counts.map((s) => (
+                  <li key={s.status} className="flex justify-between">
+                    <span className="capitalize">{s.status.replace('_', ' ')}</span>
+                    <span className="font-semibold">{s.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-ink-muted mb-1 text-[11px] font-semibold uppercase">By urgency</h3>
+              <ul className="flex flex-col gap-0.5">
+                {data.urgency_counts.map((u) => (
+                  <li key={u.urgency} className="flex justify-between">
+                    <span className="capitalize">{u.urgency}</span>
+                    <span className="font-semibold">{u.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="col-span-2">
+              <h3 className="text-ink-muted mb-1 text-[11px] font-semibold uppercase">By department</h3>
+              <ul className="flex flex-col gap-0.5">
+                {data.department_counts.map((d) => (
+                  <li key={d.department_name ?? 'unassigned'} className="flex justify-between">
+                    <span>{d.department_name ?? 'Unassigned'}</span>
+                    <span className="font-semibold">{d.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {data.average_response_time_hours !== null && (
+              <p className="text-ink-secondary col-span-2 border-t border-ink/10 pt-3 text-sm">
+                <span className="font-semibold">Avg. time to resolve:</span>{' '}
+                {data.average_response_time_hours.toFixed(1)} hrs
+              </p>
+            )}
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}

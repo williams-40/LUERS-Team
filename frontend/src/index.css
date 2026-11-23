@@ -1,0 +1,182 @@
+@import 'tailwindcss';
+@import 'leaflet/dist/leaflet.css';
+
+/*
+ * Leaflet's own CSS puts its zoom controls/attribution at z-index: 1000 and
+ * popups/tooltips/markers at 600-700 (see .leaflet-top/.leaflet-bottom etc.
+ * in leaflet.css). .leaflet-container only sets position: relative, not a
+ * new stacking context, so those z-indexes escape the map box and can sit
+ * above the sticky top bar (z-40), the account menu dropdown (z-50), and
+ * anything else on the page with a lower z-index. `isolation: isolate`
+ * traps Leaflet's internal stacking inside the map's own box so the map
+ * behaves as one flat layer from the rest of the page's point of view.
+ */
+.leaflet-container {
+  isolation: isolate;
+}
+
+/* Self-hosted fonts (offline-friendly — no external font CDN calls) */
+@import '@fontsource/manrope/700.css';
+@import '@fontsource/manrope/800.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+/*
+ * Design tokens, sourced from the LUERS Design System project.
+ * Brand colors were extracted directly from lirauni.ac.ug (logo pixel sampling
+ * + the site's own --global-palette1 CSS variable) — see design system notes.
+ * Status/urgency colors follow the dataviz skill's validated fixed status
+ * palette (good/warning/serious/critical) and are deliberately a separate
+ * scale from brand, so the two never compete for meaning.
+ */
+/*
+ * Class-based dark mode (Tailwind v4 opt-in — no dark: variant exists by
+ * default). ThemeProvider (lib/theme-context.tsx) toggles `.dark` on
+ * <html>; every `dark:` utility and every color token below responds.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Brand — verified from the university's own logo/theme */
+  --color-brand: #2d5dc2;
+  --color-brand-ink: #0a1f44;
+  --color-accent-yellow: #fefd07;
+
+  /* Status — reserved meaning, never reused for anything else */
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-serious: #ec835a;
+  --color-status-critical: #d03b3b;
+  /* Readable text-on-tinted-status-chip pairing (StatusBadge/Toast/banners) —
+     tokenized instead of arbitrary hex so dark mode can repaint them too. */
+  --color-status-good-ink: #0a6b0a;
+  --color-status-warning-ink: #8a6000;
+  --color-status-serious-ink: #8a3d1f;
+
+  /* Ink / surfaces */
+  --color-ink: #0b0b0b;
+  --color-ink-secondary: #52514e;
+  --color-ink-muted: #898781;
+  --color-surface: #fcfcfb;
+  --color-surface-2: #ffffff;
+
+  /* A confident, fully-saturated brand blue for Sidebar/MobileDrawer — a
+     deliberately dark surface with its own light-on-blue text tokens below,
+     not a tint of the page's own light ink/surface tokens (a pale tint read
+     as too soft to register as "the nav," rather than its own zone). */
+  --color-sidebar: #1c3f8a;
+  --color-sidebar-ink: #ffffff;
+  --color-sidebar-ink-muted: #a9c0ec;
+  --color-sidebar-hover-bg: rgba(255, 255, 255, 0.1);
+  --color-sidebar-active-bg: rgba(255, 255, 255, 0.18);
+}
+
+/*
+ * Dark equivalents of every token above. Surface-2 stays slightly LIGHTER
+ * than surface (a raised panel/header on a dark page), mirroring how it's
+ * slightly lighter than surface in light mode too — same relationship,
+ * inverted direction. Status hues are lightened for AA contrast against a
+ * dark chip background; brand/accent are left mostly as-is since the
+ * saturated brand blue and yellow both already read fine on dark.
+ */
+.dark {
+  color-scheme: dark;
+
+  --color-brand-ink: #d7e2fb;
+  --color-accent-yellow: #fefd07;
+
+  --color-status-good: #2fbf4f;
+  --color-status-warning: #fab219;
+  --color-status-serious: #f0956e;
+  --color-status-critical: #ef5757;
+  --color-status-good-ink: #86e08a;
+  --color-status-warning-ink: #ffcf66;
+  --color-status-serious-ink: #ffb08a;
+
+  --color-ink: #f2f1ee;
+  --color-ink-secondary: #b7b4ac;
+  --color-ink-muted: #86837c;
+  --color-surface: #0e1116;
+  --color-surface-2: #171b22;
+
+  /* Same idea as light, deepened slightly so it still reads as richer than
+     the page's own dark surfaces rather than blending into them. */
+  --color-sidebar: #14336e;
+  --color-sidebar-ink: #ffffff;
+  --color-sidebar-ink-muted: #93add9;
+  --color-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+  --color-sidebar-active-bg: rgba(255, 255, 255, 0.16);
+}
+
+@keyframes rail-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(208 59 59 / 22%);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgb(208 59 59 / 0%);
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  body {
+    @apply bg-surface text-ink font-sans antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-heading font-bold;
+  }
+  code,
+  .font-data {
+    @apply font-mono;
+  }
+}
+
+@layer components {
+  /*
+   * Paired with `appearance-none` on every plain <select> that isn't using
+   * the Select component — native selects can pick up the OS/browser's own
+   * dark-mode widget theme (from color-scheme) and ignore an author
+   * background-color entirely unless appearance is reset first, which also
+   * drops the native dropdown arrow, so this replaces it with a static one.
+   * Middle-grey works in both themes without needing two SVGs.
+   */
+  .select-chevron {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23898781' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-size: 1em;
+    /* !important: every call site also carries a Tailwind px-2.5 utility
+       for its left padding, and utilities are emitted after @layer
+       components — without this, px-2.5's own padding-right (0.625rem)
+       wins the cascade and the option text (e.g. "acknowledged") runs
+       under the chevron instead of stopping short of it. */
+    padding-right: 2rem !important;
+  }
+
+  /*
+   * Hides the scrollbar track/thumb while keeping the element genuinely
+   * scrollable (wheel/touch/keyboard still work) — used on Sidebar's nav
+   * list, which needs overflow-y-auto for a tall permission set, but a
+   * visible scrollbar in the 68px collapsed rail reads as a stray extra
+   * control sitting next to the Collapse button rather than a scrollbar.
+   */
+  .scrollbar-hidden {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* old Edge/IE */
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/new Edge */
+  }
+}
