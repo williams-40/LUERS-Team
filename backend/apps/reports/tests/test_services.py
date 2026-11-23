@@ -1,5 +1,5 @@
 import pytest
-from apps.reports.services import ReportService, IdentityService
+from apps.reports.services import ReportService
 from apps.reports.models import Report
 from apps.core.factories import UserFactory, ReportFactory
 from apps.audit.models import AuditLog
@@ -12,14 +12,13 @@ def test_create_report():
         'category': 'theft',
         'description': 'Test description',
         'urgency': 'normal',
-        'is_anonymous': False,
         'latitude': 2.2333,
         'longitude': 32.8999,
     }
     report = ReportService.create_report(data, user, ip_address='127.0.0.1')
     assert report.status == Status.NEW
     assert AuditLog.objects.filter(report=report, action=Action.CREATE).exists()
-    assert IdentityService.identity_exists(report)
+    assert report.reporter_id == user.id
 
 @pytest.mark.django_db
 def test_update_status():

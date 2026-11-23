@@ -1,6 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, ManagementFactory, StaffFactory
+from apps.core.factories import UserFactory, SecurityFactory, ICTAdminFactory, ManagementFactory, StaffFactory, DepartmentFactory
 
 ENDPOINTS = {
     '/api/v1/reports/': 'GET',
@@ -9,43 +9,38 @@ ENDPOINTS = {
     '/api/v1/dashboard/summary/': 'GET',
 }
 
-# Expected status codes per role
+# Expected status codes per role.
+# GET /api/v1/reports/ is IsAuthenticated-only (any role gets 200; visibility is
+# scoped server-side via get_accessible_reports, not gated at the permission layer).
 ROLE_MATRIX = {
     'student': {
-        '/api/v1/reports/': 403,
+        '/api/v1/reports/': 200,
         '/api/v1/reports/mine/': 200,
         '/api/v1/reports/create/': 201,   # valid data will be provided
         '/api/v1/dashboard/summary/': 403,
     },
-    'security': {
+    'responder': {
         '/api/v1/reports/': 200,
         '/api/v1/reports/mine/': 403,
         '/api/v1/reports/create/': 403,
+        # Phase 4: responder carries view_admin_dashboard as a
+        # transitional grant (see role_seed_data.py's comment on
+        # BUILTIN_ROLES['responder']) — every migrated user is an
+        # existing department head who already had it.
         '/api/v1/dashboard/summary/': 200,
-    },
-    'ict_admin': {
-        '/api/v1/reports/': 200,
-        '/api/v1/reports/mine/': 403,
-        '/api/v1/reports/create/': 403,
-        '/api/v1/dashboard/summary/': 200,
-    },
-    'management': {
-        '/api/v1/reports/': 403,
-        '/api/v1/reports/mine/': 403,
-        '/api/v1/reports/create/': 403,
-        '/api/v1/dashboard/summary/': 403,
     },
 }
 
 @pytest.mark.django_db
 def test_rbac_matrix():
     client = APIClient()
+    department = DepartmentFactory()
     # Valid data for report creation
     valid_create_data = {
-        'category': 'theft',
+        'department': str(department.id),
         'description': 'Test RBAC',
         'urgency': 'normal',
-        'is_anonymous': False,
+        'phone_number': '0700000000',
         'latitude': 2.2333,
         'longitude': 32.8999,
     }

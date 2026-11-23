@@ -2,37 +2,34 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from apps.reports.models import Report
 from apps.notifications.models import Message
 from apps.notifications.serializers import MessageSerializer, MessageCreateSerializer
-from apps.accounts.permissions import IsSecurity, IsICTAdmin, IsManagement
-from apps.reports.services import IdentityService
+from apps.reports.services import can_access_report
 
 
 class CanAccessReportMixin:
-    """Mixin to check if the current user can access the report."""
+    """
+    Mixin to check if the current user can access the report.
+
+    Delegates entirely to apps.reports.services.can_access_report (which
+    wraps get_accessible_reports) — the same function REST detail/list and
+    the WebSocket consumer already use. Previously this mixin had its own,
+    independently-written check that had drifted from that one: it treated
+    view_admin_dashboard as blanket access (get_accessible_reports uses
+    view_all_reports for that) and never considered department headship at
+    all. include_deleted=True matches this mixin's pre-existing behavior —
+    it never filtered on deleted_at either, since it looked reports up by
+    raw id — so this consolidation doesn't newly restrict access to a
+    soft-deleted report's messages.
+    """
     def get_report_and_check_access(self, report_id):
         report = get_object_or_404(Report, id=report_id)
         user = self.request.user
 
-        # Admin roles have full access (case‑insensitive)
-        admin_roles = {'security', 'ict_admin', 'management'}
-        if user.role and user.role.lower() in admin_roles:
-            return report
-
-        # Check if user is the reporter (non‑anonymous only)
-        if not report.is_anonymous:
-            from apps.reports.models import ReportIdentity
-            try:
-                identity = ReportIdentity.objects.get(report=report)
-                reporter_id = IdentityService.get_reporter(identity)
-                if reporter_id and str(user.id) == reporter_id:
-                    return report
-            except ReportIdentity.DoesNotExist:
-                pass
-
-        # Check if user is the assigned officer
-        if report.assigned_to and report.assigned_to.id == user.id:
+        if can_access_report(user, report, include_deleted=True):
             return report
 
         self.permission_denied(self.request, message="You do not have access to this report.")
@@ -67,4 +64,29 @@ class MessageCreateView(generics.CreateAPIView, CanAccessReportMixin):
 
     def perform_create(self, serializer):
         # The serializer's create() will use the report from context
-        serializer.save()
+        message = serializer.save()
+
+        # REST is the only path that can carry a binary attachment (voice
+        # note) — Channels' WS protocol here is JSON-only (see
+        # ReportConsumer.receive's own chat_message branch, which creates
+        # and broadcasts inline for text). Broadcast here too, using the
+        # same group/event shape, so a live listener sees a voice note
+        # immediately instead of only on next fetchMessages() refetch.
+        attachment_url = None
+        if message.attachment:
+            attachment_url = self.request.build_absolute_uri(message.attachment.url)
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'report_{message.report_id}',
+            {
+                'type': 'chat_message',
+                'data': {
+                    'id': str(message.id),
+                    'sender': message.sender.username,
+                    'content': message.content,
+                    'attachment_url': attachment_url,
+                    'created_at': message.created_at.isoformat(),
+                },
+            },
+        )
