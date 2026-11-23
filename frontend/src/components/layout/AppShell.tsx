@@ -39,8 +39,7 @@ export function AppShell() {
           Skip to main content
         </a>
         <header className="bg-surface-2 flex items-center gap-2 border-b border-ink/10 px-5 py-3">
-          <Logo className="h-10 w-auto sm:h-11 md:h-12" />
-          <span className="font-heading text-brand-ink text-base font-bold">LUERS</span>
+          <Logo className="h-11 w-auto sm:h-12 md:h-14" />
         </header>
         <main id="main-content" className="flex-1">
           <Suspense fallback={<RouteLoadingFallback />}>

@@ -29,8 +29,7 @@ export function TopBar({ collapsed, onOpenDrawer }: { collapsed: boolean; onOpen
 
       {collapsed && (
         <Link to="/" className="hidden shrink-0 items-center gap-2 md:flex">
-          <Logo className="h-8 w-auto shrink-0 md:h-9 lg:h-10" />
-          <span className="font-heading text-brand-ink text-base font-bold">LUERS</span>
+          <Logo className="h-9 w-auto shrink-0 lg:h-10" />
         </Link>
       )}
 

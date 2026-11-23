@@ -55,8 +55,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
     >
       {!collapsed && (
         <Link to="/" className="mb-5 flex items-center gap-2 px-1">
-          <Logo variant="light" className="h-8 w-auto shrink-0" />
-          <span className="font-heading text-sidebar-ink text-sm font-bold">LUERS</span>
+          <Logo onDark className="h-9 w-auto shrink-0" />
         </Link>
       )}
 
