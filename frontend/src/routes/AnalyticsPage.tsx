@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Clock, UserCheck, AlertTriangle, Star } from 'lucide-react';
+import { Clock, UserCheck, Star } from 'lucide-react'; //AlertTriangle,
 import { useAuth } from '../hooks/useAuth';
 import { fetchDashboardSummary, fetchDashboardAnalytics } from '../lib/dashboard-api';
 import { fetchDepartments, HEAD_DETECTION_DEPARTMENTS_QUERY_KEY } from '../lib/departments-api';
@@ -41,20 +41,31 @@ export function AnalyticsPage() {
     <div className="mx-auto max-w-4xl px-5 py-8">
       <h1 className="mb-1 text-2xl">Analytics</h1>
       <p className="text-ink-secondary mb-6 text-sm">
-        {isSystemAdmin ? 'Campus-wide reporting trends and performance.' : 'Reporting trends and performance for your department.'}
+        {isSystemAdmin
+          ? 'Campus-wide reporting trends and performance.'
+          : 'Reporting trends and performance for your department.'}
       </p>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KPIStatCard
           label="Avg. time to resolve"
           icon={Clock}
-          value={analytics?.average_resolution_time_hours != null ? `${analytics.average_resolution_time_hours.toFixed(1)}h` : 'N/A'}
+          value={
+            analytics?.average_resolution_time_hours != null
+              ? `${analytics.average_resolution_time_hours.toFixed(1)}h`
+              : 'N/A'
+          }
         />
         <KPIStatCard
           label="Avg. time to assign"
           icon={UserCheck}
-          value={analytics?.average_assignment_time_hours != null ? `${analytics.average_assignment_time_hours.toFixed(1)}h` : 'N/A'}
+          value={
+            analytics?.average_assignment_time_hours != null
+              ? `${analytics.average_assignment_time_hours.toFixed(1)}h`
+              : 'N/A'
+          }
         />
+        {/* 
         <KPIStatCard
           label="Overdue emergencies"
           icon={AlertTriangle}
@@ -67,6 +78,7 @@ export function AnalyticsPage() {
           value={analytics?.overdue.normal ?? 'N/A'}
           tone={analytics && analytics.overdue.normal > 0 ? 'warning' : 'neutral'}
         />
+        */}
       </div>
 
       {analytics && analytics.feedback.feedback_count > 0 && (
@@ -85,24 +97,48 @@ export function AnalyticsPage() {
       </div>
 
       <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <StatusBreakdownChart data={summary?.status_counts} isLoading={summaryLoading} isError={summaryError} />
-        <UrgencyBreakdownChart data={analytics?.urgency_counts} isLoading={analyticsLoading} isError={analyticsError} />
+        <StatusBreakdownChart
+          data={summary?.status_counts}
+          isLoading={summaryLoading}
+          isError={summaryError}
+        />
+        <UrgencyBreakdownChart
+          data={analytics?.urgency_counts}
+          isLoading={analyticsLoading}
+          isError={analyticsError}
+        />
       </div>
 
       {isSystemAdmin && (
         <div className="mb-4">
-          <DepartmentBreakdownChart data={summary?.department_counts} isLoading={summaryLoading} isError={summaryError} />
+          <DepartmentBreakdownChart
+            data={summary?.department_counts}
+            isLoading={summaryLoading}
+            isError={summaryError}
+          />
         </div>
       )}
 
       <div className="mb-4">
-        <MonthlyTrendChart data={analytics?.monthly_trend} isLoading={analyticsLoading} isError={analyticsError} />
+        <MonthlyTrendChart
+          data={analytics?.monthly_trend}
+          isLoading={analyticsLoading}
+          isError={analyticsError}
+        />
       </div>
 
       {(isSystemAdmin || isDepartmentHead) && (
         <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <ResponderWorkloadChart data={analytics?.responder_workload} isLoading={analyticsLoading} isError={analyticsError} />
-          <ResponderPerformanceList data={analytics?.responder_performance} isLoading={analyticsLoading} isError={analyticsError} />
+          <ResponderWorkloadChart
+            data={analytics?.responder_workload}
+            isLoading={analyticsLoading}
+            isError={analyticsError}
+          />
+          <ResponderPerformanceList
+            data={analytics?.responder_performance}
+            isLoading={analyticsLoading}
+            isError={analyticsError}
+          />
         </div>
       )}
 

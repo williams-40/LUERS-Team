@@ -42,7 +42,11 @@ export function EmergencyReportPage() {
   const { user } = useAuth();
   const { show } = useToast();
 
-  const { data: categories, isLoading: isLoadingCategories, isError: isCategoriesError } = useQuery({
+  const {
+    data: categories,
+    isLoading: isLoadingCategories,
+    isError: isCategoriesError,
+  } = useQuery({
     queryKey: ['emergency-categories', { is_active: true, picker: true }],
     queryFn: () => fetchEmergencyCategories({ is_active: true }),
   });
@@ -131,6 +135,7 @@ export function EmergencyReportPage() {
     setSubmitError(null);
 
     const coords = locationRef.current;
+
     const attachments = [recordingFile, photoFile, ...evidenceFiles].filter(
       (file): file is File => file !== null,
     );
@@ -142,7 +147,11 @@ export function EmergencyReportPage() {
       ...(department ? { department } : {}),
       ...(phoneNumber.trim() ? { phone_number: phoneNumber.trim() } : {}),
       ...(coords
-        ? { latitude: coords.latitude, longitude: coords.longitude, location_accuracy: coords.location_accuracy }
+        ? {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            location_accuracy: coords.location_accuracy,
+          }
         : {}),
     };
 
@@ -175,7 +184,10 @@ export function EmergencyReportPage() {
           // eslint-disable-next-line no-await-in-loop
           await evidenceMutation.mutateAsync({ reportId: report.id, file });
         } catch {
-          show('Emergency sent, but an attachment could not be uploaded. Add it from the report page.', 'error');
+          show(
+            'Emergency sent, but an attachment could not be uploaded. Add it from the report page.',
+            'error',
+          );
           break;
         }
       }
@@ -199,8 +211,8 @@ export function EmergencyReportPage() {
         <h1 className="mb-2 text-xl">Emergency queued</h1>
         <p className="text-status-warning mb-2 text-sm font-semibold">
           You're offline right now. The institutional emergency system has not received this yet, it will send
-          automatically the moment you're back online. If this is a real emergency, also use your campus's usual
-          offline emergency procedure now.
+          automatically the moment you're back online. If this is a real emergency, also use your campus's
+          usual offline emergency procedure now.
         </p>
         <button
           type="button"
@@ -222,7 +234,9 @@ export function EmergencyReportPage() {
   return (
     // pb-40 clears the fixed ActionBar so the last field is never covered.
     <div className="mx-auto max-w-xl px-5 pt-8 pb-40">
-      <h1 className="text-status-critical font-heading mb-1 text-2xl font-extrabold">🚨 Report an emergency</h1>
+      <h1 className="text-status-critical font-heading mb-1 text-2xl font-extrabold">
+        🚨 Report an emergency
+      </h1>
       <p className="text-ink-secondary mb-6 text-sm">
         What's happening? We'll route this immediately. Add more detail if you have time, or send now.
       </p>
@@ -286,7 +300,7 @@ export function EmergencyReportPage() {
           + Add details (optional)
         </button>
       ) : (
-        <div className="mb-6 flex flex-col gap-5 rounded-xl border border-ink/10 p-4">
+        <div className="border-ink/10 mb-6 flex flex-col gap-5 rounded-xl border p-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
               <label htmlFor="description" className="text-ink-secondary text-[12.5px] font-semibold">
@@ -308,7 +322,9 @@ export function EmergencyReportPage() {
                     onClick={() => selectDescriptionMode(option)}
                     className={cn(
                       'rounded-full px-2.5 py-1 text-xs font-semibold transition',
-                      descriptionMode === option ? 'bg-brand text-white' : 'text-ink-secondary hover:bg-ink/6',
+                      descriptionMode === option
+                        ? 'bg-brand text-white'
+                        : 'text-ink-secondary hover:bg-ink/6',
                     )}
                   >
                     {option === 'text' ? 'Text' : option === 'voice' ? 'Voice' : 'Video'}

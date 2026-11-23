@@ -51,7 +51,11 @@ export function ReportLocationMap({ latitude, longitude, locationAccuracy }: Rep
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           {locationAccuracy !== null && locationAccuracy > 0 && (
-            <Circle center={position} radius={locationAccuracy} pathOptions={{ color: '#2d5dc2', fillOpacity: 0.1 }} />
+            <Circle
+              center={position}
+              radius={locationAccuracy}
+              pathOptions={{ color: '#2d5dc2', fillOpacity: 0.1 }}
+            />
           )}
           <Marker position={position} icon={pinIcon}>
             <Popup>
